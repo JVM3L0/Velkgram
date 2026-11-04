@@ -32,7 +32,7 @@ Black Friday (2026-11-27) is the expected volume peak. v1 should be collecting a
 ## 3. Requirements
 
 ### Functional
-- **FR1 — Sources.** Monitor up to ~30 Telegram **channels**, not groups, through a secondary **user account** over MTProto (Telethon). Channels are identified by numeric ID (`-100…`), never by username.
+- **FR1 — Sources.** Monitor up to ~30 Telegram **channels** (broadcast only; groups and supergroups are rejected) through a secondary **user account** over MTProto (Telethon). The user adds a channel by **`@username` or `t.me` link** (public or invite `t.me/+…`). After resolving it, the collector stores the numeric ID (`-100…`), and from then on all data is keyed by that ID, never by username.
 - **FR2 — Wish items.** A wish has a name, **required terms**, **excluded terms**, a **max price** (BRL), and an enabled flag. A term may list alternatives separated by `|` (e.g. `2tb|2 tb|2000gb`).
 - **FR3 — Matching.** A message matches a wish when every required term has at least one alternative present, no excluded alternative is present, and the extracted price is ≤ the max price.
 - **FR4 — Unknown price.** If the terms match but no price can be extracted, alert anyway, flagged `price_unknown` ("⚠️ preço não identificado").
@@ -40,16 +40,16 @@ Black Friday (2026-11-27) is the expected volume peak. v1 should be collecting a
   (a) the message is a forward of a message that already produced an alert;
   (b) the same wish was alerted at the same price within 30 min;
   (c) with no price, the same wish was alerted for the same normalized-text hash within 30 min.
-- **FR6 — Edits.** Store every edit as a new version. Re-evaluate the edit, and alert only if the message newly matches and has no previous alert. Flag `sold_out_hint` when the text contains sold-out phrases ("esgotado", "acabou", "encerrada"…). v1 sends no notification for it.
+- **FR6 — Edits.** Store every edit as a new version. Re-evaluate the edit, and alert only if the message newly matches, has no previous alert, and was posted no more than 30 min ago (older offers are assumed gone). Flag `sold_out_hint` when the text contains sold-out phrases ("esgotado", "acabou", "encerrada"…). v1 sends no notification for it.
 - **FR7 — Deletions.** Mark the message as deleted. Nothing is physically removed.
 - **FR8 — Backfill.** On startup and on reconnect, fetch messages newer than `last_message_id` per channel (cap: 6 h or 200 messages). Backfilled messages younger than 30 min alert with `delayed_minutes`. Older ones are stored without alerting.
 - **FR9 — Web UI.** Single-user login. CRUD for wishes and channels, alert history, a status page (connection, last message per channel, recent failures, silent channels). User-facing text is in Portuguese.
-- **FR10 — Hot reload.** Wishlist and channel changes made in the web UI reach the collector within 5 s, without a restart. When a channel is added that the account hasn't joined, the collector joins it (respecting `FloodWait`) and runs a short backfill.
+- **FR10 — Hot reload.** Wishlist and channel changes made in the web UI reach the collector within 5 s, without a restart. A newly added channel starts `pending`. The collector resolves the reference, joins the channel if needed (respecting `FloodWait`), and either marks it `active` with its numeric ID and title and runs a short backfill, or marks it `error` with a reason shown in the web UI (e.g. not a channel, invalid link, flood wait).
 - **FR11 — Reporting.** A CLI report per day and per channel: message volume, price-extraction coverage, dedup rates by rule, alert counts, latency p50/p95, and estimated tokens plus LLM cost. The price per million tokens is a parameter, not a hardcoded value.
 - **FR12 — Session bootstrap.** A CLI command logs in interactively and prints a Telethon `StringSession`.
 
 ### Non-functional
-- **NFR1 — Latency.** Telegram→alert under 10 s end to end. The internal path (event in → `Notifier.notify` called) stays under 200 ms. Both are measured and stored per alert.
+- **NFR1 — Latency.** Telegram→alert under 10 s end to end. The internal path (event in → `Notifier.notify` called) stays under 200 ms. Both are measured **at the moment the first `notify` call starts** (`latency_telegram_ms = now − date`, `latency_internal_ms = now − handler entry`, clamped at ≥ 0) and stored per alert. A slow or failing notifier must never delay the evaluation of later messages.
 - **NFR2 — Alert first.** No secondary failure (raw storage, web, reporting) may block or delay an alert.
 - **NFR3 — At-least-once processing.** Every stored message is evaluated at least once. Dedup makes reprocessing idempotent.
 - **NFR4 — Account safety.** No bulk actions, `FloodWaitError` honored, sequential backfill with pauses, read-only behavior apart from joining configured channels.
@@ -111,10 +111,10 @@ velkgram/
 
 ### 4.3 Dependency rules
 These are enforced by `import-linter` contracts that run in CI.
-1. `*/domain` imports nothing from the project except `shared.events`, and no third-party I/O libraries.
+1. `*/domain` imports nothing from the project except `shared.events` and `shared.text` (both pure), and no third-party I/O libraries.
 2. `*/services` imports only its own `domain` and `ports`, plus `shared`.
 3. Modules (`channels`, `wishlist`, `ingestion`, `alerting`, `reporting`) are **independent**: no module imports another module's internals. Cross-module access goes through events or a port whose adapter calls the other module's public API (e.g. `alerting.ports.WishlistReader` ← `wishlist` public API).
-4. Only `apps/*` imports `*/adapters`.
+4. Only `apps/*` imports `*/adapters`. A module's public API (`__init__.py`) exports domain types, ports, and services, never adapter factories. Read queries are ports (`<module>/ports/queries.py`) implemented in `adapters/sqlite/queries.py` and wired by `apps`.
 5. Each module owns its tables and migrations. No module reads another module's tables. Read access across modules goes through **query functions in the owner's public API** (e.g. `reporting` reads message and alert stats through `ingestion` and `alerting` public queries).
 6. **Events carry plain data.** Payload dataclasses are defined in `shared/events.py` (ids, text, links, timestamps…), never in a module's domain types, so the consumer never imports the producer.
 7. **Web pages live in the module that owns the data:** Wishes → `wishlist/web`, Channels → `channels/web`, Alerts → `alerting/web`, Status (heartbeat, per-channel last message, silent channels) → `ingestion/web`. Anything shown from another module comes through that module's public API.
@@ -138,11 +138,17 @@ All timestamps are UTC, stored as ISO-8601. Money is stored in integer cents.
 **channels** (owned by `channels`)
 | column | type | notes |
 |---|---|---|
-| id | INTEGER PK | Telegram channel ID (`-100…`) |
-| name | TEXT | human label |
+| id | INTEGER PK | internal row id |
+| ref | TEXT UNIQUE | what the user typed, normalized (`@name` or `+hash`) |
+| telegram_id | INTEGER UNIQUE NULL | Telegram channel ID (`-100…`), set on resolution |
+| name | TEXT NULL | channel title, set on resolution |
+| status | TEXT | `pending` / `active` / `error` |
+| error | TEXT NULL | reason when `error` |
 | enabled | INTEGER | 0/1 |
 | silent_after_hours | INTEGER | default 12 |
 | created_at | TEXT | |
+
+The `channel_id` columns in other modules' tables hold `telegram_id`.
 
 **wishes** (owned by `wishlist`)
 | column | type | notes |
@@ -248,13 +254,13 @@ Nothing on this path makes network calls apart from Telegram (inbound) and the n
 - `MessageDeleted` → set `deleted_at`.
 
 ### 6.5 Web changes
-The web writes wishes or channels and bumps `state_versions` in the same transaction. The collector polls `state_versions` every 3 s and reloads whatever changed. For a new channel it joins if needed and runs a backfill.
+The web writes wishes or channels and bumps `state_versions` in the same transaction. The collector polls `state_versions` every 3 s, publishes `WishlistChanged`/`ChannelsChanged` on the bus, and its handlers reload whatever changed. For each `pending` channel it resolves and joins it (FR10), then runs a backfill. At startup the collector calls `get_dialogs()` once, to warm Telethon's entity cache for channels it already joined.
 
 ## 7. Error handling and resilience
 
 | Failure | Behavior |
 |---|---|
-| Telegram disconnect | Telethon auto-reconnects; on reconnect, backfill from cursors. |
+| Telegram disconnect | Telethon auto-reconnects (`catch_up=True`). A connection watcher checks `is_connected()` with every heartbeat (30 s): while disconnected, heartbeat `connection_state=reconnecting`; on recovery, backfill from cursors. |
 | Silently missed updates | Gap check every 10 min: latest message per channel (`limit=1`) vs. cursor → backfill on mismatch. |
 | `FloodWaitError` | Waits ≤ 60 s are handled automatically (`flood_sleep_threshold`). Longer waits are logged, only that operation is deferred, and nothing retries in a loop. |
 | Auth failure (invalid, duplicated, or banned session) | Fatal: one `Notifier.notify_system` message, heartbeat `connection_state=fatal`, the process stays up idle (no restart loop), manual action required. |
@@ -269,7 +275,7 @@ The web writes wishes or channels and bumps `state_versions` in the same transac
 ## 8. Web UI
 
 - **Login:** single user. The password hash (stdlib `hashlib.scrypt`) comes from `WEB_PASSWORD_HASH`, with a signed session cookie (`WEB_SECRET_KEY`). There is also a CLI helper that generates the hash.
-- **Pages:** Wishes (list/create/edit/toggle/delete), Channels (list/add by ID/toggle/remove), Alerts (history with status, price, latency, link to the message), Status (heartbeat, per-channel last message, silent channels, recent failures).
+- **Pages:** Wishes (list/create/edit/toggle/delete), Channels (list with status/add by `@username` or link/toggle/remove), Alerts (history with status, price, latency, link to the message), Status (heartbeat, per-channel last message, silent channels, recent failures).
 - Server-rendered with Jinja2 + HTMX; no JS build. Each module contributes its own router under `<module>/web/`.
 
 ## 9. Configuration

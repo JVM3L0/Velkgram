@@ -1,0 +1,30 @@
+{
+  "enabledPlugins": {
+    "superpowers@anthropic-plugin-directory": true,
+    "feature-dev@anthropic-plugin-directory": true,
+    "pr-review-toolkit@anthropic-plugin-directory": true,
+    "pyright-lsp@anthropic-plugin-directory": true,
+    "context7@anthropic-plugin-directory": true,
+    "security-guidance@anthropic-plugin-directory": true,
+    "claude-security@anthropic-plugin-directory": true,
+    "commit-commands@anthropic-plugin-directory": true
+  },
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5-5"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/.claude/hooks/limit_subagent_model.py\"",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}
