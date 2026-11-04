@@ -61,6 +61,7 @@ class TelethonGateway:
             errors.InviteHashExpiredError,
             errors.UsernameInvalidError,
             errors.UsernameNotOccupiedError,
+            ValueError,  # Telethon wraps unknown usernames/hashes in ValueError
         ) as exc:
             raise ChannelResolutionError("Link inválido ou expirado") from exc
         except errors.FloodWaitError as exc:

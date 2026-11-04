@@ -36,7 +36,6 @@ def register_handlers(client: TelegramClient, ingestor: Ingestor, clock: Clock) 
             log.exception("telegram_handler_failed", extra={"handler": "edit"})
 
     async def on_delete(event: events.MessageDeleted.Event) -> None:
-        clock.now()
         try:
             if event.chat_id is None:
                 return

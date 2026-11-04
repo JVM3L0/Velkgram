@@ -148,3 +148,27 @@ def test_is_auth_fatal() -> None:
     assert is_auth_fatal(errors.UserDeactivatedBanError(request=None))
     assert is_auth_fatal(errors.SessionRevokedError(request=None))
     assert not is_auth_fatal(ValueError("x"))
+
+
+async def test_resolve_unknown_username_raises_resolution_error() -> None:
+    client = AsyncMock()
+    client.get_entity.side_effect = ValueError('No user has "x" as username')
+    with pytest.raises(ChannelResolutionError, match="Link inválido ou expirado"):
+        await _gw(client).resolve_and_join("@x")
+
+
+async def test_resolve_already_participant_invite_falls_back_to_get_entity() -> None:
+    client = AsyncMock()
+    client.side_effect = [
+        types.ChatInvite(
+            title="x",
+            photo=types.PhotoEmpty(id=0),
+            participants_count=1,
+            participants=[],
+            color=0,
+        ),
+        errors.UserAlreadyParticipantError(request=None),
+    ]
+    client.get_entity.return_value = _channel()
+    res = await _gw(client).resolve_and_join("+abc")
+    assert (res.telegram_id, res.title) == (-1000000000042, "Promo")
