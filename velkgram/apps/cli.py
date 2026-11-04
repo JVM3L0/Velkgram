@@ -67,10 +67,18 @@ def _hash_password(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _collector(_args: argparse.Namespace) -> int:
+    from velkgram.apps.collector.main import main as collector_main
+
+    asyncio.run(collector_main())
+    return 0
+
+
 COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "migrate": _migrate,
     "login": _login_cmd,
     "hash-password": _hash_password,
+    "collector": _collector,
 }
 
 
@@ -80,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("migrate", help="apply pending database migrations")
     sub.add_parser("login", help="interactive Telegram login; prints a StringSession")
     sub.add_parser("hash-password", help="hash a web password for WEB_PASSWORD_HASH")
+    sub.add_parser("collector", help="run the Telegram collector")
     return parser
 
 
