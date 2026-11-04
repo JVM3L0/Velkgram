@@ -17,8 +17,19 @@ CASES = [
     ("", None),
 ]
 
+EDGE_CASES = [
+    ("10x R$ 119,90 ou R$ 1.099 à vista", 109900),
+    ("12x R$ 35", None),
+    ("10x R$ 12", None),
+    ("por 12x de R$ 35", None),
+    ("R$ 1.5", None),
+    ("R$ 1.299,5", None),
+    ("R$ 1.299.00", None),
+    ("Pix R$ 1.899,00\n10x R$ 199,90", 189900),
+]
 
-@pytest.mark.parametrize(("text", "expected"), CASES)
+
+@pytest.mark.parametrize(("text", "expected"), CASES + EDGE_CASES)
 def test_extract_price(text: str, expected: int | None) -> None:
     assert extract_price(text) == expected
 
