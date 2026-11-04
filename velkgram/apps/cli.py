@@ -43,8 +43,8 @@ def _migrate(_args: argparse.Namespace) -> int:
 async def _login() -> None:
     settings = load_settings(os.environ)
     client = build_client(replace(settings, tg_session=None))
-    await client.start()  # type: ignore[misc]
     try:
+        await client.start()  # type: ignore[misc]
         print(StringSession.save(client.session))  # type: ignore[arg-type]
     finally:
         await client.disconnect()  # type: ignore[misc]
@@ -57,6 +57,9 @@ def _login_cmd(_args: argparse.Namespace) -> int:
 
 def _hash_password(_args: argparse.Namespace) -> int:
     first = getpass.getpass("Password: ")
+    if not first:
+        print("password must not be empty", file=sys.stderr)
+        return 1
     if getpass.getpass("Repeat password: ") != first:
         print("passwords do not match", file=sys.stderr)
         return 1

@@ -1,7 +1,6 @@
 """Password hashing for the web login (scrypt, stdlib only)."""
 
 import base64
-import binascii
 import hashlib
 import hmac
 import secrets
@@ -28,14 +27,18 @@ def hash_password(pw: str) -> str:
 
 
 def verify_password(stored: str, candidate: str) -> bool:
-    """Constant-time check; returns False (never raises) on malformed input."""
+    """Constant-time check; returns False (never raises) on malformed or hostile input.
+
+    Only the parameters `hash_password` produces are accepted, so a stored value cannot
+    force expensive or invalid scrypt settings.
+    """
     try:
         scheme, n, r, p, salt_b64, hash_b64 = stored.split("$")
-        if scheme != "scrypt":
+        if scheme != "scrypt" or (int(n), int(r), int(p)) != (_N, _R, _P):
             return False
         salt = base64.b64decode(salt_b64, validate=True)
         expected = base64.b64decode(hash_b64, validate=True)
-        actual = _scrypt(candidate, salt, int(n), int(r), int(p), len(expected))
-    except (ValueError, binascii.Error, MemoryError):
+        actual = _scrypt(candidate, salt, _N, _R, _P, len(expected))
+        return hmac.compare_digest(actual, expected)
+    except Exception:
         return False
-    return hmac.compare_digest(actual, expected)
