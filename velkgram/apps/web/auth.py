@@ -38,7 +38,9 @@ def verify_password(stored: str, candidate: str) -> bool:
             return False
         salt = base64.b64decode(salt_b64, validate=True)
         expected = base64.b64decode(hash_b64, validate=True)
-        actual = _scrypt(candidate, salt, _N, _R, _P, len(expected))
+        if len(expected) != _DKLEN:
+            return False
+        actual = _scrypt(candidate, salt, _N, _R, _P, _DKLEN)
         return hmac.compare_digest(actual, expected)
     except Exception:
         return False

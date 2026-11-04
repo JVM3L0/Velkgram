@@ -58,7 +58,7 @@ def test_login_assumptions_hold_without_network() -> None:
     from velkgram.ingestion.adapters.telethon.client import build_client
     from velkgram.shared.config import load_settings
 
-    settings = load_settings({"TG_API_ID": "1", "TG_API_HASH": "x", "TG_SESSION": "abc"})
+    settings = load_settings({"TG_API_ID": "1", "TG_API_HASH": "x"})
     client = build_client(replace(settings, tg_session=None))
     assert isinstance(client.session, StringSession)
     assert StringSession.save(client.session) == ""

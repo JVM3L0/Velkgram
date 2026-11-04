@@ -1,3 +1,5 @@
+import base64
+
 import pytest
 
 from velkgram.apps.web.auth import hash_password, verify_password
@@ -41,7 +43,24 @@ def test_verify_never_raises_on_malformed_input() -> None:
         f"scrypt${2**22}$8$1$QQ==$QQ==",
         "scrypt$16384$8$1$!!$QQ==",
         "scrypt$16384$8$1$QQ==$!!",
+        "scrypt$16384$8$1$QQ==$" + base64.b64encode(bytes(10_000)).decode(),
+        "scrypt$16384$8$1$QQ==$" + base64.b64encode(bytes(63)).decode(),
     ],
 )
 def test_verify_rejects_hostile_input(bad: str) -> None:
     assert verify_password(bad, "x") is False
+
+
+def test_verify_does_not_run_scrypt_for_wrong_hash_length(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[int] = []
+
+    def spy(*args: object, **kwargs: object) -> bytes:
+        calls.append(1)
+        return b""
+
+    monkeypatch.setattr("velkgram.apps.web.auth._scrypt", spy)
+    stored = "scrypt$16384$8$1$QQ==$" + base64.b64encode(bytes(10_000)).decode()
+    assert verify_password(stored, "x") is False
+    assert calls == []
