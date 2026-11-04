@@ -48,6 +48,15 @@ def test_duplicate_ref_rejected() -> None:
     assert len(repo.list_all()) == 1
 
 
+def test_duplicate_ref_rejected_ignoring_case() -> None:
+    repo, cmds = _setup()
+    cmds.add("@promotech")
+    with pytest.raises(InvalidChannel) as exc:
+        cmds.add("@PromoTech")
+    assert exc.value.message_pt == "Canal já cadastrado"
+    assert len(repo.list_all()) == 1
+
+
 def test_activate_sets_id_and_name() -> None:
     repo, cmds = _setup()
     channel = cmds.add("@promotech", silent_after_hours=6)

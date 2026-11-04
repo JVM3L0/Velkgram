@@ -53,7 +53,7 @@ def parse_channel_ref(raw: str) -> str:
 def _username(name: str) -> str:
     if not _USERNAME.fullmatch(name):
         raise InvalidChannel(_INVALID_PT)
-    return f"@{name}"
+    return f"@{name.lower()}"
 
 
 def _invite(code: str) -> str:

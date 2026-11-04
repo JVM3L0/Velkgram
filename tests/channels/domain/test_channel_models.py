@@ -10,6 +10,8 @@ from velkgram.channels import InvalidChannel, parse_channel_ref
         ("http://t.me/promotech", "@promotech"),
         ("t.me/promotech", "@promotech"),
         ("@promotech", "@promotech"),
+        ("@PromoTech", "@promotech"),
+        ("https://t.me/PromoTech", "@promotech"),
         ("  promotech  ", "@promotech"),
         ("https://t.me/promotech/", "@promotech"),
         ("t.me/+AbC12", "+AbC12"),
