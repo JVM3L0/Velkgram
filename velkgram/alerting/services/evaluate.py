@@ -22,7 +22,7 @@ from velkgram.alerting.ports.notifier import Notifier
 from velkgram.alerting.ports.repository import AlertRepository
 from velkgram.alerting.ports.wishlist_reader import WishlistReader
 from velkgram.alerting.services.notify import send_with_retry
-from velkgram.shared.events import AlertTriggered, MessageData, MessageReceived
+from velkgram.shared.events import AlertTriggered, MessageData, MessageEdited, MessageReceived
 from velkgram.shared.ports import Clock, EventBus
 from velkgram.shared.text import normalize_text
 
@@ -68,6 +68,15 @@ class Evaluator:
             task = asyncio.create_task(self._notify(m, alert))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
+
+    async def on_edited(self, e: MessageEdited) -> None:
+        """Re-evaluate a recent edited message that never produced an alert."""
+        m = e.message
+        if self._clock.now() - m.date > _BACKFILL_MAX_AGE:
+            return
+        if self._repo.has_alert_for_message(m.channel_id, m.message_id):
+            return
+        await self.on_received(MessageReceived(m))
 
     async def wait_idle(self) -> None:
         while pending := [t for t in self._tasks if not t.done()]:
