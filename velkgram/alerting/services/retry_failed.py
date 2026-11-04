@@ -1,6 +1,7 @@
 """Recovery paths: retry failed/stuck alerts, expire old ones, warm the dedup cache."""
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import timedelta
@@ -12,6 +13,8 @@ from velkgram.alerting.ports.repository import AlertRepository
 from velkgram.alerting.services.notify import send_with_retry
 from velkgram.shared.ports import Clock
 
+log = logging.getLogger(__name__)
+
 _MAX_AGE = timedelta(minutes=30)
 _STUCK_AFTER = timedelta(seconds=15)
 
@@ -22,6 +25,7 @@ async def retry_failed(
     clock: Clock,
     build_message: Callable[[Alert], AlertMessage | None],
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    on_alert_sent: Callable[[], None] = lambda: None,
 ) -> tuple[int, int]:
     """Retry recent failed/stuck alerts and expire old ones; return (sent, expired)."""
     now = clock.now()
@@ -36,22 +40,28 @@ async def retry_failed(
     }
     sent = expired = 0
     for alert in sorted(candidates.values(), key=lambda a: (a.created_at, a.id or 0)):
-        message = None if alert.created_at < cutoff else build_message(alert)
-        if message is None:
-            repo.update(replace(alert, status=AlertStatus.expired))
-            expired += 1
-            continue
-        ok, attempts, error = await send_with_retry(notifier, message, sleep=sleep)
-        repo.update(
-            replace(
-                alert,
-                status=AlertStatus.sent if ok else AlertStatus.failed,
-                attempts=alert.attempts + attempts,
-                sent_at=now if ok else alert.sent_at,
-                last_error=error,
+        try:
+            message = None if alert.created_at < cutoff else build_message(alert)
+            if message is None:
+                repo.update(replace(alert, status=AlertStatus.expired))
+                expired += 1
+                continue
+            ok, attempts, error = await send_with_retry(notifier, message, sleep=sleep)
+            repo.update(
+                replace(
+                    alert,
+                    status=AlertStatus.sent if ok else AlertStatus.failed,
+                    attempts=alert.attempts + attempts,
+                    sent_at=now if ok else alert.sent_at,
+                    last_error=error,
+                )
             )
-        )
-        sent += ok
+        except Exception:
+            log.exception("alert_retry_failed", extra={"alert_id": alert.id})
+            continue
+        if ok:
+            sent += 1
+            on_alert_sent()
     return sent, expired
 
 

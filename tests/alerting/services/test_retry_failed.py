@@ -100,3 +100,36 @@ def test_warm_cache_prevents_duplicate_after_restart() -> None:
     keys = [(rule_for_key(k), k) for k in a.dedup_keys]
     assert cache.find(keys, NOW) is not None
     assert cache.find(keys[1:], NOW) == (keys[1][0], a.id)
+
+
+async def test_one_bad_alert_does_not_block_others() -> None:
+    repo, notifier = InMemoryAlertRepository(), FakeNotifier()
+    first = repo.add(_alert(AlertStatus.failed, timedelta(minutes=2)))
+    second = repo.add(_alert(AlertStatus.failed, timedelta(minutes=1)))
+
+    def build(a: Alert) -> AlertMessage | None:
+        if a.id == first.id:
+            raise RuntimeError("bad alert")
+        return _build(a)
+
+    result = await retry_failed(repo, notifier, FakeClock(NOW), build, sleep=_no_sleep)
+    assert result == (1, 0)
+    by_id = {a.id: a for a in repo.list_since(NOW - timedelta(days=1))}
+    assert by_id[second.id].status is AlertStatus.sent
+
+
+async def test_on_alert_sent_called_once_per_successful_retry() -> None:
+    repo, notifier = InMemoryAlertRepository(), FakeNotifier()
+    repo.add(_alert(AlertStatus.failed, timedelta(minutes=2)))
+    repo.add(_alert(AlertStatus.failed, timedelta(minutes=1)))
+    repo.add(_alert(AlertStatus.failed, timedelta(minutes=40)))
+    calls: list[int] = []
+    await retry_failed(
+        repo,
+        notifier,
+        FakeClock(NOW),
+        _build,
+        sleep=_no_sleep,
+        on_alert_sent=lambda: calls.append(1),
+    )
+    assert len(calls) == 2
