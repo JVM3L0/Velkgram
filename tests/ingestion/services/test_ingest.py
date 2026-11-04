@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from tests.fakes.clock import FakeClock
+from tests.fakes.messages import NOW, msg
 from tests.fakes.repositories import InMemoryMessageRepository
 from velkgram.ingestion.services.ingest import Ingestor
 from velkgram.shared.adapters.bus_memory import MemoryBus
@@ -15,24 +16,6 @@ from velkgram.shared.events import (
     MessageEdited,
     MessageReceived,
 )
-
-NOW = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
-
-
-def msg(message_id: int = 1, channel_id: int = 10, text: str = "oferta") -> MessageData:
-    return MessageData(
-        channel_id=channel_id,
-        message_id=message_id,
-        date=NOW,
-        received_at=NOW,
-        text=text,
-        links=(),
-        fwd_from_channel_id=None,
-        fwd_from_message_id=None,
-        grouped_id=None,
-        has_photo=False,
-        source="live",
-    )
 
 
 class Harness:

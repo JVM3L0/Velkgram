@@ -1,8 +1,11 @@
 """Connection watcher: the only writer of the heartbeat connection state."""
 
+import logging
 from collections.abc import Awaitable, Callable
 
 from velkgram.ingestion.services.heartbeat import HeartbeatWriter
+
+log = logging.getLogger(__name__)
 
 
 class ConnectionWatcher:
@@ -22,7 +25,11 @@ class ConnectionWatcher:
             self._was_down = True
             self._heartbeat.beat("reconnecting")
             return
-        if self._was_down:
-            self._was_down = False
-            await self._on_recovered()
         self._heartbeat.beat("connected")
+        if self._was_down:
+            try:
+                await self._on_recovered()
+            except Exception:
+                log.exception("recovery_backfill_failed")
+            else:
+                self._was_down = False

@@ -1,6 +1,6 @@
+from tests.fakes.messages import msg
 from tests.fakes.repositories import InMemoryMessageRepository
 from tests.fakes.telegram import FakeTelegramGateway
-from tests.ingestion.services.test_ingest import msg
 from velkgram.ingestion.ports.telegram import TelegramDeferred
 from velkgram.ingestion.services.gap_check import gap_check
 

@@ -2,9 +2,9 @@ import dataclasses
 from datetime import UTC, datetime, timedelta
 
 from tests.fakes.clock import FakeClock
+from tests.fakes.messages import msg
 from tests.fakes.repositories import InMemoryMessageRepository
 from tests.fakes.telegram import FakeTelegramGateway
-from tests.ingestion.services.test_ingest import msg
 from velkgram.ingestion.ports.telegram import TelegramDeferred
 from velkgram.ingestion.services.backfill import backfill_all, backfill_channel
 from velkgram.ingestion.services.ingest import Ingestor
