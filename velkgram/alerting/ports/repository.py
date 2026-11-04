@@ -28,8 +28,8 @@ class AlertRepository(Protocol):
         ...
 
     def list_retryable(self, since: datetime, stuck_before: datetime) -> list[Alert]:
-        """`failed` alerts created at or after `since`, plus `pending` alerts created in
-        [`since`, `stuck_before`) (crash leftovers). Older ones are left for expiry."""
+        """`failed` alerts created at or after `since`, plus every `pending` alert created
+        before `stuck_before` (crash leftovers, however old, so they can be retried or expired)."""
         ...
 
     def list_failed_before(self, before: datetime) -> list[Alert]:

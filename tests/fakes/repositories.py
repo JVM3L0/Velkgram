@@ -176,11 +176,8 @@ class InMemoryAlertRepository:
     def list_retryable(self, since: datetime, stuck_before: datetime) -> list[Alert]:
         return self._where(
             lambda a: (
-                a.created_at >= since
-                and (
-                    a.status is AlertStatus.failed
-                    or (a.status is AlertStatus.pending and a.created_at < stuck_before)
-                )
+                (a.status is AlertStatus.failed and a.created_at >= since)
+                or (a.status is AlertStatus.pending and a.created_at < stuck_before)
             )
         )
 

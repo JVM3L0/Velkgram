@@ -119,7 +119,7 @@ class SqliteAlertRepository:
 
     def list_retryable(self, since: datetime, stuck_before: datetime) -> list[Alert]:
         return self._select(
-            "created_at >= ? AND (status = 'failed' OR (status = 'pending' AND created_at < ?))",
+            "(status = 'failed' AND created_at >= ?) OR (status = 'pending' AND created_at < ?)",
             (to_iso(since), to_iso(stuck_before)),
         )
 

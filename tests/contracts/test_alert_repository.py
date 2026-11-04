@@ -143,8 +143,8 @@ def test_list_retryable_failed_and_stuck_pending(handle: RepoHandle) -> None:
     handle.repo.add(_alert(6, T0 - timedelta(minutes=5), AlertStatus.sent))
     handle.repo.add(_alert(7, T0 - timedelta(minutes=5), AlertStatus.expired))
     result = handle.repo.list_retryable(since, stuck_before)
-    assert result == [failed, stuck]
-    for excluded in (failed_old, fresh, ancient):
+    assert result == [ancient, failed, stuck]
+    for excluded in (failed_old, fresh):
         assert excluded not in result
 
 
@@ -154,7 +154,8 @@ def test_list_retryable_boundaries(handle: RepoHandle) -> None:
     at_since = handle.repo.add(_alert(1, since, AlertStatus.failed))
     pending_at_stuck = handle.repo.add(_alert(2, stuck_before, AlertStatus.pending))
     pending_at_since = handle.repo.add(_alert(3, since, AlertStatus.pending))
-    assert handle.repo.list_retryable(since, stuck_before) == [at_since, pending_at_since]
+    result = handle.repo.list_retryable(since, stuck_before)
+    assert result == [at_since, pending_at_since]
     assert pending_at_stuck not in handle.repo.list_retryable(since, stuck_before)
 
 
