@@ -1,6 +1,10 @@
+from collections.abc import Sequence
 from dataclasses import replace
+from datetime import datetime
 
 from velkgram.channels import Channel, ChannelStatus
+from velkgram.ingestion import Heartbeat
+from velkgram.shared.events import MessageData
 from velkgram.wishlist import Wish
 
 
@@ -72,3 +76,56 @@ class InMemoryChannelRepository:
 
     def list_pending(self) -> list[Channel]:
         return [c for c in self.list_all() if c.status is ChannelStatus.PENDING]
+
+
+class InMemoryMessageRepository:
+    def __init__(self) -> None:
+        self._messages: dict[tuple[int, int], MessageData] = {}
+        self._versions: dict[tuple[int, int], int] = {}
+        self._deleted: dict[tuple[int, int], datetime] = {}
+        self._processed: dict[tuple[int, int], datetime] = {}
+        self._cursors: dict[int, int] = {}
+        self._heartbeat: Heartbeat | None = None
+
+    def add(self, m: MessageData) -> bool:
+        key = (m.channel_id, m.message_id)
+        if key in self._messages:
+            return False
+        self._messages[key] = m
+        return True
+
+    def add_version(self, m: MessageData, edited_at: datetime, sold_out_hint: bool) -> int:
+        key = (m.channel_id, m.message_id)
+        self._versions[key] = self._versions.get(key, 0) + 1
+        return self._versions[key]
+
+    def mark_deleted(self, channel_id: int, message_ids: Sequence[int], at: datetime) -> None:
+        for message_id in message_ids:
+            if (channel_id, message_id) in self._messages:
+                self._deleted[(channel_id, message_id)] = at
+
+    def mark_processed(self, channel_id: int, message_id: int, at: datetime) -> None:
+        if (channel_id, message_id) in self._messages:
+            self._processed[(channel_id, message_id)] = at
+
+    def list_unprocessed_since(self, since: datetime) -> list[MessageData]:
+        return [
+            m
+            for key, m in self._messages.items()
+            if key not in self._processed and m.received_at >= since
+        ]
+
+    def get(self, channel_id: int, message_id: int) -> MessageData | None:
+        return self._messages.get((channel_id, message_id))
+
+    def get_cursor(self, channel_id: int) -> int | None:
+        return self._cursors.get(channel_id)
+
+    def set_cursor(self, channel_id: int, last_message_id: int) -> None:
+        self._cursors[channel_id] = max(last_message_id, self._cursors.get(channel_id, 0))
+
+    def write_heartbeat(self, h: Heartbeat) -> None:
+        self._heartbeat = h
+
+    def read_heartbeat(self) -> Heartbeat | None:
+        return self._heartbeat
