@@ -2,6 +2,8 @@ import asyncio
 from dataclasses import replace
 from datetime import timedelta
 
+import pytest
+
 from tests.fakes.clock import FakeClock
 from tests.fakes.messages import NOW, msg
 from tests.fakes.notifier import FakeNotifier
@@ -263,3 +265,63 @@ async def test_slow_notifier_does_not_delay_next_evaluation() -> None:
     for t in pending:
         t.cancel()
     await asyncio.gather(*pending, return_exceptions=True)
+
+
+class FailingAdd(InMemoryAlertRepository):
+    def __init__(self, bad_wish_id: int) -> None:
+        super().__init__()
+        self._bad = bad_wish_id
+
+    def add(self, a: Alert) -> Alert:
+        if a.wish_id == self._bad:
+            raise RuntimeError("db down")
+        return super().add(a)
+
+
+async def test_failing_wish_does_not_block_other_wishes_and_leaves_message_unprocessed() -> None:
+    h = Harness()
+    h.alerts = FailingAdd(bad_wish_id=1)
+    h.evaluator = Evaluator(
+        wishes=WishlistApiReader(h.wishes),
+        repo=h.alerts,
+        cache=DedupCache(timedelta(minutes=30)),
+        notifier=h.notifier,
+        bus=h.bus,
+        clock=h.clock,
+        mark_processed=lambda c, m: h.processed.append((c, m)),
+        channel_names=lambda: {10: "Promos"},
+        sleep=h._no_sleep,
+    )
+    h.wish("RTX 4060", ("rtx 4060",))
+    h.wish("Kit", ("ryzen",))
+    await h.feed(msg(text="Kit Ryzen + RTX 4060 por R$ 1.500"))
+    assert [a.wish_id for a in h.stored()] == [2]
+    assert h.stored()[0].status is AlertStatus.sent
+    assert h.notifier.calls == 1
+    assert h.processed == []
+
+
+async def test_notify_task_exception_is_logged_not_raised(caplog: pytest.LogCaptureFixture) -> None:
+    h = Harness()
+    h.wish()
+
+    def boom() -> dict[int, str]:
+        raise RuntimeError("names down")
+
+    h.evaluator._channel_names = boom
+    await h.feed(msg(text="RTX 4060 por R$ 1.500"))
+    assert [a.status for a in h.stored()] == [AlertStatus.pending]
+    assert any(r.message == "alert_notify_failed" for r in caplog.records)
+
+
+async def test_concurrent_reposts_yield_one_alert() -> None:
+    h = Harness()
+    h.wish()
+    a = msg(1, 10, "RTX 4060 por R$ 1.500")
+    b = replace(msg(2, 20, "RTX 4060 por R$ 1.500"), fwd_from_channel_id=10, fwd_from_message_id=1)
+    await asyncio.gather(
+        h.evaluator.on_received(MessageReceived(a)), h.evaluator.on_received(MessageReceived(b))
+    )
+    await h.evaluator.wait_idle()
+    assert len(h.stored()) == 1
+    assert len(h.alerts.suppressions) == 1

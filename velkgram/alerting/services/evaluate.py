@@ -74,10 +74,12 @@ class Evaluator:
             await asyncio.gather(*pending, return_exceptions=True)
 
     def evaluate(self, m: MessageData) -> list[Alert]:
-        """Synchronous: decide, persist and remember alerts; return the new pending ones."""
-        try:
-            return self._evaluate(m)
-        finally:
+        """Synchronous: decide, persist and remember alerts; return the new pending ones.
+
+        A failing wish is logged and skipped; the message is then left unprocessed.
+        """
+        created, complete = self._evaluate(m)
+        if complete:
             try:
                 self._mark_processed(m.channel_id, m.message_id)
             except Exception:
@@ -85,30 +87,44 @@ class Evaluator:
                     "mark_processed_failed",
                     extra={"channel_id": m.channel_id, "message_id": m.message_id},
                 )
+        return created
 
-    def _evaluate(self, m: MessageData) -> list[Alert]:
+    def _evaluate(self, m: MessageData) -> tuple[list[Alert], bool]:
         text = normalize_text(m.text)
         if not text:
-            return []
+            return [], True
         now = self._clock.now()
         delayed: int | None = None
         if m.source == "backfill":
             age = max(timedelta(0), now - m.date)
             if age > _BACKFILL_MAX_AGE:
-                return []
+                return [], True
             delayed = int(age.total_seconds() // 60)
         price = extract_price(m.text)
         created: list[Alert] = []
+        complete = True
         for wish in self._wishes.enabled():
-            if not matches_terms(wish, text):
+            try:
+                if not matches_terms(wish, text):
+                    continue
+                if price is not None and price > wish.max_price_cents:
+                    continue
+                alert = self._decide(m, wish, text, price, delayed, now)
+            except Exception:
+                complete = False
+                log.exception(
+                    "wish_evaluation_failed",
+                    extra={
+                        "channel_id": m.channel_id,
+                        "message_id": m.message_id,
+                        "wish_id": wish.id,
+                    },
+                )
                 continue
-            if price is not None and price > wish.max_price_cents:
-                continue
-            alert = self._decide(m, wish, text, price, delayed, now)
             if alert is not None:
                 self._wish_names[wish.id] = wish.name
                 created.append(alert)
-        return created
+        return created, complete
 
     def _decide(
         self,
@@ -154,6 +170,12 @@ class Evaluator:
         return alert
 
     async def _notify(self, m: MessageData, alert: Alert) -> None:
+        try:
+            await self._notify_and_finalize(m, alert)
+        except Exception:
+            log.exception("alert_notify_failed", extra={"alert_id": alert.id})
+
+    async def _notify_and_finalize(self, m: MessageData, alert: Alert) -> None:
         t = self._clock.now()
         names = self._channel_names()
         message = AlertMessage(
@@ -174,18 +196,15 @@ class Evaluator:
             latency_telegram_ms=_ms(t - m.date),
             latency_internal_ms=_ms(t - m.received_at),
         )
-        try:
-            self._repo.update(updated)
-            if ok:
-                self._on_alert_sent()
-            await self._bus.publish(
-                AlertTriggered(
-                    alert_id=alert.id or 0,
-                    wish_id=alert.wish_id,
-                    channel_id=alert.channel_id,
-                    message_id=alert.message_id,
-                    status=updated.status.value,
-                )
+        self._repo.update(updated)
+        if ok:
+            self._on_alert_sent()
+        await self._bus.publish(
+            AlertTriggered(
+                alert_id=alert.id or 0,
+                wish_id=alert.wish_id,
+                channel_id=alert.channel_id,
+                message_id=alert.message_id,
+                status=updated.status.value,
             )
-        except Exception:
-            log.exception("alert_finalize_failed", extra={"alert_id": alert.id})
+        )
