@@ -1,7 +1,8 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import datetime
 
+from velkgram.alerting import Alert, AlertStatus, SuppressionRule
 from velkgram.channels import Channel, ChannelStatus
 from velkgram.ingestion import Heartbeat
 from velkgram.shared.events import MessageData
@@ -134,3 +135,59 @@ class InMemoryMessageRepository:
 
     def read_heartbeat(self) -> Heartbeat | None:
         return self._heartbeat
+
+
+class InMemoryAlertRepository:
+    def __init__(self) -> None:
+        self._alerts: dict[int, Alert] = {}
+        self._next_id = 1
+        self.suppressions: list[tuple[int, int, int, str, int, datetime]] = []
+
+    def _where(self, predicate: Callable[[Alert], bool]) -> list[Alert]:
+        found = [a for a in self._alerts.values() if predicate(a)]
+        return sorted(found, key=lambda a: (a.created_at, a.id or 0))
+
+    def add(self, a: Alert) -> Alert:
+        stored = replace(a, id=self._next_id)
+        self._alerts[self._next_id] = stored
+        self._next_id += 1
+        return stored
+
+    def update(self, a: Alert) -> None:
+        if a.id is not None and a.id in self._alerts:
+            self._alerts[a.id] = a
+
+    def add_suppression(
+        self,
+        channel_id: int,
+        message_id: int,
+        wish_id: int,
+        rule: SuppressionRule,
+        matched_alert_id: int,
+        at: datetime,
+    ) -> None:
+        self.suppressions.append(
+            (channel_id, message_id, wish_id, rule.value, matched_alert_id, at)
+        )
+
+    def list_since(self, since: datetime) -> list[Alert]:
+        return self._where(lambda a: a.created_at >= since)
+
+    def list_retryable(self, since: datetime, stuck_before: datetime) -> list[Alert]:
+        return self._where(
+            lambda a: (
+                a.created_at >= since
+                and (
+                    a.status is AlertStatus.failed
+                    or (a.status is AlertStatus.pending and a.created_at < stuck_before)
+                )
+            )
+        )
+
+    def list_failed_before(self, before: datetime) -> list[Alert]:
+        return self._where(lambda a: a.status is AlertStatus.failed and a.created_at < before)
+
+    def has_alert_for_message(self, channel_id: int, message_id: int) -> bool:
+        return any(
+            a.channel_id == channel_id and a.message_id == message_id for a in self._alerts.values()
+        )
