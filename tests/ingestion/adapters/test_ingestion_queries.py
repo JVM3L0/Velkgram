@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.fakes.clock import FakeClock
 from velkgram.ingestion import DailyCount, Heartbeat, MessageText
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.adapters.sqlite.repository import SqliteMessageRepository
@@ -15,6 +16,7 @@ from velkgram.shared.migrate import apply_migrations
 
 D1 = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 D2 = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+T0 = D1
 
 
 @pytest.fixture
@@ -32,7 +34,7 @@ def _msg(channel_id: int, message_id: int, when: datetime, text: str = "t") -> M
 
 
 def _seed(conn: sqlite3.Connection) -> SqliteIngestionQueries:
-    repo = SqliteMessageRepository(conn)
+    repo = SqliteMessageRepository(conn, FakeClock(T0))
     repo.add(_msg(1, 1, D1, "a"))
     repo.add(_msg(1, 2, D1 + timedelta(hours=1), "b"))
     repo.add(_msg(2, 1, D1, "c"))
@@ -76,7 +78,7 @@ def test_heartbeat(conn: sqlite3.Connection) -> None:
     q = SqliteIngestionQueries(conn)
     assert q.heartbeat() is None
     hb = Heartbeat(D1, "reconnecting", None, 3, 1)
-    SqliteMessageRepository(conn).write_heartbeat(hb)
+    SqliteMessageRepository(conn, FakeClock(T0)).write_heartbeat(hb)
     assert q.heartbeat() == hb
 
 

@@ -9,6 +9,7 @@ from typing import Literal, cast
 from velkgram.ingestion.domain.models import ConnectionState, Heartbeat
 from velkgram.shared.db import transaction
 from velkgram.shared.events import MessageData
+from velkgram.shared.ports import Clock
 
 _COLUMNS = (
     "channel_id, message_id, date, received_at, text, links, fwd_from_channel_id, "
@@ -45,8 +46,9 @@ def _to_message(row: sqlite3.Row) -> MessageData:
 
 
 class SqliteMessageRepository:
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(self, conn: sqlite3.Connection, clock: Clock) -> None:
         self._conn = conn
+        self._clock = clock
 
     def add(self, m: MessageData) -> bool:
         with transaction(self._conn):
@@ -104,7 +106,8 @@ class SqliteMessageRepository:
 
     def list_unprocessed_since(self, since: datetime) -> list[MessageData]:
         rows = self._conn.execute(
-            f"SELECT {_COLUMNS} FROM messages WHERE processed_at IS NULL AND received_at >= ? "
+            f"SELECT {_COLUMNS} FROM messages WHERE processed_at IS NULL "
+            "AND deleted_at IS NULL AND received_at >= ? "
             "ORDER BY received_at, channel_id, message_id",
             (to_iso(since),),
         ).fetchall()
@@ -130,7 +133,7 @@ class SqliteMessageRepository:
                 "VALUES (?, ?, ?) ON CONFLICT(channel_id) DO UPDATE SET "
                 "last_message_id = MAX(last_message_id, excluded.last_message_id), "
                 "updated_at = excluded.updated_at",
-                (channel_id, last_message_id, to_iso(datetime.now(UTC))),
+                (channel_id, last_message_id, to_iso(self._clock.now())),
             )
 
     def write_heartbeat(self, h: Heartbeat) -> None:

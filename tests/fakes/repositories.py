@@ -109,11 +109,16 @@ class InMemoryMessageRepository:
             self._processed[(channel_id, message_id)] = at
 
     def list_unprocessed_since(self, since: datetime) -> list[MessageData]:
-        return [
-            m
-            for key, m in self._messages.items()
-            if key not in self._processed and m.received_at >= since
-        ]
+        return sorted(
+            (
+                m
+                for key, m in self._messages.items()
+                if key not in self._processed
+                and key not in self._deleted
+                and m.received_at >= since
+            ),
+            key=lambda m: (m.received_at, m.channel_id, m.message_id),
+        )
 
     def get(self, channel_id: int, message_id: int) -> MessageData | None:
         return self._messages.get((channel_id, message_id))

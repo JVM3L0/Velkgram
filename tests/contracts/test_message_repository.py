@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.fakes.clock import FakeClock
 from tests.fakes.repositories import InMemoryMessageRepository
 from velkgram.ingestion import Heartbeat, MessageRepository
 from velkgram.ingestion.adapters.sqlite.repository import SqliteMessageRepository
@@ -29,7 +30,7 @@ def handle(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[RepoHandl
         return
     conn = connect(tmp_path / "t.db")
     apply_migrations(conn, ["velkgram.shared", "velkgram.ingestion"])
-    yield RepoHandle(SqliteMessageRepository(conn), conn)
+    yield RepoHandle(SqliteMessageRepository(conn, FakeClock(T0)), conn)
     conn.close()
 
 
@@ -123,7 +124,7 @@ def test_heartbeat_round_trip(handle: RepoHandle) -> None:
 def test_message_writes_do_not_bump_state_versions(tmp_path: Path) -> None:
     conn = connect(tmp_path / "t.db")
     apply_migrations(conn, ["velkgram.shared", "velkgram.ingestion"])
-    repo = SqliteMessageRepository(conn)
+    repo = SqliteMessageRepository(conn, FakeClock(T0))
     before = read_versions(conn)
     repo.add(_msg(1))
     repo.add_version(_msg(1), T0, False)
@@ -131,3 +132,30 @@ def test_message_writes_do_not_bump_state_versions(tmp_path: Path) -> None:
     repo.mark_processed(100, 1, T0)
     repo.set_cursor(100, 1)
     assert read_versions(conn) == before
+
+
+def test_unprocessed_sorted_by_received_at_channel_message(handle: RepoHandle) -> None:
+    a = _msg(5, 200, received_at=T0 + timedelta(minutes=1))
+    b = _msg(2, 100, received_at=T0 + timedelta(minutes=1))
+    c = _msg(9, 100, received_at=T0 + timedelta(minutes=1))
+    d = _msg(1, 300, received_at=T0)
+    for m in (a, b, c, d):
+        handle.repo.add(m)
+    assert handle.repo.list_unprocessed_since(T0) == [d, b, c, a]
+
+
+def test_unprocessed_skips_deleted(handle: RepoHandle) -> None:
+    gone, kept = _msg(1), _msg(2)
+    handle.repo.add(gone)
+    handle.repo.add(kept)
+    handle.repo.mark_deleted(100, [1], T0)
+    assert handle.repo.list_unprocessed_since(T0) == [kept]
+
+
+def test_cursor_updated_at_uses_clock(tmp_path: Path) -> None:
+    conn = connect(tmp_path / "t.db")
+    apply_migrations(conn, ["velkgram.shared", "velkgram.ingestion"])
+    clock = FakeClock(datetime(2030, 1, 2, 3, 4, 5, tzinfo=UTC))
+    SqliteMessageRepository(conn, clock).set_cursor(100, 1)
+    row = conn.execute("SELECT updated_at FROM ingestion_cursors").fetchone()
+    assert row[0] == "2030-01-02T03:04:05.000000Z"
