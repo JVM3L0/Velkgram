@@ -33,6 +33,7 @@ class Offer:
     sold_out: bool
     deleted: bool
     updated_at: datetime
+    comparable: bool = True
 
 
 @dataclass(frozen=True, slots=True)

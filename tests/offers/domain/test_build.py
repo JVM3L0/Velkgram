@@ -87,3 +87,16 @@ def test_fingerprint_changes_with_terms_and_price() -> None:
 
 def test_fingerprint_ignores_name() -> None:
     assert wish_fingerprint(_wish(name="Outro", id=7)) == wish_fingerprint(_wish())
+
+
+def test_offer_comparable_flag_follows_the_coupon_and_multi_price_rule() -> None:
+    plain = offer_from_message(_msg("Fone JBL por R$ 99"), sold_out=False, deleted=False, now=NOW)
+    coupon = offer_from_message(
+        _msg("Cupom Kabum 10% OFF\n- A = R$ 80\n- B = R$ 140"),
+        sold_out=False,
+        deleted=False,
+        now=NOW,
+    )
+    assert plain is not None and coupon is not None
+    assert plain.comparable is True
+    assert coupon.comparable is False

@@ -1,5 +1,6 @@
 import sqlite3
 from collections.abc import Iterator
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -49,3 +50,22 @@ def test_fts_indexes_text_and_skips_null_text(conn: sqlite3.Connection) -> None:
 def test_fts_ignores_accents(conn: sqlite3.Connection) -> None:
     _insert(conn, "promoção")
     assert _hits(conn, "promocao") == 1
+
+
+def test_comparable_column_defaults_to_true_and_backfills_coupon_titles(
+    tmp_path: Path,
+) -> None:
+    c = connect(tmp_path / "old.db")
+    c.executescript((files("velkgram.offers") / "migrations" / "001_offers.sql").read_text())
+    for mid, title in ((1, "Cupom Kabum 10%"), (2, "SSD Kingston")):
+        c.execute(
+            "INSERT INTO offers (channel_id, message_id, posted_at, title, has_photo, sold_out, "
+            "deleted, updated_at) VALUES (1, ?, '2026-01-01T00:00:00Z', ?, 0, 0, 0, "
+            "'2026-01-01T00:00:00Z')",
+            (mid, title),
+        )
+    migration = files("velkgram.offers") / "migrations" / "002_offer_comparable.sql"
+    c.executescript(migration.read_text())
+    rows = dict(c.execute("SELECT message_id, comparable FROM offers").fetchall())
+    assert rows == {1: 0, 2: 1}
+    c.close()

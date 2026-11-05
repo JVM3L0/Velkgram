@@ -3,6 +3,7 @@
 import hashlib
 from datetime import datetime
 
+from velkgram.offers.domain.comparable import is_comparable
 from velkgram.offers.domain.models import Offer
 from velkgram.offers.domain.stores import main_link, store_of
 from velkgram.offers.domain.title import title_of
@@ -19,11 +20,12 @@ def offer_from_message(
         return None
     link = main_link(m.links)
     store = store_of(link) if link else None
+    title = title_of(m.text, store)
     return Offer(
         channel_id=m.channel_id,
         message_id=m.message_id,
         posted_at=m.date,
-        title=title_of(m.text, store),
+        title=title,
         price_cents=extract_price(m.text),
         store=store,
         main_link=link,
@@ -35,6 +37,7 @@ def offer_from_message(
         sold_out=sold_out,
         deleted=deleted,
         updated_at=now,
+        comparable=is_comparable(title, text),
     )
 
 

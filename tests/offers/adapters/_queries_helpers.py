@@ -19,6 +19,7 @@ def offer(
     origin: tuple[int, int] | None = None,
     sold_out: bool = False,
     deleted: bool = False,
+    comparable: bool = True,
 ) -> Offer:
     when = at or T0 + timedelta(minutes=message_id)
     return Offer(
@@ -37,6 +38,7 @@ def offer(
         sold_out=sold_out,
         deleted=deleted,
         updated_at=when,
+        comparable=comparable,
     )
 
 

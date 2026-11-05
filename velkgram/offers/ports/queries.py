@@ -38,6 +38,7 @@ class OfferCard:
     sold_out: bool
     deleted: bool
     repost_count: int
+    comparable: bool = True
 
 
 @dataclass(frozen=True, slots=True)

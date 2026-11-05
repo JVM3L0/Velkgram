@@ -46,6 +46,23 @@ def _to_cents(num: str) -> int:
     return int(whole) * 100 + (int(frac) if frac else 0)
 
 
+_REAIS = re.compile(rf"R\$\s*{_NUM}", re.IGNORECASE)
+
+
+def listed_prices(text: str) -> list[int]:
+    """Every `R$` value in cents, minus installments and the old price of a "de X por Y" pair."""
+    found: list[int] = []
+    for match in _REAIS.finditer(text):
+        before = text[max(0, match.start() - _WINDOW) : match.start()]
+        after = text[match.end() : match.end() + _WINDOW]
+        if _INSTALLMENT_BEFORE.search(before) or _INSTALLMENT_AFTER.match(after):
+            continue
+        if _OLD_BEFORE.search(before) and _OLD_AFTER.match(after):
+            continue
+        found.append(_to_cents(match.group("num")))
+    return found
+
+
 def extract_price(text: str) -> int | None:
     """Return the deal price in cents (BRL), or None when unknown."""
     for match in _VALUE.finditer(text):

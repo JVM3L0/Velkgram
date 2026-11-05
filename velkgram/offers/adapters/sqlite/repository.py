@@ -46,6 +46,7 @@ def _to_offer(row: sqlite3.Row) -> Offer:
         sold_out=bool(row["sold_out"]),
         deleted=bool(row["deleted"]),
         updated_at=from_iso(row["updated_at"]),
+        comparable=bool(row["comparable"]),
     )
 
 
@@ -81,14 +82,15 @@ _INSERT_MATCH = (
 _UPSERT = (
     "INSERT INTO offers (channel_id, message_id, posted_at, title, price_cents, store, "
     "main_link, has_photo, text, norm_text, origin_channel_id, origin_message_id, sold_out, "
-    "deleted, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+    "deleted, updated_at, comparable) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
     "ON CONFLICT(channel_id, message_id) DO UPDATE SET "
     "posted_at = excluded.posted_at, title = excluded.title, "
     "price_cents = excluded.price_cents, store = excluded.store, "
     "main_link = excluded.main_link, has_photo = excluded.has_photo, text = excluded.text, "
     "norm_text = excluded.norm_text, origin_channel_id = excluded.origin_channel_id, "
     "origin_message_id = excluded.origin_message_id, sold_out = excluded.sold_out, "
-    "deleted = excluded.deleted, updated_at = excluded.updated_at"
+    "deleted = excluded.deleted, updated_at = excluded.updated_at, "
+    "comparable = excluded.comparable"
 )
 
 
@@ -113,6 +115,7 @@ class SqliteOfferRepository:
             int(o.sold_out),
             int(o.deleted),
             to_iso(o.updated_at),
+            int(o.comparable),
         )
         with transaction(self._conn) as c:
             c.execute(_UPSERT, params)
@@ -187,8 +190,11 @@ class SqliteOfferRepository:
 
     def priced_points(self, wish_id: int) -> list[tuple[datetime, int | None]]:
         rows = self._conn.execute(
-            "SELECT posted_at, price_cents FROM offer_matches WHERE wish_id = ? "
-            "ORDER BY posted_at, channel_id, message_id",
+            "SELECT m.posted_at, CASE WHEN COALESCE(o.comparable, 1) = 1 "
+            "THEN m.price_cents END AS price_cents "
+            "FROM offer_matches m LEFT JOIN offers o "
+            "ON o.channel_id = m.channel_id AND o.message_id = m.message_id "
+            "WHERE m.wish_id = ? ORDER BY m.posted_at, m.channel_id, m.message_id",
             (wish_id,),
         ).fetchall()
         return [(from_iso(r["posted_at"]), _opt_int(r["price_cents"])) for r in rows]

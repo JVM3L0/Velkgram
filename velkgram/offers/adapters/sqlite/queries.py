@@ -26,9 +26,14 @@ _MIN_DAYS_FOR_DAILY = 3  # fewer distinct days: plot every priced match
 _MAX_POINTS = 200
 _RECENT = 30
 
+_MATCH_JOIN = (
+    "offer_matches m JOIN offers o ON o.channel_id = m.channel_id AND o.message_id = m.message_id"
+)
+_COMPARABLE_MATCH = "m.price_cents IS NOT NULL AND o.comparable = 1"
+
 _CARD_COLUMNS = (
     "o.channel_id, o.message_id, o.posted_at, o.title, o.price_cents, o.store, o.main_link, "
-    "o.has_photo, o.sold_out, o.deleted, "
+    "o.has_photo, o.sold_out, o.deleted, o.comparable, "
     "(SELECT COUNT(*) FROM offers r WHERE r.origin_channel_id = o.channel_id "
     "AND r.origin_message_id = o.message_id) AS repost_count"
 )
@@ -56,6 +61,7 @@ def _card(row: sqlite3.Row) -> OfferCard:
         has_photo=bool(row["has_photo"]),
         sold_out=bool(row["sold_out"]),
         deleted=bool(row["deleted"]),
+        comparable=bool(row["comparable"]),
         repost_count=int(row["repost_count"]),
     )
 
@@ -126,19 +132,19 @@ class SqliteOfferQueries:
         )
 
     def _points(self, wish_id: int, since: str | None) -> tuple[PricePoint, ...]:
-        where = "wish_id = ? AND price_cents IS NOT NULL"
+        where = f"{_COMPARABLE_MATCH} AND m.wish_id = ?"
         params: list[object] = [wish_id]
         if since is not None:
-            where += " AND posted_at >= ?"
+            where += " AND m.posted_at >= ?"
             params.append(since)
         distinct_days = self._conn.execute(
-            f"SELECT COUNT(DISTINCT substr(posted_at, 1, 10)) FROM offer_matches WHERE {where}",
+            f"SELECT COUNT(DISTINCT substr(m.posted_at, 1, 10)) FROM {_MATCH_JOIN} WHERE {where}",
             params,
         ).fetchone()[0]
         if distinct_days < _MIN_DAYS_FOR_DAILY:
             rows = self._conn.execute(
-                f"SELECT posted_at, price_cents FROM offer_matches WHERE {where} "
-                "ORDER BY posted_at, channel_id, message_id",
+                f"SELECT m.posted_at, m.price_cents FROM {_MATCH_JOIN} WHERE {where} "
+                "ORDER BY m.posted_at, m.channel_id, m.message_id",
                 params,
             ).fetchall()
             return tuple(
@@ -146,8 +152,8 @@ class SqliteOfferQueries:
                 for r in rows
             )
         rows = self._conn.execute(
-            "SELECT substr(posted_at, 1, 10) AS day, MIN(price_cents) AS low FROM offer_matches "
-            f"WHERE {where} GROUP BY day ORDER BY day",
+            "SELECT substr(m.posted_at, 1, 10) AS day, MIN(m.price_cents) AS low "
+            f"FROM {_MATCH_JOIN} WHERE {where} GROUP BY day ORDER BY day",
             params,
         ).fetchall()
         days = [(datetime.fromisoformat(r["day"]).replace(tzinfo=UTC), int(r["low"])) for r in rows]
@@ -194,9 +200,9 @@ class SqliteOfferQueries:
                 "SELECT COUNT(*) FROM offer_matches WHERE wish_id = ?", (wid,)
             ).fetchone()[0]
             rows = self._conn.execute(
-                "SELECT price_cents FROM offer_matches WHERE wish_id = ? "
-                "AND price_cents IS NOT NULL "
-                "ORDER BY posted_at DESC, channel_id DESC, message_id DESC LIMIT ?",
+                f"SELECT m.price_cents FROM {_MATCH_JOIN} WHERE m.wish_id = ? "
+                f"AND {_COMPARABLE_MATCH} "
+                "ORDER BY m.posted_at DESC, m.channel_id DESC, m.message_id DESC LIMIT ?",
                 (wid, _RECENT),
             ).fetchall()
             recent = tuple(int(r[0]) for r in reversed(rows))
