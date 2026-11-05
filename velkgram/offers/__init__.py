@@ -19,6 +19,7 @@ from velkgram.offers.services.build_offer import OfferBuilder
 from velkgram.offers.services.rebuild import rebuild_offers
 from velkgram.offers.services.retention import purge_offer_text_before
 from velkgram.offers.services.retro_match import RetroMatcher
+from velkgram.offers.web.chart import sparkline_svg
 
 __all__ = [
     "FeedCursor",
@@ -39,4 +40,5 @@ __all__ = [
     "WishSummary",
     "purge_offer_text_before",
     "rebuild_offers",
+    "sparkline_svg",
 ]
