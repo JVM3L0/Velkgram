@@ -15,6 +15,7 @@ PINNED = (
     "https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js",
     "https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap",
     "/static/velkgram.css",
+    "/static/velkgram.js",
 )
 PAGES = ("/login", "/wishes", "/wishes/new", "/channels", "/alerts", "/status")
 
@@ -196,3 +197,15 @@ def test_pages_without_a_shared_title_keep_the_plain_app_bar(tmp_path: Path) -> 
     )
     page = _page(client, "/wishes/1")
     assert "page-title" not in page and "has-page-title" not in page
+
+
+def test_script_is_loaded_deferred_with_content_hash(tmp_path: Path) -> None:
+    import hashlib
+
+    js = Path(__file__).parents[3] / "velkgram" / "apps" / "web" / "static" / "velkgram.js"
+    digest = hashlib.sha256(js.read_bytes()).hexdigest()[:12]
+    page = _page(make_client(tmp_path), "/")
+    assert f'<script src="/static/velkgram.js?v={digest}" defer></script>' in page
+    (tmp_path / "c").mkdir()
+    served = make_client(tmp_path / "c").get("/static/velkgram.js")
+    assert served.status_code == 200 and "data-copy" in served.text

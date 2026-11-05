@@ -39,6 +39,7 @@ from velkgram.ingestion.web.router import build_router as build_status_router
 from velkgram.offers import sparkline_svg
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
+from velkgram.offers.web.format import linkify
 from velkgram.offers.web.router import WishInfo
 from velkgram.offers.web.router import build_router as build_offers_router
 from velkgram.shared.adapters.clock_system import SystemClock
@@ -73,7 +74,11 @@ def _build_templates() -> Jinja2Templates:
     env.globals["css_version"] = hashlib.sha256(
         (_STATIC_DIR / "velkgram.css").read_bytes()
     ).hexdigest()[:12]
+    env.globals["js_version"] = hashlib.sha256(
+        (_STATIC_DIR / "velkgram.js").read_bytes()
+    ).hexdigest()[:12]
     env.filters["brl"] = format_brl
+    env.filters["linkify"] = linkify
     env.globals["below_alert"] = is_below_alert
     return Jinja2Templates(env=env)
 
