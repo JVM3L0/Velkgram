@@ -12,16 +12,19 @@
     <i>search</i>
     <input type="search" id="q" name="q" value="{{ q }}" placeholder="Buscar por código, título ou loja" aria-label="Buscar cupons" enterkeyhint="search">
   </div>
-  <div class="field label suffix border filter-channel">
-    <select id="loja" name="loja">
-      <option value="">Todas as lojas</option>
+  {% if store_options %}
+  <div class="filter-group" role="group" aria-labelledby="stores-label">
+    <p id="stores-label" class="filter-label">Lojas</p>
+    <div class="chip-row">
       {% for value, name in store_options %}
-      <option value="{{ value }}"{% if value == store %} selected{% endif %}>{{ name }}</option>
+      <label class="chip">
+        <input type="checkbox" name="loja" value="{{ value }}"{% if value in selected_stores %} checked{% endif %}>
+        <span>{{ name }}</span>
+      </label>
       {% endfor %}
-    </select>
-    <label for="loja">Loja</label>
-    <i>arrow_drop_down</i>
+    </div>
   </div>
+  {% endif %}
   <input type="hidden" name="ativos" value="0">
   <label class="switch filter-switch">
     <input type="checkbox" name="ativos" value="1"{% if only_active %} checked{% endif %}>

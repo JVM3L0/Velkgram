@@ -1114,10 +1114,10 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 .product-page .offer.offer-coupon { display: flex; flex-direction: column; align-items: stretch; }
 
 /* Feed tabs (Ofertas / Cupons): real links in a primary-tabs row. */
-.tabs.feed-tabs { margin-block: 0 1rem !important; border-block-end: 1px solid var(--outline-variant); }
+nav.tabs.feed-tabs { margin-block: 0 1rem; border-block-end: 1px solid var(--outline-variant); }
 .feed-tabs > a { flex: 1 1 0; min-block-size: 3rem; justify-content: center; margin: 0; }
 @media (min-width: 600px) {
-  .tabs.feed-tabs { justify-content: flex-start; }
+  nav.tabs.feed-tabs { justify-content: flex-start; }
   .feed-tabs > a { flex: 0 0 auto; inline-size: auto; min-inline-size: 9rem; }
 }
 
@@ -1162,10 +1162,11 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 .load-more.is-error .load-more-label { display: none; }
 .load-more.is-error { background-color: var(--error-container); color: var(--on-error-container); }
 .load-more.is-error .load-more-error { display: inline; }
-.load-more .htmx-indicator { display: none; margin: 0; color: var(--on-primary-container); }
+.load-more .htmx-indicator { display: none; margin: 0; color: var(--on-secondary-container); }
 .load-more.htmx-request .htmx-indicator { display: inline-block; }
 .load-more.htmx-request .load-more-label, .load-more.htmx-request .load-more-error { display: none; }
 .load-end { text-align: center; margin: 1rem 0; }
+.feed-list, .feed-cards { padding-block-end: 4.5rem; }
 
 .top-fab {
   position: fixed;

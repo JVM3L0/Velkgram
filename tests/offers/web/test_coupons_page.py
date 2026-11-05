@@ -21,8 +21,11 @@ def test_tabs_are_links_with_the_current_one_marked_on_both_pages(tmp_path: Path
     client = _client(tmp_path)
     for path, current in (("/", "Ofertas"), ("/cupons", "Cupons")):
         page = client.get(path).text
-        assert 'role="tablist"' in page
-        tabs = re.findall(r'<a [^>]*role="tab"[^>]*>.*?</a>', page, re.DOTALL)
+        nav = re.search(
+            r'<nav class="tabs feed-tabs" aria-label="Seções do feed">(.*?)</nav>', page, re.DOTALL
+        )
+        assert nav is not None and 'role="tab' not in page
+        tabs = re.findall(r"<a [^>]*>.*?</a>", nav.group(1), re.DOTALL)
         assert len(tabs) == 2
         assert [("/" if "Ofertas" in t else "/cupons") in t for t in tabs] == [True, True]
         marked = [t for t in tabs if 'aria-current="page"' in t]
@@ -75,9 +78,9 @@ def test_store_select_lists_stores_with_coupons_and_filters(tmp_path: Path) -> N
     )
     page = client.get("/cupons", params={"loja": "amazon"}).text
     assert len(_cards(page)) == 1 and "cupom-1-2" in page
-    options = re.findall(r'<option value="([^"]*)"( selected)?', page)
-    assert [o[0] for o in options] == ["", "amazon", "shopee"]
-    assert [o[0] for o in options if o[1]] == ["amazon"]
+    boxes = re.findall(r'<input type="checkbox" name="loja" value="([^"]*)"( checked)?', page)
+    assert [o[0] for o in boxes] == ["amazon", "shopee"]
+    assert [o[0] for o in boxes if o[1]] == ["amazon"]
 
 
 def test_search_matches_code_title_or_store_including_display_name(tmp_path: Path) -> None:
@@ -207,4 +210,7 @@ def test_several_stores_filter_and_unknown_store_is_not_all_stores(tmp_path: Pat
     ]
     page = client.get("/cupons", params={"loja": "naoexiste"}).text
     assert _cards(page) == [] and "Nenhum cupom por aqui." in page
-    assert '<option value="naoexiste" selected>' in page
+    assert 'name="loja" value="naoexiste" checked' in page
+    page = client.get("/cupons", params=[("loja", "shopee"), ("loja", "kabum")]).text
+    checked = re.findall(r'name="loja" value="([^"]*)" checked', page)
+    assert checked == ["shopee", "kabum"] or sorted(checked) == ["kabum", "shopee"]

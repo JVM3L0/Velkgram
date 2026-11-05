@@ -103,6 +103,16 @@
 
   document.addEventListener("htmx:afterSwap", syncTitle);
 
+  // A 204 means nothing is new any more (a deletion): htmx does not swap, so empty the region
+  // ourselves, which drops the stale pill and its title badge.
+  document.addEventListener("htmx:afterRequest", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element) || !target.matches("[data-live]")) return;
+    if (event.detail.xhr?.status !== 204) return;
+    target.replaceChildren();
+    syncTitle();
+  });
+
   // Settled, not just swapped: the pill's own hx-get is processed by then, so a click works.
   document.addEventListener("htmx:afterSettle", (event) => {
     const target = event.target;

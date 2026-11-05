@@ -4,7 +4,7 @@ import html
 import re
 from datetime import timedelta
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from tests.offers.adapters._queries_helpers import offer, put
 from tests.offers.web.test_coupons_ui import NOW, _coupon
@@ -99,6 +99,15 @@ def test_feed_news_empty_list_counts_from_render_time(tmp_path: Path) -> None:
     assert client.get(url).status_code == 204  # posted before the page was rendered
     _add(tmp_path, offer(2, at=NOW + timedelta(seconds=30)))
     assert "1 nova oferta" in client.get(url).text
+
+
+def test_feed_news_empty_list_cursor_leaves_a_margin_before_render_time(tmp_path: Path) -> None:
+    client = feed_client(tmp_path)
+    url = _since(client.get("/").text)
+    _add(tmp_path, offer(1, at=NOW - timedelta(seconds=30)))  # posted just before the render
+    assert "1 nova oferta" in client.get(url).text
+    since = unquote(url).split("since=")[1].split("|")[0]
+    assert since.endswith(":00+00:00") or "." not in since  # whole seconds
 
 
 def test_feed_news_tie_on_posted_at_uses_the_full_cursor(tmp_path: Path) -> None:

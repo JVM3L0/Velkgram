@@ -130,9 +130,17 @@ def _cursor_of(card: OfferCard) -> FeedCursor:
     return FeedCursor(card.posted_at, card.channel_id, card.message_id)
 
 
+_RENDER_MARGIN_SECONDS = 60
+
+
 def _render_cursor(now: datetime) -> FeedCursor:
-    """Sorts after every row posted up to `now`: an empty list counts what arrives afterwards."""
-    return FeedCursor(now, SQLITE_MAX_INT, SQLITE_MAX_INT)
+    """Sorts after every row posted up to a minute before `now`: an empty list counts what arrives.
+
+    `posted_at` is the Telegram message date (whole seconds, earlier than ingestion), so a bare
+    render time would miss an offer posted around it. The list is empty: no double count.
+    """
+    margin = timedelta(seconds=_RENDER_MARGIN_SECONDS)
+    return FeedCursor((now - margin).replace(microsecond=0), SQLITE_MAX_INT, SQLITE_MAX_INT)
 
 
 def _cursor_text(c: FeedCursor) -> str:
@@ -577,6 +585,8 @@ def build_router(
             params = feed_params(flt, view)
             params.append(("cursor", _cursor_text(page.next_cursor)))
             next_url = "/?" + urlencode(params)
+        # `since` is the newest rendered row. Rows backfilled with an older posted_at are not
+        # announced: they simply show up in chronological place on the next load.
         since = _cursor_text(_cursor_of(page.cards[0]) if page.cards else _render_cursor(now))
         live_url = "/novidades?" + urlencode([*feed_params(flt, view), ("since", since)])
         is_fragment = request.headers.get("HX-Request") == "true" and bool(cursor)
@@ -622,6 +632,8 @@ def build_router(
             params = coupon_params(flt, query, only_active)
             params.append(("cursor", _cursor_text(page.next_cursor)))
             next_url = "/cupons?" + urlencode(params)
+        # `since` is the newest rendered row. Rows backfilled with an older posted_at are not
+        # announced: they simply show up in chronological place on the next load.
         since = _cursor_text(_cursor_of(page.cards[0]) if page.cards else _render_cursor(now))
         live_url = "/cupons/novidades?" + urlencode(
             [*coupon_params(flt, query, only_active), ("since", since)]
@@ -637,7 +649,7 @@ def build_router(
                 "rows": rows,
                 "next_url": next_url,
                 "q": query,
-                "store": selected[0] if selected else "",
+                "selected_stores": selected,
                 "only_active": only_active,
                 "store_options": [
                     (s, STORE_NAMES.get(s, s))
