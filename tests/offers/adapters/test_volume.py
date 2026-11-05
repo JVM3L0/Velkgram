@@ -150,7 +150,7 @@ def test_volume_coupons_pages(conn: sqlite3.Connection) -> None:
     _check(conn, lambda: q.coupons(flt, None), "coupons first page")
     cursor = _deep(lambda cur: q.coupons(flt, cur))
     _check(conn, lambda: q.coupons(flt, cursor), "coupons 100th page")
-    since = CouponFilter(store="shopee", since=T0 + timedelta(hours=100))
+    since = CouponFilter(stores=("shopee",), since=T0 + timedelta(hours=100))
     _check(conn, lambda: q.coupons(since, None), "coupons store+since")
 
 

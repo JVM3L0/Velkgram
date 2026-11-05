@@ -74,18 +74,6 @@
   </dialog>
 </form>
 
-{% if coupon_strip %}
-<section class="coupon-strip" aria-labelledby="coupon-strip-title">
-  <div class="coupon-strip-head">
-    <h2 id="coupon-strip-title" class="section-title">Cupons ativos</h2>
-    <a class="coupon-strip-all" href="/cupons">Ver todos</a>
-  </div>
-  <div class="coupon-strip-row">
-    {% for row in coupon_strip %}{% with compact = true %}{% include "_coupon_card.html" %}{% endwith %}{% endfor %}
-  </div>
-</section>
-{% endif %}
-
 <section id="results" class="results" aria-label="Resultados">
   {% if q %}<p class="note"><i aria-hidden="true">info</i>A busca cobre os últimos {{ retention_days }} dias.</p>{% endif %}
   <div id="feed" class="feed feed-{{ view }}">

@@ -118,25 +118,12 @@ def test_coupon_card_falls_back_to_abrir_without_redeem_link(tmp_path: Path) -> 
     assert "Resgatar" not in page and "Abrir" in page
 
 
-def test_main_list_excludes_coupons_and_active_strip_shows_them(tmp_path: Path) -> None:
+def test_main_list_excludes_coupons_and_has_no_coupon_strip(tmp_path: Path) -> None:
     client = _client(tmp_path, _product(1), _coupon(2), _coupon(3, at=NOW - timedelta(hours=8)))
     page = client.get("/").text
-    assert "Cupons ativos" in page
-    strip = _section(page, "Cupons ativos")
-    assert "R$ 10 OFF" in strip
-    assert strip.count('class="offer offer-coupon') == 1  # the 8 h old coupon is gone
-    results = page[page.index('id="feed"') :]
-    assert "Placa de Video" in results
-    assert "offer-coupon" not in results
-
-
-def test_strip_is_hidden_without_active_coupons_or_when_filtered(tmp_path: Path) -> None:
-    client = _client(tmp_path, _product(1), _coupon(2, at=NOW - timedelta(hours=9)))
-    assert "Cupons ativos" not in client.get("/").text
-    client = _client(tmp_path / "b", _product(1), _coupon(2))
-    assert "Cupons ativos" in client.get("/").text
-    assert "Cupons ativos" not in client.get("/", params={"q": "placa"}).text
-    assert "Cupons ativos" not in client.get("/", params={"store": "amazon"}).text
+    assert "Cupons ativos" not in page and "coupon-strip" not in page
+    assert "Placa de Video" in page
+    assert "offer-coupon" not in page and "R$ 10 OFF" not in page
 
 
 def test_post_text_details_is_escaped_and_linkified(tmp_path: Path) -> None:
@@ -237,28 +224,6 @@ def test_single_tier_card_is_unchanged(tmp_path: Path) -> None:
     assert "<li" not in card and "em compras a partir de R$ 40" in card
 
 
-def test_strip_card_is_compact(tmp_path: Path) -> None:
-    page = _client(tmp_path, _multi_tier()).get("/").text
-    strip = _section(page, "Cupons ativos")
-    assert "Até R$ 90 OFF" in strip
-    rows = _rows(strip)
-    assert len(rows) == 2
-    assert [[b["data-copy"] for b in _copy_buttons(r)] for r in rows] == [
-        ["MOVEIS0511"],
-        ["SEMPRESAUDE"],
-    ]
-    assert len(_copy_buttons(strip)) == 2
-    assert 'class="coupon-more"' in strip and ">+7<" in strip
-    assert 'href="/cupons#cupom-1-3"' in strip
-    assert "Ver post completo" not in strip
-    assert 'id="cupom-1-3"' not in page  # anchors live on the full cards only
-
-
-def test_full_card_carries_the_anchor_the_strip_links_to(tmp_path: Path) -> None:
-    page = _client(tmp_path, _multi_tier()).get("/cupons").text
-    assert 'id="cupom-1-3"' in page
-
-
 def test_coupon_card_does_not_repeat_the_discount_in_its_title(tmp_path: Path) -> None:
     repeat = _coupon(4, title="Cupom KaBuM em produtos selecionados - 11% OFF", store="kabum")
     bare = _coupon(5, title="Cupom Shopee")
@@ -266,3 +231,8 @@ def test_coupon_card_does_not_repeat_the_discount_in_its_title(tmp_path: Path) -
     assert 'class="offer-title">em produtos selecionados<' in page
     assert "Cupom KaBuM" not in page
     assert page.count('class="offer-title"') == 1  # "Cupom Shopee" leaves nothing to show
+
+
+def test_full_card_carries_its_anchor(tmp_path: Path) -> None:
+    page = _client(tmp_path, _multi_tier()).get("/cupons").text
+    assert 'id="cupom-1-3"' in page and "coupon-more" not in page

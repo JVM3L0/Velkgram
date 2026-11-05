@@ -46,7 +46,7 @@ def test_lists_full_coupon_cards_newest_first_without_products(tmp_path: Path) -
     ids = re.findall(r'<article id="(cupom-\d+-\d+)"', page)
     assert ids == ["cupom-1-2", "cupom-1-1"]
     assert "Placa de Video" not in page
-    assert "Ver post completo" in page  # full card, not the compact strip one
+    assert "Ver post completo" in page
 
 
 def test_only_active_is_on_by_default_and_ativos_0_turns_it_off(tmp_path: Path) -> None:
@@ -120,11 +120,9 @@ def test_old_tipo_filter_redirects_to_cupons_keeping_store_and_query(tmp_path: P
     assert client.get("/", params={"tipo": "cupons"}).headers["location"] == "/cupons"
 
 
-def test_feed_has_no_coupon_chip_but_strip_links_to_the_coupon_page(tmp_path: Path) -> None:
+def test_feed_has_no_coupon_chip_or_strip(tmp_path: Path) -> None:
     page = _client(tmp_path, _product(1), _coupon(2)).get("/").text
-    assert 'name="tipo"' not in page
-    strip = page[page.index("Cupons ativos") : page.index('id="results"')]
-    assert re.search(r'<a [^>]*href="/cupons"[^>]*>Ver todos', strip)
+    assert 'name="tipo"' not in page and "Ver todos" not in page
 
 
 def test_product_card_links_to_the_stores_recent_coupons(tmp_path: Path) -> None:
@@ -188,3 +186,25 @@ def test_product_page_match_cards_carry_the_store_coupon_chip(tmp_path: Path) ->
         conn.close()
     page = client.get("/wishes/1").text
     assert 'href="/cupons?loja=amazon"' in page and "1 cupom da loja" in page
+
+
+def test_redirect_keeps_every_store_and_the_active_switch(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    r = client.get(
+        "/", params=[("tipo", "cupons"), ("store", "amazon"), ("store", "shopee"), ("ativos", "0")]
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/cupons?loja=amazon&loja=shopee&ativos=0"
+
+
+def test_several_stores_filter_and_unknown_store_is_not_all_stores(tmp_path: Path) -> None:
+    offers = (_coupon(1, store="shopee"), _coupon(2, store="amazon"), _coupon(3, store="kabum"))
+    client = _client(tmp_path, *offers)
+    page = client.get("/cupons", params=[("loja", "shopee"), ("loja", "kabum")]).text
+    assert [c for c in ("cupom-1-1", "cupom-1-2", "cupom-1-3") if f'id="{c}"' in page] == [
+        "cupom-1-1",
+        "cupom-1-3",
+    ]
+    page = client.get("/cupons", params={"loja": "naoexiste"}).text
+    assert _cards(page) == [] and "Nenhum cupom por aqui." in page
+    assert '<option value="naoexiste" selected>' in page

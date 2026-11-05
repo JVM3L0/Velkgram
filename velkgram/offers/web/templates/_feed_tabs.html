@@ -1,4 +1,4 @@
 <div class="tabs feed-tabs" role="tablist" aria-label="Seções do feed">
-  <a role="tab" href="/"{% if tab == "ofertas" %} class="active" aria-selected="true" aria-current="page"{% else %} aria-selected="false"{% endif %}><i aria-hidden="true">sell</i><span>Ofertas</span></a>
-  <a role="tab" href="/cupons"{% if tab == "cupons" %} class="active" aria-selected="true" aria-current="page"{% else %} aria-selected="false"{% endif %}><i aria-hidden="true">confirmation_number</i><span>Cupons</span></a>
+  <a role="tab" href="/"{% if tab == "ofertas" %} class="active" aria-current="page"{% else %}{% endif %}><i aria-hidden="true">sell</i><span>Ofertas</span></a>
+  <a role="tab" href="/cupons"{% if tab == "cupons" %} class="active" aria-current="page"{% else %}{% endif %}><i aria-hidden="true">confirmation_number</i><span>Cupons</span></a>
 </div>

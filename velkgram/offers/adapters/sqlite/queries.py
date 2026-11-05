@@ -139,12 +139,17 @@ class SqliteOfferQueries:
         if f.since is not None:
             where.append("o.posted_at >= ?")
             params.append(to_iso(f.since))
-        if f.store is not None:
-            where.append("o.store = ?")
-            params.append(f.store)
+        if f.stores:
+            where.append(f"o.store IN ({', '.join('?' * len(f.stores))})")
+            params.extend(f.stores)
         if f.q:
             like = "%" + _escape_like(f.q) + "%"
-            clauses = [f"o.{col} LIKE ? ESCAPE '\\'" for col in ("title", "store", "coupons")]
+            clauses = [f"o.{col} LIKE ? ESCAPE '\\'" for col in ("title", "store")]
+            # `coupons` is a JSON array: match its elements, never the brackets or quotes.
+            clauses.append(
+                "EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(o.coupons) THEN o.coupons "
+                "ELSE '[]' END) WHERE value LIKE ? ESCAPE '\\')"
+            )
             params.extend([like] * len(clauses))
             if f.q_stores:
                 clauses.append(f"o.store IN ({', '.join('?' * len(f.q_stores))})")
@@ -176,17 +181,6 @@ class SqliteOfferQueries:
             (to_iso(now - timedelta(hours=hours)),),
         ).fetchall()
         return {str(r[0]): int(r[1]) for r in rows}
-
-    def active_coupons(
-        self, now: datetime, hours: int = 6, limit: int = 12
-    ) -> tuple[OfferCard, ...]:
-        rows = self._conn.execute(
-            f"SELECT {_CARD_COLUMNS} FROM offers o WHERE o.kind = 'coupon' AND o.deleted = 0 "
-            f"AND {_NOT_REPOST} AND o.posted_at >= ? ORDER BY o.posted_at DESC, o.channel_id DESC, "
-            "o.message_id DESC LIMIT ?",
-            (to_iso(now - timedelta(hours=hours)), limit),
-        ).fetchall()
-        return tuple(_card(r) for r in rows)
 
     def product(
         self,

@@ -155,29 +155,3 @@ def test_card_carries_coupon_data_and_post_text(conn: sqlite3.Connection) -> Non
     assert (coupon.coupon_discount, coupon.coupon_min_cents) == ("R$ 10 OFF", 4000)
     assert coupon.redeem_link == "https://x.test/resgate"
     assert coupon.coupon_tiers == (CouponTier("R$ 10 OFF", 4000),)
-
-
-def test_active_coupons_are_recent_newest_first_and_capped(conn: sqlite3.Connection) -> None:
-    now = T0 + timedelta(hours=10)
-
-    def coupon(mid: int, age_h: float, **kw: object):  # type: ignore[no-untyped-def]
-        return offer(
-            mid,
-            at=now - timedelta(hours=age_h),
-            kind=OfferKind.coupon,
-            price=None,
-            title="Cupom X",
-            **kw,  # type: ignore[arg-type]
-        )
-
-    put(
-        conn,
-        coupon(1, 7),
-        coupon(2, 5),
-        coupon(3, 1),
-        coupon(4, 2, deleted=True),
-        offer(5, at=now - timedelta(hours=1)),
-    )
-    q = SqliteOfferQueries(conn)
-    assert [c.message_id for c in q.active_coupons(now)] == [3, 2]
-    assert [c.message_id for c in q.active_coupons(now, limit=1)] == [3]

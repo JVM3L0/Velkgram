@@ -105,7 +105,6 @@ class CardView:
     text: str | None = None
     tier_rows: tuple[TierRow, ...] = ()
     loose_codes: tuple[str, ...] = ()
-    compact_more: int = 0
     anchor: str = ""
     store_key: str | None = None
     store_coupons: int = 0
@@ -217,22 +216,15 @@ def _loose_codes(card: OfferCard) -> tuple[str, ...]:
     return tuple(c for c in card.coupons if c not in tied)
 
 
-_COMPACT_ROWS = 2
-
-
-def _compact_more(card: OfferCard) -> int:
-    """Codes a compact card leaves out: only the first code of its first rows is shown."""
-    if len(card.coupon_tiers) < 2:
-        return max(len(card.coupons) - _COMPACT_ROWS, 0)
-    shown = sum(1 for t in card.coupon_tiers[:_COMPACT_ROWS] if t.codes)
-    return len(card.coupons) - shown
-
-
-def _redirect_to_coupons(q: str, stores: list[str] | None) -> RedirectResponse:
-    """The old `/?tipo=cupons` filter now lives on the coupons tab; keep store and search."""
-    params = [("loja", s) for s in (stores or [])[:1] if s]
+def _redirect_to_coupons(
+    q: str, stores: list[str] | None, ativos: list[str] | None
+) -> RedirectResponse:
+    """The old `/?tipo=cupons` filter now lives on the coupons tab; keep stores, search, ativos."""
+    params = [("loja", s) for s in (stores or []) if s]
     if q.strip():
         params.append(("q", q.strip()))
+    if ativos:
+        params.append(("ativos", ativos[-1]))
     return RedirectResponse(
         "/cupons" + ("?" + urlencode(params) if params else ""), status_code=303
     )
@@ -288,7 +280,6 @@ def build_router(
             terms=_coupon_terms(card) if len(card.coupon_tiers) < 2 else (),
             tier_rows=_tier_rows(card),
             loose_codes=_loose_codes(card),
-            compact_more=_compact_more(card),
             anchor=f"cupom-{card.channel_id}-{card.message_id}",
             redeem_href=safe_href(card.redeem_link),
             cart_href=safe_href(card.cart_link),
@@ -443,9 +434,10 @@ def build_router(
         cursor: str = "",
         view: str = "cards",
         tipo: str = "",
+        ativos: Annotated[list[str] | None, Query()] = None,
     ) -> Response:
         if tipo == _COUPONS_TYPE:
-            return _redirect_to_coupons(q, store)
+            return _redirect_to_coupons(q, store, ativos)
         names = channel_names(conn)
         channel_id = _int_or_none(channel)
         if channel_id not in names:
@@ -489,14 +481,8 @@ def build_router(
         context: dict[str, object] = {"rows": rows, "next_url": next_url}
         if is_fragment:
             return templates.TemplateResponse(request, "_feed_page.html", context)
-        unfiltered = flt == FeedFilter(None, None, None, (), False, None) and not cursor
         context.update(
             {
-                "coupon_strip": (
-                    [card_view(c, now, names) for c in queries.active_coupons(now)]
-                    if unfiltered
-                    else []
-                ),
                 "q": query,
                 "min_value": min_raw.strip(),
                 "max_value": max_raw.strip(),
@@ -516,7 +502,7 @@ def build_router(
         request: Request,
         conn: Annotated[sqlite3.Connection, Depends(get_conn)],
         q: str = "",
-        loja: str = "",
+        loja: Annotated[list[str] | None, Query()] = None,
         ativos: Annotated[list[str] | None, Query()] = None,
         cursor: str = "",
     ) -> Response:
@@ -524,12 +510,12 @@ def build_router(
         now = clock.now()
         stores = queries.coupon_stores()
         query = q.strip()
-        store = loja if loja in stores else ""
+        selected = tuple(dict.fromkeys(s for s in (loja or []) if s))
         # The switch posts a hidden "0" before its checkbox "1": the last value wins.
         only_active = not ativos or ativos[-1] != "0"
         flt = CouponFilter(
             q=query or None,
-            store=store or None,
+            stores=selected,
             since=now - timedelta(hours=_ACTIVE_HOURS) if only_active else None,
             q_stores=tuple(
                 s for s in stores if query and query.casefold() in STORE_NAMES.get(s, s).casefold()
@@ -541,8 +527,7 @@ def build_router(
         next_url: str | None = None
         if rows and page.next_cursor is not None:
             params = [("q", query)] if query else []
-            if store:
-                params.append(("loja", store))
+            params.extend(("loja", s) for s in selected)
             params.append(("ativos", "1" if only_active else "0"))
             params.append(("cursor", _cursor_text(page.next_cursor)))
             next_url = "/cupons?" + urlencode(params)
@@ -557,10 +542,13 @@ def build_router(
                 "rows": rows,
                 "next_url": next_url,
                 "q": query,
-                "store": store,
+                "store": selected[0] if selected else "",
                 "only_active": only_active,
-                "store_options": [(s, STORE_NAMES.get(s, s)) for s in stores],
-                "has_filters": bool(query or store),
+                "store_options": [
+                    (s, STORE_NAMES.get(s, s))
+                    for s in (*stores, *(x for x in selected if x not in stores))
+                ],
+                "has_filters": bool(query or selected),
             },
         )
 

@@ -23,7 +23,7 @@ class CouponFilter:
     """Filters of the coupons page; `since` keeps only coupons posted at or after it."""
 
     q: str | None = None
-    store: str | None = None
+    stores: tuple[str, ...] = ()
     since: datetime | None = None
     q_stores: tuple[str, ...] = ()
     """Store keys whose display name matched `q`, so a search by "mercado livre" finds them."""
@@ -99,12 +99,6 @@ class WishSummary:
 
 class OfferQueries(Protocol):
     def feed(self, f: FeedFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage: ...
-
-    def active_coupons(
-        self, now: datetime, hours: int = 6, limit: int = 12
-    ) -> tuple[OfferCard, ...]:
-        """Coupon offers posted in the last `hours`, newest first."""
-        ...
 
     def coupons(self, f: CouponFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
         """Live (not deleted, not a repost) coupon offers, newest first."""

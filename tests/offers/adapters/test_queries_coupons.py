@@ -8,7 +8,7 @@ import pytest
 from tests.offers.adapters._queries_helpers import T0, offer, put
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
-from velkgram.offers.domain.models import Offer, OfferKind
+from velkgram.offers.domain.models import CouponTier, Offer, OfferKind
 from velkgram.offers.ports.queries import CouponFilter, FeedCursor
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
@@ -70,7 +70,7 @@ def test_coupons_since_keeps_only_recent_ones(conn: sqlite3.Connection) -> None:
 
 def test_coupons_store_filter(conn: sqlite3.Connection) -> None:
     put(conn, coupon(1, store="shopee"), coupon(2, store="amazon"), coupon(3, store=None))
-    assert _ids(conn, CouponFilter(store="amazon")) == [2]
+    assert _ids(conn, CouponFilter(stores=("amazon",))) == [2]
 
 
 def test_coupons_search_matches_code_title_or_store(conn: sqlite3.Connection) -> None:
@@ -139,3 +139,17 @@ def test_coupon_queries_use_the_kind_feed_index(conn: sqlite3.Connection) -> Non
         )
     )
     assert "idx_offers_kind_feed" in plan
+
+
+def test_coupons_search_never_matches_json_structure_or_tier_metadata(
+    conn: sqlite3.Connection,
+) -> None:
+    put(conn, coupon(1, 1, coupon=("AAA", "BBB"), coupon_tiers=(CouponTier("R$ 10 OFF", 4000),)))
+    for term in ('","', "[", '"', "min_cents", "4000", "OFF"):
+        assert _ids(conn, CouponFilter(q=term)) == [], term
+    assert _ids(conn, CouponFilter(q="BBB")) == [1]
+
+
+def test_coupons_store_filter_accepts_several_stores(conn: sqlite3.Connection) -> None:
+    put(conn, coupon(1, store="shopee"), coupon(2, store="amazon"), coupon(3, store="kabum"))
+    assert _ids(conn, CouponFilter(stores=("shopee", "kabum"))) == [3, 1]
