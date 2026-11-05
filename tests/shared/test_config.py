@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from velkgram.shared.config import load_settings
@@ -29,3 +31,11 @@ def test_defaults() -> None:
 def test_unknown_notifier_rejected() -> None:
     with pytest.raises(ValueError, match="unknown NOTIFIER: email"):
         load_settings({"NOTIFIER": "email"})
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_blank_values_use_defaults(blank: str) -> None:
+    s = load_settings({"NOTIFIER": blank, "DB_PATH": blank, "LOG_LEVEL": blank})
+    assert s.notifier == "log"
+    assert s.db_path == Path("./data/velkgram.db")
+    assert s.log_level == "INFO"

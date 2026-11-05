@@ -9,9 +9,21 @@ async def test_signal_reports_only_changed_names(tmp_path: Path) -> None:
     conn = connect(tmp_path / "t.db")
     apply_migrations(conn, ["velkgram.shared"])
     signal = PollingChangeSignal(conn)
-    assert await signal.changed() == {"wishlist": 0, "channels": 0}
+    assert await signal.changed() == {}
     assert await signal.changed() == {}
     with transaction(conn):
         bump_version(conn, "channels")
     assert await signal.changed() == {"channels": 1}
     assert await signal.changed() == {}
+
+
+async def test_first_poll_does_not_report_existing_versions(tmp_path: Path) -> None:
+    conn = connect(tmp_path / "t.db")
+    apply_migrations(conn, ["velkgram.shared"])
+    with transaction(conn):
+        bump_version(conn, "wishlist")
+    signal = PollingChangeSignal(conn)
+    assert await signal.changed() == {}
+    with transaction(conn):
+        bump_version(conn, "wishlist")
+    assert await signal.changed() == {"wishlist": 2}

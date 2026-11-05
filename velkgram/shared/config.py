@@ -29,8 +29,13 @@ class Settings:
         )
 
 
+def _value(env: Mapping[str, str], key: str, default: str) -> str:
+    """Empty or whitespace-only values count as unset."""
+    return (env.get(key) or "").strip() or default
+
+
 def load_settings(env: Mapping[str, str]) -> Settings:
-    notifier = env.get("NOTIFIER", "log")
+    notifier = _value(env, "NOTIFIER", "log")
     if notifier != "log":
         raise ValueError(f"unknown NOTIFIER: {notifier}")
     api_id = env.get("TG_API_ID")
@@ -38,9 +43,9 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         tg_api_id=int(api_id) if api_id else None,
         tg_api_hash=env.get("TG_API_HASH") or None,
         tg_session=env.get("TG_SESSION") or None,
-        db_path=Path(env.get("DB_PATH", "./data/velkgram.db")),
+        db_path=Path(_value(env, "DB_PATH", "./data/velkgram.db")),
         notifier=notifier,
         web_password_hash=env.get("WEB_PASSWORD_HASH") or None,
         web_secret_key=env.get("WEB_SECRET_KEY") or None,
-        log_level=env.get("LOG_LEVEL", "INFO"),
+        log_level=_value(env, "LOG_LEVEL", "INFO"),
     )

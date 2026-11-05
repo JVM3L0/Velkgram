@@ -34,7 +34,7 @@ uv sync
 cp .env.example .env
 ```
 
-Edit `.env`. Empty values for `NOTIFIER`, `DB_PATH` or `LOG_LEVEL` break startup, so fill them in or delete those lines. Empty `TG_*` and `WEB_*` values count as unset.
+Edit `.env`. Empty values count as unset and fall back to the default.
 
 | Variable | Value |
 |---|---|
