@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Lista de desejos - Velkgram{% endblock %}
+{% block content %}
+<h1>Lista de desejos</h1>
+<p><a class="button" href="/wishes/new">Novo desejo</a></p>
+<table>
+  <thead><tr><th>Nome</th><th>Preço máximo</th><th>Ativo</th><th></th></tr></thead>
+  <tbody>
+  {% for wish in wishes %}
+    {% include "_wish_row.html" %}
+  {% else %}
+    <tr><td colspan="4" class="muted">Nenhum desejo cadastrado.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

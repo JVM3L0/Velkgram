@@ -1,0 +1,19 @@
+"""Wish persistence port. Every write bumps the `wishlist` state version."""
+
+from typing import Protocol
+
+from velkgram.wishlist.domain.models import Wish
+
+
+class WishRepository(Protocol):
+    def add(self, w: Wish) -> Wish: ...
+
+    def update(self, w: Wish) -> None: ...
+
+    def delete(self, id: int) -> None: ...
+
+    def get(self, id: int) -> Wish | None: ...
+
+    def list_all(self) -> list[Wish]: ...
+
+    def list_enabled(self) -> list[Wish]: ...

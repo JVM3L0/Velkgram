@@ -1,0 +1,90 @@
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from tests.apps.web_support import make_client, make_settings
+from tests.fakes.clock import FakeClock
+from velkgram.shared.db import connect
+
+NOW = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+CHANNEL = -1001234567890
+
+
+def _iso(when: datetime) -> str:
+    return when.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def _seed(tmp_path: Path, alerts: list[tuple[int, int | None, str]]) -> None:
+    """alerts: (message_id, price_cents, status); created_at grows with message_id."""
+    conn = connect(make_settings(tmp_path).db_path)
+    try:
+        conn.execute(
+            "INSERT INTO wishes (id, name, required_terms, excluded_terms, max_price_cents, "
+            "enabled, created_at, updated_at) VALUES (1, 'Tênis <b>', '[]', '[]', 1000, 1, ?, ?)",
+            (_iso(NOW), _iso(NOW)),
+        )
+        conn.execute(
+            "INSERT INTO channels (id, ref, telegram_id, name, status, enabled, created_at) "
+            "VALUES (1, '@promos', ?, 'Promos BR', 'active', 1, ?)",
+            (CHANNEL, _iso(NOW)),
+        )
+        for message_id, price, status in alerts:
+            conn.execute(
+                "INSERT INTO alerts (wish_id, channel_id, message_id, price_cents, price_unknown, "
+                "dedup_key, status, attempts, created_at, latency_telegram_ms, "
+                "latency_internal_ms) VALUES (1, ?, ?, ?, ?, ?, ?, 1, ?, 120, 80)",
+                (
+                    CHANNEL,
+                    message_id,
+                    price,
+                    price is None,
+                    f"k{message_id}",
+                    status,
+                    _iso(NOW - timedelta(minutes=1000 - message_id)),
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _client(tmp_path: Path) -> TestClient:
+    return make_client(tmp_path, clock=FakeClock(NOW))
+
+
+def test_alerts_page_shows_price_unknown_label(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [(1, None, "sent"), (2, 12345, "failed")])
+    page = client.get("/alerts")
+    assert page.status_code == 200
+    assert "preço não identificado" in page.text
+    assert "R$ 123,45" in page.text
+    assert "Tênis &lt;b&gt;" in page.text
+    assert "Promos BR" in page.text
+    assert "120" in page.text
+    assert 'href="https://t.me/c/1234567890/2"' in page.text
+    assert 'rel="noopener noreferrer"' in page.text
+    assert 'target="_blank"' in page.text
+    assert 'href="/alerts"' in page.text
+    assert 'href="/status"' in page.text
+
+
+def test_alerts_pagination(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [(i, 1000, "sent") for i in range(1, 56)])
+    first = client.get("/alerts")
+    assert "t.me/c/1234567890/55" in first.text
+    assert 't.me/c/1234567890/6"' in first.text
+    assert 't.me/c/1234567890/5"' not in first.text
+    second = client.get("/alerts?page=2")
+    assert 't.me/c/1234567890/5"' in second.text
+    assert 't.me/c/1234567890/55"' not in second.text
+    assert 't.me/c/1234567890/6"' not in second.text
+    assert client.get("/alerts?page=abc").text == first.text
+    assert client.get("/alerts?page=0").text == first.text
+
+
+def test_alerts_requires_login(tmp_path: Path) -> None:
+    client = make_client(tmp_path, login=False, clock=FakeClock(NOW))
+    assert client.get("/alerts").status_code == 303

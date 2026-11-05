@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Alertas - Velkgram{% endblock %}
+{% block content %}
+<h1>Alertas</h1>
+<table>
+  <thead><tr><th>Quando</th><th>Status</th><th>Preço</th><th>Latência</th><th>Desejo</th><th>Canal</th><th>Mensagem</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ r.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
+      <td>{{ r.status }}</td>
+      <td>{% if r.price %}{{ r.price }}{% else %}<span class="muted">preço não identificado</span>{% endif %}</td>
+      <td>Telegram {{ r.latency_telegram_ms }} ms · interno {{ r.latency_internal_ms }} ms</td>
+      <td>{{ r.wish }}</td>
+      <td>{{ r.channel }}</td>
+      <td><a href="{{ r.link }}" rel="noopener noreferrer" target="_blank">abrir</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">Nenhum alerta ainda.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p>
+  {% if page > 1 %}<a href="/alerts?page={{ page - 1 }}">Anterior</a>{% endif %}
+  <span class="muted">Página {{ page }}</span>
+  {% if has_next %}<a href="/alerts?page={{ page + 1 }}">Próxima</a>{% endif %}
+</p>
+{% endblock %}

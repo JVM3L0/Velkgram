@@ -1,0 +1,17 @@
+.venv/
+data/
+.env
+.git/
+.superpowers/
+.vscode/
+.claude/
+docs/
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.import_linter_cache/
+*.db*
+*.session

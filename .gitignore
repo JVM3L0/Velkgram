@@ -1,0 +1,12 @@
+.env
+*.session
+data/
+*.db*
+.venv/
+dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.import_linter_cache/

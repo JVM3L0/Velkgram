@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Entrar - Velkgram{% endblock %}
+{% block content %}
+<h1>Entrar</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" action="/login">
+  <label for="password">Senha</label>
+  <input id="password" type="password" name="password" autofocus required>
+  <p><button type="submit">Entrar</button></p>
+</form>
+{% endblock %}

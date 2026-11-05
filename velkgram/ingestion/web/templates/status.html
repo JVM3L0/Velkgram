@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Status - Velkgram{% endblock %}
+{% block content %}
+<h1>Status</h1>
+<h2>Coletor</h2>
+{% if heartbeat %}
+<p>
+  Estado: <strong>{{ heartbeat.state }}</strong>{% if heartbeat.reason %} ({{ heartbeat.reason }}){% endif %}
+  {% if heartbeat.stale %}<span class="error">desatualizado</span>{% endif %}
+  <br><span class="muted">Último sinal: {{ heartbeat.last_seen.strftime("%d/%m/%Y %H:%M:%S") }}
+  · {{ heartbeat.messages_seen }} mensagens · {{ heartbeat.alerts_sent }} alertas enviados</span>
+</p>
+{% else %}
+<p class="error">coletor nunca rodou</p>
+{% endif %}
+<h2>Canais</h2>
+<table>
+  <thead><tr><th>Canal</th><th>Última mensagem</th><th></th></tr></thead>
+  <tbody>
+  {% for c in channels %}
+    <tr>
+      <td>{{ c.name }}</td>
+      <td>{% if c.last_message_at %}{{ c.last_message_at.strftime("%d/%m/%Y %H:%M") }}{% else %}<span class="muted">nenhuma</span>{% endif %}</td>
+      <td>{% if c.silent %}<span class="error">silencioso (&gt; {{ c.silent_after_hours }} h)</span>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="muted">Nenhum canal ativo.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<h2>Falhas recentes</h2>
+<table>
+  <thead><tr><th>Quando</th><th>Desejo</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for wish, state, when in failures %}
+    <tr><td>{{ when.strftime("%d/%m/%Y %H:%M") }}</td><td>{{ wish }}</td><td>{{ state }}</td></tr>
+  {% else %}
+    <tr><td colspan="3" class="muted">Nenhuma falha recente.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
