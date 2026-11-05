@@ -59,6 +59,33 @@ class ChannelsChanged:
     version: int
 
 
+@dataclass(frozen=True, slots=True)
+class CouponTargetData:
+    wish_id: int
+    offer_channel_id: int
+    offer_message_id: int
+    offer_price_cents: int
+    over_max: bool
+    discount: str
+    min_cents: int | None
+    codes: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CouponMatchedWish:
+    coupon_channel_id: int
+    coupon_message_id: int
+    coupon_origin_channel_id: int | None  # forward origin, None when not forwarded
+    coupon_origin_message_id: int | None
+    coupon_posted_at: datetime
+    coupon_received_at: datetime
+    store: str  # slug, stable: used in dedup keys
+    store_title: str  # display name for the alert text
+    scope: str | None
+    link: str | None
+    targets: tuple[CouponTargetData, ...]
+
+
 Event = (
     MessageReceived
     | MessageEdited
@@ -66,4 +93,5 @@ Event = (
     | AlertTriggered
     | WishlistChanged
     | ChannelsChanged
+    | CouponMatchedWish
 )

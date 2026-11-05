@@ -2,13 +2,16 @@
 
 from datetime import date
 
-from velkgram.alerting import AlertQueries, extract_price
+from velkgram.alerting import AlertQueries, SuppressionRule, extract_price
 from velkgram.reporting.ports.stats import (
     DailyAlertStat,
     DailySuppressionStat,
     LatencyStat,
     PriceExtractor,
 )
+
+# Report labels for suppression rules whose enum value is not the label (pt-BR for coupons).
+_RULE_LABELS = {SuppressionRule.wish_coupon: "cupom"}
 
 
 def price_extractor() -> PriceExtractor:
@@ -27,7 +30,9 @@ class AlertingAlertStats:
 
     def daily_suppressions(self, since: date, until: date) -> list[DailySuppressionStat]:
         return [
-            DailySuppressionStat(s.day, s.channel_id, s.rule.value, s.count)
+            DailySuppressionStat(
+                s.day, s.channel_id, _RULE_LABELS.get(s.rule, s.rule.value), s.count
+            )
             for s in self._q.daily_suppressions(since, until)
         ]
 

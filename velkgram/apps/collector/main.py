@@ -147,7 +147,7 @@ async def run(
     finally:
         for t in tasks:
             t.cancel()
-        await collector.stop_offer_worker()
+        await collector.stop_offer_worker()  # also the coupon alerter
     await _idle_forever()
 
 

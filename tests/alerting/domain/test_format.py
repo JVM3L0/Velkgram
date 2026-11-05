@@ -1,6 +1,11 @@
 from datetime import UTC, datetime
 
-from velkgram.alerting.domain.format import format_alert, message_link, telegram_link
+from velkgram.alerting.domain.format import (
+    format_alert,
+    format_coupon_alert,
+    message_link,
+    telegram_link,
+)
 from velkgram.alerting.domain.models import AlertMessage
 from velkgram.shared.events import MessageData
 
@@ -74,3 +79,92 @@ def test_alert_lists_several_coupons() -> None:
 
 def test_alert_without_a_coupon_keeps_the_plain_price_line() -> None:
     assert format_alert(_msg()).splitlines()[1] == "R$ 1.299,90"
+
+
+def _coupon(**kw: object) -> str:
+    args: dict[str, object] = {
+        "store_title": "Shopee",
+        "codes": ("QIP98Q1ZXO",),
+        "discount": "R$ 10 OFF",
+        "min_cents": 4000,
+        "scope": None,
+        "wish_name": "SSD",
+        "offer_price_cents": 9900,
+        "max_price_cents": 20000,
+        "over_max": False,
+        "link": "https://s.shopee.com.br/x",
+    }
+    args.update(kw)
+    return format_coupon_alert(**args)  # type: ignore[arg-type]
+
+
+def test_coupon_alert_plain() -> None:
+    assert _coupon().splitlines() == [
+        "🎟️ Cupom Shopee: QIP98Q1ZXO — R$ 10 OFF a partir de R$ 40,00",
+        'Para "SSD": oferta de R$ 99,00',
+        "https://s.shopee.com.br/x",
+    ]
+
+
+def test_coupon_alert_over_max() -> None:
+    line = _coupon(over_max=True, offer_price_cents=25000).splitlines()[1]
+    assert line == 'Para "SSD": oferta de R$ 250,00 (acima do seu limite de R$ 200,00)'
+
+
+def test_coupon_alert_with_scope_adds_caveat_line() -> None:
+    lines = _coupon(scope="eletrônicos").splitlines()
+    assert lines[0].endswith("a partir de R$ 40,00 em eletrônicos")
+    assert lines[2] == "• pode não valer para todos os produtos"
+    assert lines[3] == "https://s.shopee.com.br/x"
+
+
+def test_coupon_alert_without_discount_or_minimum() -> None:
+    first = _coupon(discount="", min_cents=None).splitlines()[0]
+    assert first == "🎟️ Cupom Shopee: QIP98Q1ZXO"
+
+
+def test_coupon_alert_lists_mercado_livre_tier_codes() -> None:
+    first = _coupon(
+        store_title="Mercado Livre", codes=("ML10", "ML10B"), discount="10% OFF", min_cents=None
+    ).splitlines()[0]
+    assert first == "🎟️ Cupom Mercado Livre: ML10, ML10B — 10% OFF"
+
+
+def test_rendered_text_is_returned_verbatim() -> None:
+    assert format_alert(_msg(rendered="texto pronto")) == "texto pronto"
+
+
+def test_coupon_line_one_code() -> None:
+    from datetime import UTC, datetime
+
+    from velkgram.alerting.domain.format import format_coupon_line
+    from velkgram.alerting.domain.models import ActiveCoupon
+
+    c = ActiveCoupon(1, 2, datetime(2026, 11, 4, tzinfo=UTC), "R$ 10 OFF", 4000, ("QIP98Q1ZXO",))
+    assert (
+        format_coupon_line(c)
+        == "🎟️ Cupom ativo da loja: QIP98Q1ZXO — R$ 10 OFF a partir de R$ 40,00"
+    )
+
+
+def test_coupon_line_two_codes_and_no_discount_or_minimum() -> None:
+    from datetime import UTC, datetime
+
+    from velkgram.alerting.domain.format import format_coupon_line
+    from velkgram.alerting.domain.models import ActiveCoupon
+
+    at = datetime(2026, 11, 4, tzinfo=UTC)
+    two = ActiveCoupon(1, 2, at, "10% OFF", None, ("AAA", "BBB"))
+    assert format_coupon_line(two) == "🎟️ Cupom ativo da loja: AAA, BBB — 10% OFF"
+    bare = ActiveCoupon(1, 2, at, "", None, ("AAA",))
+    assert format_coupon_line(bare) == "🎟️ Cupom ativo da loja: AAA"
+
+
+def test_alert_with_coupon_lines_places_them_after_the_price() -> None:
+    out = format_alert(_msg(coupon_lines=("🎟️ Cupom ativo da loja: AAA",)))
+    assert out.splitlines()[1:3] == ["R$ 1.299,90", "🎟️ Cupom ativo da loja: AAA"]
+
+
+def test_over_max_suffix_on_the_price_line() -> None:
+    out = format_alert(_msg(over_max_cents=100000))
+    assert out.splitlines()[1] == "R$ 1.299,90 (acima do seu limite de R$ 1.000,00, mas há cupom)"

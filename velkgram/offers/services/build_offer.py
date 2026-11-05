@@ -2,27 +2,47 @@
 
 import asyncio
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from velkgram.offers.domain.build import offer_from_message
-from velkgram.offers.domain.models import MatchSource, Offer, OfferMatch
+from velkgram.offers.domain.coupon_targets import coupon_targets
+from velkgram.offers.domain.models import MatchSource, Offer, OfferKind, OfferMatch
+from velkgram.offers.domain.title import STORE_TITLES
 from velkgram.offers.ports.messages import SourceMessage
 from velkgram.offers.ports.repository import OfferRepository
 from velkgram.offers.ports.wishes import WishReader
 from velkgram.shared.deals import WishView, matches
-from velkgram.shared.events import MessageData, MessageDeleted, MessageEdited, MessageReceived
+from velkgram.shared.events import (
+    CouponMatchedWish,
+    Event,
+    MessageData,
+    MessageDeleted,
+    MessageEdited,
+    MessageReceived,
+)
 from velkgram.shared.ports import Clock
 
 log = logging.getLogger(__name__)
 
 type _Event = MessageReceived | MessageEdited | MessageDeleted
 
+_LIVE_AGE_LIMIT = timedelta(minutes=30)
+_COUPON_LOOKBACK = timedelta(days=3)
+
 
 class OfferBuilder:
-    def __init__(self, repo: OfferRepository, wishes: WishReader, clock: Clock) -> None:
+    def __init__(
+        self,
+        repo: OfferRepository,
+        wishes: WishReader,
+        clock: Clock,
+        publish: Callable[[Event], Awaitable[None]] | None = None,
+    ) -> None:
         self._repo = repo
+        self._publish = publish
+        self._outbox: list[CouponMatchedWish] = []
         self._wishes = wishes
         self._clock = clock
         self._queue: asyncio.Queue[_Event] = asyncio.Queue()
@@ -40,11 +60,29 @@ class OfferBuilder:
         while True:
             e = await self._queue.get()
             self._handle(e)
+            await self._flush()
             await asyncio.sleep(0)
 
     async def drain(self) -> None:
         while not self._queue.empty():
             self._handle(self._queue.get_nowait())
+            await self._flush()
+
+    async def _flush(self) -> None:
+        """Publish the coupon events the last `_handle` queued; a failure never stops the worker."""
+        events, self._outbox = self._outbox, []
+        for event in events:
+            try:
+                assert self._publish is not None
+                await self._publish(event)
+            except Exception:
+                log.exception(
+                    "coupon_event_publish_failed",
+                    extra={
+                        "channel_id": event.coupon_channel_id,
+                        "message_id": event.coupon_message_id,
+                    },
+                )
 
     def _handle(self, e: _Event) -> None:
         try:
@@ -61,6 +99,7 @@ class OfferBuilder:
                 case MessageDeleted():
                     self._repo.mark_deleted(e.channel_id, e.message_ids, e.deleted_at)
         except Exception:
+            self._outbox.clear()
             ids = _ids(e)
             log.exception("offer_build_failed", extra=ids)
 
@@ -81,7 +120,43 @@ class OfferBuilder:
         found = self._matches_for(offer, self._wishes.all, source, now)
         if found:
             self._repo.add_matches(found)
+        if self._publish is not None and source == MatchSource.live and m.source == "live":
+            self._queue_coupon_event(m, offer, now)
         return True
+
+    def _queue_coupon_event(self, m: MessageData, offer: Offer, now: datetime) -> None:
+        """Queue a `CouponMatchedWish` for a fresh live coupon. Never raises: the offer and the
+        v1 matches are already stored, so a failure here only costs the coupon alert."""
+        if offer.kind != OfferKind.coupon or now - m.date > _LIVE_AGE_LIMIT:
+            return
+        try:
+            if offer.store is None:
+                return
+            recent = self._repo.recent_store_offers(offer.store, offer.posted_at - _COUPON_LOOKBACK)
+            targets = coupon_targets(offer, self._wishes.enabled(), recent, now)
+            if not targets:
+                return
+            forwarded = offer.origin_channel_id is not None and offer.origin_message_id is not None
+            self._outbox.append(
+                CouponMatchedWish(
+                    coupon_channel_id=offer.channel_id,
+                    coupon_message_id=offer.message_id,
+                    coupon_origin_channel_id=offer.origin_channel_id if forwarded else None,
+                    coupon_origin_message_id=offer.origin_message_id if forwarded else None,
+                    coupon_posted_at=offer.posted_at,
+                    coupon_received_at=m.received_at,
+                    store=offer.store,
+                    store_title=STORE_TITLES.get(offer.store, offer.store),
+                    scope=offer.coupon_scope,
+                    link=offer.redeem_link or offer.main_link,
+                    targets=targets,
+                )
+            )
+        except Exception:
+            log.exception(
+                "coupon_targets_failed",
+                extra={"channel_id": offer.channel_id, "message_id": offer.message_id},
+            )
 
     def ingest_many(self, items: Sequence[SourceMessage], *, source: MatchSource) -> int:
         """Ingest a batch with `ingest`'s rules: one wish read and one `add_matches` call."""

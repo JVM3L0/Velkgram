@@ -29,3 +29,11 @@ def test_matches_rejects_price_above_max() -> None:
 
 def test_matches_accepts_unknown_price() -> None:
     assert matches(_wish((("ssd",),)), "ssd 2tb", None)
+
+
+def test_within_over_max_ceiling_is_one_and_a_half_times_the_max() -> None:
+    from velkgram.shared.deals import within_over_max
+
+    assert within_over_max(225000, 150000)
+    assert not within_over_max(225001, 150000)
+    assert not within_over_max(150000, 150000)

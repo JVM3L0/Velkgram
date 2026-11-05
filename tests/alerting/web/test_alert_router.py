@@ -123,3 +123,52 @@ def test_alerts_with_rows_keep_the_table(tmp_path: Path) -> None:
     _seed(tmp_path, [(1, 100, "sent")])
     page = client.get("/alerts").text
     assert "<table" in page and "Nenhum alerta ainda" not in page
+
+
+def _seed_kind(
+    tmp_path: Path, kind: str, over_max: bool, dedup_key: str, message_id: int = 7
+) -> None:
+    _seed(tmp_path, [])
+    conn = connect(make_settings(tmp_path).db_path)
+    try:
+        conn.execute(
+            "INSERT INTO alerts (wish_id, channel_id, message_id, price_cents, price_unknown, "
+            "dedup_key, status, attempts, created_at, latency_telegram_ms, latency_internal_ms, "
+            "kind, over_max) VALUES (1, ?, ?, 1000, 0, ?, 'sent', 1, ?, 120, 80, ?, ?)",
+            (CHANNEL, message_id, dedup_key, _iso(NOW), kind, over_max),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_coupon_alert_shows_cupom_chip_with_codes(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed_kind(tmp_path, "coupon", False, "wcc:1:amazon:OFF10,PROMO5")
+    page = client.get("/alerts").text
+    assert "cupom" in page
+    assert "OFF10" in page and "PROMO5" in page
+    assert "acima do limite" not in page
+    assert 'href="https://t.me/c/1234567890/7"' in page
+
+
+def test_coupon_codes_with_html_are_escaped(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed_kind(tmp_path, "coupon", False, "wcc:1:amazon:<b>X")
+    assert "&lt;b&gt;X" in client.get("/alerts").text
+
+
+def test_over_max_alert_shows_acima_do_limite_chip(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed_kind(tmp_path, "offer", True, "wp:1:1000")
+    page = client.get("/alerts").text
+    assert "acima do limite" in page
+    assert "cupom" not in page
+
+
+def test_ordinary_alert_shows_neither_chip(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [(1, 1000, "sent")])
+    page = client.get("/alerts").text
+    assert "acima do limite" not in page
+    assert "cupom" not in page

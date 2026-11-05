@@ -1,7 +1,7 @@
 """Dedup keys and the in-memory suppression cache."""
 
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
 
 from velkgram.alerting.domain.models import SuppressionRule
@@ -12,6 +12,8 @@ _PREFIX_RULES = {
     "org:": SuppressionRule.origin,
     "wp:": SuppressionRule.wish_price,
     "wt:": SuppressionRule.wish_text,
+    "wco:": SuppressionRule.wish_coupon,
+    "wcc:": SuppressionRule.wish_coupon,
 }
 
 
@@ -25,6 +27,22 @@ def origin_key(
     if fwd_channel_id is not None and fwd_message_id is not None:
         return f"org:{wish_id}:{fwd_channel_id}:{fwd_message_id}"
     return f"org:{wish_id}:{channel_id}:{message_id}"
+
+
+def coupon_origin_key(
+    wish_id: int,
+    channel_id: int,
+    message_id: int,
+    fwd_channel_id: int | None,
+    fwd_message_id: int | None,
+) -> str:
+    if fwd_channel_id is not None and fwd_message_id is not None:
+        return f"wco:{wish_id}:{fwd_channel_id}:{fwd_message_id}"
+    return f"wco:{wish_id}:{channel_id}:{message_id}"
+
+
+def coupon_content_key(wish_id: int, store: str, codes: tuple[str, ...]) -> str:
+    return f"wcc:{wish_id}:{store}:{','.join(sorted(codes))}"
 
 
 def price_key(wish_id: int, cents: int) -> str:
@@ -44,14 +62,22 @@ def rule_for_key(key: str) -> SuppressionRule:
 
 
 class DedupCache:
-    def __init__(self, window: timedelta) -> None:
+    def __init__(
+        self,
+        window: timedelta,
+        rule_windows: Mapping[SuppressionRule, timedelta] | None = None,
+    ) -> None:
         self._window = window
+        self._rule_windows = dict(rule_windows or {})
         self._entries: dict[DedupKey, tuple[int, datetime]] = {}
+
+    def _window_for(self, rule: SuppressionRule) -> timedelta:
+        return self._rule_windows.get(rule, self._window)
 
     def find(self, keys: Sequence[DedupKey], now: datetime) -> tuple[SuppressionRule, int] | None:
         for key in keys:
             entry = self._entries.get(key)
-            if entry is not None and now - entry[1] <= self._window:
+            if entry is not None and now - entry[1] <= self._window_for(key[0]):
                 return key[0], entry[0]
         return None
 
@@ -60,4 +86,6 @@ class DedupCache:
             self._entries[key] = (alert_id, at)
 
     def prune(self, now: datetime) -> None:
-        self._entries = {k: v for k, v in self._entries.items() if now - v[1] <= self._window}
+        self._entries = {
+            k: v for k, v in self._entries.items() if now - v[1] <= self._window_for(k[0])
+        }

@@ -1,6 +1,8 @@
 import asyncio
 import sqlite3
 from collections.abc import AsyncIterator
+from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,8 @@ from tests.fakes.clock import FakeClock
 from tests.fakes.messages import NOW, msg
 from tests.fakes.notifier import FakeNotifier
 from tests.fakes.telegram import FakeTelegramGateway
+from velkgram.alerting import Alert, AlertKind, AlertStatus
+from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
 from velkgram.channels import ChannelCommands, ChannelStatus
@@ -350,3 +354,160 @@ async def test_gap_check_uses_pending_snapshot(tmp_path: Path) -> None:
     await env.collector.start()  # startup backfill consumes the snapshot
     assert env.count("messages", f"channel_id={CH}") == 2
     assert gw.iter_calls[0][1] == 5
+
+
+_SHOPEE_COUPON = (
+    "Cupom Shopee\n\nR$ 10 OFF em R$ 40: QIP98Q1ZXO\n\n-Resgate aqui: \n"
+    "https://s.shopee.com.br/70GSVaUJxC\n\n-Anúncio"
+)
+
+
+async def test_live_coupon_after_a_matching_offer_produces_one_coupon_alert(env: Env) -> None:
+    env.channel()
+    env.wish()
+    await env.collector.start()
+    product = replace(
+        msg(1, CH, "Teclado mecanico por R$ 99"),
+        date=NOW - timedelta(hours=2),
+        links=("https://s.shopee.com.br/prod",),
+        source="backfill",
+    )
+    await env.collector.ingestor.on_new(product)
+    await env.bus.drain()
+    await env.collector.wait_idle()
+    coupon = replace(
+        msg(2, CH, _SHOPEE_COUPON),
+        date=NOW - timedelta(minutes=1),
+        links=("https://s.shopee.com.br/70GSVaUJxC",),
+    )
+    await env.collector.ingestor.on_new(coupon)
+    await env.bus.drain()
+    await env.collector.wait_idle()
+    assert env.count("alerts", "kind='coupon' AND status='sent'") == 1
+    [sent] = [m for m in env.notifier.sent if m.rendered is not None]
+    assert sent.rendered is not None
+    assert sent.rendered.startswith("🎟️ Cupom Shopee: QIP98Q1ZXO")
+    assert 'Para "Teclado": oferta de R$ 99,00' in sent.rendered
+
+
+async def test_stopping_the_collector_leaves_no_pending_workers(env: Env) -> None:
+    env.channel()
+    await env.collector.start()
+    workers = [env.collector._offer_worker, env.collector._coupon_worker]
+    assert all(w is not None and not w.done() for w in workers)
+    await env.collector.stop_offer_worker()
+    assert all(w is not None and w.done() for w in workers)
+
+
+async def _seed_product_and_coupon(env: Env) -> None:
+    env.channel()
+    env.wish()
+    await env.collector.start()
+    product = replace(
+        msg(1, CH, "Teclado mecanico por R$ 99"),
+        date=NOW - timedelta(hours=2),
+        links=("https://s.shopee.com.br/prod",),
+        source="backfill",
+    )
+    await env.collector.ingestor.on_new(product)
+    await _settle(env)
+    await _post_coupon(env, 2)
+
+
+async def _settle(env: Env) -> None:
+    await env.bus.drain()
+    await env.collector.wait_idle()
+
+
+async def _post_coupon(env: Env, message_id: int) -> None:
+    coupon = replace(
+        msg(message_id, CH, _SHOPEE_COUPON),
+        date=env.clock.now() - timedelta(minutes=1),
+        links=("https://s.shopee.com.br/70GSVaUJxC",),
+    )
+    await env.collector.ingestor.on_new(coupon)
+    await _settle(env)
+
+
+async def test_same_coupon_two_days_later_is_suppressed_by_the_three_day_window(
+    env: Env,
+) -> None:
+    await _seed_product_and_coupon(env)
+    assert env.count("alerts", "kind='coupon'") == 1
+    env.clock.advance(2 * 24 * 3600)
+    await _post_coupon(env, 3)
+    assert env.count("alerts", "kind='coupon'") == 1
+    assert env.count("alert_suppressions", "rule='wish_coupon'") == 1
+
+
+async def test_failed_coupon_alert_is_retried_from_its_stored_payload(env: Env) -> None:
+    env.notifier = FakeNotifier(fail_times=3)  # one full send_with_retry round
+    env.collector = env.build()
+    await _seed_product_and_coupon(env)
+    assert env.count("alerts", "kind='coupon' AND status='failed'") == 1
+    env.conn.execute("DELETE FROM messages")  # nothing to rebuild the text from
+    env.conn.commit()
+    await env.collector.run_retry_failed()
+    assert env.count("alerts", "kind='coupon' AND status='sent'") == 1
+    assert env.count("alerts", "status='expired'") == 0
+    [sent] = env.notifier.sent
+    assert sent.rendered is not None
+    assert sent.rendered.startswith("🎟️ Cupom Shopee: QIP98Q1ZXO")
+
+
+def test_coupon_alert_without_payload_is_expired_not_rebuilt(env: Env) -> None:
+    alert = Alert(
+        id=1,
+        wish_id=1,
+        channel_id=CH,
+        message_id=2,
+        price_cents=9900,
+        price_unknown=False,
+        dedup_keys=(),
+        status=AlertStatus.failed,
+        attempts=0,
+        delayed_minutes=None,
+        created_at=NOW,
+        sent_at=None,
+        latency_telegram_ms=0,
+        latency_internal_ms=0,
+        last_error=None,
+        kind=AlertKind.coupon,
+        payload=None,
+    )
+    assert env.collector.build_message(alert) is None
+
+
+async def _over_max_alert_with_active_coupon(env: Env) -> None:
+    env.channel()
+    env.wish()  # max R$ 500
+    await env.collector.start()
+    await _post_coupon(env, 2)
+    live = replace(
+        msg(3, CH, "Teclado mecanico por R$ 600"),
+        date=env.clock.now(),
+        links=("https://s.shopee.com.br/prod",),
+    )
+    await env.collector.ingestor.on_new(live)
+    await _settle(env)
+
+
+async def test_over_max_offer_after_a_stored_coupon_alerts_with_the_suffix(env: Env) -> None:
+    await _over_max_alert_with_active_coupon(env)
+    assert env.count("alerts", "kind='offer' AND over_max=1 AND status='sent'") == 1
+    [sent] = [m for m in env.notifier.sent if m.rendered is None]
+    assert sent.over_max_cents == 50000
+
+
+async def test_retry_of_an_over_max_alert_keeps_the_suffix(env: Env) -> None:
+    await _over_max_alert_with_active_coupon(env)
+    [alert] = [
+        a
+        for a in SqliteAlertRepository(env.conn).list_since(NOW - timedelta(days=1))
+        if a.kind is AlertKind.offer
+    ]
+    assert alert.over_max
+    rebuilt = env.collector.build_message(alert)
+    assert rebuilt is not None
+    assert rebuilt.over_max_cents == 50000
+    assert rebuilt.coupon_lines == ()

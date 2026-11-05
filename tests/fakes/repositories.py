@@ -2,10 +2,10 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
 from datetime import datetime
 
-from velkgram.alerting import Alert, AlertStatus, SuppressionRule
+from velkgram.alerting import Alert, AlertKind, AlertStatus, SuppressionRule
 from velkgram.channels import Channel, ChannelStatus
 from velkgram.ingestion import Heartbeat
-from velkgram.offers.domain.models import Offer, OfferMatch, OfferText, RetroRun
+from velkgram.offers.domain.models import Offer, OfferKind, OfferMatch, OfferText, RetroRun
 from velkgram.offers.ports.messages import SourceMessage
 from velkgram.shared.deals import WishView
 from velkgram.shared.events import MessageData
@@ -197,7 +197,8 @@ class InMemoryAlertRepository:
 
     def has_alert_for_message(self, channel_id: int, message_id: int) -> bool:
         return any(
-            a.channel_id == channel_id and a.message_id == message_id for a in self._alerts.values()
+            a.channel_id == channel_id and a.message_id == message_id and a.kind is AlertKind.offer
+            for a in self._alerts.values()
         )
 
 
@@ -257,6 +258,20 @@ class InMemoryOfferRepository:
             key=lambda m: (m.posted_at, m.channel_id, m.message_id),
         )
         return [(m.posted_at, m.price_cents) for m in ms]
+
+    def recent_store_offers(self, store: str, since: datetime, limit: int = 500) -> list[Offer]:
+        found = [
+            o
+            for o in self._offers.values()
+            if o.store == store
+            and o.kind == OfferKind.product
+            and o.posted_at >= since
+            and o.price_cents is not None
+            and not o.deleted
+            and not o.sold_out
+        ]
+        found.sort(key=lambda o: (o.posted_at, o.channel_id, o.message_id), reverse=True)
+        return found[:limit]
 
     def purge_text_before(self, cutoff: datetime) -> int:
         n = 0

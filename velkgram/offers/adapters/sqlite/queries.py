@@ -10,10 +10,13 @@ from velkgram.offers.adapters.sqlite.repository import (
     decode_tiers,
     from_iso,
     to_iso,
+    to_offer,
 )
+from velkgram.offers.domain.coupon_targets import applicable_tier
 from velkgram.offers.domain.models import MatchSource, OfferKind
 from velkgram.offers.domain.stats import product_stats
 from velkgram.offers.ports.queries import (
+    ActiveCouponView,
     CouponFilter,
     FeedCursor,
     FeedFilter,
@@ -96,6 +99,13 @@ def _cursor_of(card: OfferCard) -> FeedCursor:
 
 
 class SqliteOfferQueries:
+    # Served by idx_offers_store_kind_feed; no LIMIT, because the price filter runs in Python.
+    ACTIVE_COUPONS_SQL = (
+        "SELECT * FROM offers WHERE store = ? AND kind = 'coupon' AND posted_at >= ? "
+        "AND deleted = 0 AND sold_out = 0 "
+        "ORDER BY posted_at DESC, channel_id DESC, message_id DESC"
+    )
+
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
         self._repo = SqliteOfferRepository(conn)
@@ -187,6 +197,35 @@ class SqliteOfferQueries:
     def count_coupons_after(self, f: CouponFilter, since: FeedCursor) -> int:
         where, params = self._coupon_where(f)
         return self._count_after(where, params, since)
+
+    def active_coupons(
+        self,
+        store: str,
+        since: datetime,
+        price_cents: int | None,
+        exclude: tuple[int, int] | None,
+        limit: int = 3,
+    ) -> list[ActiveCouponView]:
+        rows = self._conn.execute(self.ACTIVE_COUPONS_SQL, (store, to_iso(since))).fetchall()
+        views: list[ActiveCouponView] = []
+        for row in rows:
+            c = to_offer(row)
+            if (c.channel_id, c.message_id) == exclude or not c.coupons:
+                continue
+            discount, min_cents, codes = c.coupon_discount or "", c.coupon_min_cents, c.coupons
+            if price_cents is not None:
+                tier = applicable_tier(c.coupon_tiers, min_cents, discount, codes, price_cents)
+                if tier is None:
+                    continue
+                discount, min_cents, codes = tier.discount, tier.min_cents, tier.codes
+            views.append(
+                ActiveCouponView(
+                    c.channel_id, c.message_id, c.posted_at, discount, min_cents, codes
+                )
+            )
+            if len(views) >= limit:
+                break
+        return views
 
     def coupon_stores(self) -> list[str]:
         rows = self._conn.execute(

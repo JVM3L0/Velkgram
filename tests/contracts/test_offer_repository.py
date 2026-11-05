@@ -239,3 +239,27 @@ def test_upsert_twice_reindexes_fts(tmp_path: Path) -> None:
     assert hits("samsung") == 1
     assert conn.execute("SELECT id FROM offers").fetchone()[0] == id_before
     conn.close()
+
+
+def _recent(handle: Handle, since: datetime, limit: int = 500) -> list[int]:
+    return [o.message_id for o in handle.repo.recent_store_offers("amazon", since, limit)]
+
+
+def test_recent_store_offers_filters_window_kind_price_and_flags(handle: Handle) -> None:
+    at = T0 + timedelta(hours=1)
+    handle.repo.upsert(_offer(1, posted_at=T0 - timedelta(seconds=1)))  # before the window
+    handle.repo.upsert(_offer(2, posted_at=T0))  # window start is inclusive
+    handle.repo.upsert(_offer(3, posted_at=at, price_cents=None))
+    handle.repo.upsert(_offer(4, posted_at=at, deleted=True))
+    handle.repo.upsert(_offer(5, posted_at=at, sold_out=True))
+    handle.repo.upsert(_offer(6, posted_at=at, store="shopee"))
+    handle.repo.upsert(_offer(7, posted_at=at, kind=OfferKind.coupon, coupons=("X",)))
+    handle.repo.upsert(_offer(8, posted_at=at))
+    assert _recent(handle, T0) == [8, 2]
+
+
+def test_recent_store_offers_is_newest_first_and_limited(handle: Handle) -> None:
+    for i in range(1, 5):
+        handle.repo.upsert(_offer(i, posted_at=T0 + timedelta(minutes=i)))
+    assert _recent(handle, T0) == [4, 3, 2, 1]
+    assert _recent(handle, T0, limit=2) == [4, 3]

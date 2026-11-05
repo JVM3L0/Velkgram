@@ -1,10 +1,11 @@
 """Build an Offer from a stored message (pure)."""
 
 import hashlib
+from dataclasses import dataclass
 from datetime import datetime
 
 from velkgram.offers.domain.comparable import is_comparable
-from velkgram.offers.domain.coupon import coupon_deal, store_in_title
+from velkgram.offers.domain.coupon import CouponDeal, coupon_deal, store_in_title
 from velkgram.offers.domain.models import Offer, OfferKind
 from velkgram.offers.domain.stores import main_link, store_of
 from velkgram.offers.domain.title import title_of
@@ -13,18 +14,36 @@ from velkgram.shared.events import MessageData
 from velkgram.shared.text import normalize_text
 
 
+@dataclass(frozen=True, slots=True)
+class MessageClass:
+    store: str | None
+    is_coupon_post: bool
+
+
+def _classify(m: MessageData) -> tuple[str | None, str | None, str, CouponDeal | None]:
+    link = main_link(m.links)
+    store = store_of(link) if link else None
+    title = title_of(m.text, store)
+    text = m.text if m.text.strip() else None
+    deal = coupon_deal(title, text, m.links)
+    if deal is not None and store is None:
+        store = store_in_title(title)  # short links (tidd.ly) hide the store; the title names it
+    return link, store, title, deal
+
+
+def classify_message(m: MessageData) -> MessageClass:
+    """Store and coupon-post flag of a message; `offer_from_message` shares this logic."""
+    _, store, _, deal = _classify(m)
+    return MessageClass(store=store, is_coupon_post=deal is not None)
+
+
 def offer_from_message(
     m: MessageData, *, sold_out: bool, deleted: bool, now: datetime
 ) -> Offer | None:
     text = m.text if m.text.strip() else None
     if text is None and not m.links:
         return None
-    link = main_link(m.links)
-    store = store_of(link) if link else None
-    title = title_of(m.text, store)
-    deal = coupon_deal(title, text, m.links)
-    if deal is not None and store is None:
-        store = store_in_title(title)  # short links (tidd.ly) hide the store; the title names it
+    link, store, title, deal = _classify(m)
     return Offer(
         channel_id=m.channel_id,
         message_id=m.message_id,

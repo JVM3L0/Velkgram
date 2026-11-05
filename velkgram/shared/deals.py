@@ -77,6 +77,11 @@ def extract_price(text: str) -> int | None:
     return None
 
 
+def within_over_max(price_cents: int, max_cents: int) -> bool:
+    """True when the price is above the max but at most 1.5x of it (integer math, no floats)."""
+    return max_cents < price_cents and price_cents * 2 <= max_cents * 3
+
+
 def matches(wish: WishView, normalized_text: str, price_cents: int | None) -> bool:
     """Terms match and the price is unknown or within the wish's maximum."""
     if not matches_terms(wish, normalized_text):

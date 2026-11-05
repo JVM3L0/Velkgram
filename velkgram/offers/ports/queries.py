@@ -97,6 +97,18 @@ class WishSummary:
     """The last 30 priced matches, oldest first."""
 
 
+@dataclass(frozen=True, slots=True)
+class ActiveCouponView:
+    """A live coupon as it applies to a price: tier-level discount, minimum and codes."""
+
+    channel_id: int
+    message_id: int
+    posted_at: datetime
+    discount: str
+    min_cents: int | None
+    codes: tuple[str, ...]
+
+
 class OfferQueries(Protocol):
     def feed(self, f: FeedFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage: ...
 
@@ -138,5 +150,20 @@ class OfferQueries(Protocol):
         ...
 
     def summaries(self, wish_ids: Sequence[int]) -> dict[int, WishSummary]: ...
+
+    def active_coupons(
+        self,
+        store: str,
+        since: datetime,
+        price_cents: int | None,
+        exclude: tuple[int, int] | None,
+        limit: int = 3,
+    ) -> list[ActiveCouponView]:
+        """Newest live coupons of `store` posted since `since` that have codes.
+
+        With `price_cents`, only coupons whose applicable tier the price reaches, described by
+        that tier; the limit applies after that filter.
+        """
+        ...
 
     def stores_seen(self) -> list[str]: ...
