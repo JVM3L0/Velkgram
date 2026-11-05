@@ -1,15 +1,24 @@
 import logging
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from tests.fakes.clock import FakeClock
-from tests.fakes.repositories import FakeWishReader, InMemoryOfferRepository
+from tests.fakes.repositories import FakeMessageSource, FakeWishReader, InMemoryOfferRepository
 from velkgram.offers.domain.models import MatchSource
+from velkgram.offers.ports.messages import SourceMessage
 from velkgram.offers.services.build_offer import OfferBuilder
+from velkgram.offers.services.rebuild import rebuild_offers
 from velkgram.shared.deals import WishView
-from velkgram.shared.events import MessageData, MessageDeleted, MessageEdited, MessageReceived
+from velkgram.shared.events import (
+    CouponMatchedWish,
+    Event,
+    MessageData,
+    MessageDeleted,
+    MessageEdited,
+    MessageReceived,
+)
 
 NOW = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
 
@@ -254,3 +263,190 @@ async def test_blank_redelivery_of_unpurged_offer_adds_no_matches(
     wishes.views = [*wishes.views, WishView(99, "x", (("ssd",),), (), 10_000_000)]
     builder.ingest(_msg(""))
     assert len(repo._matches) == before
+
+
+# --- coupon events ----------------------------------------------------------------------------
+
+SHOPEE_COUPON = (
+    "Cupom Shopee\n\nR$ 10 OFF em R$ 40: QIP98Q1ZXO\n\n-Resgate aqui: \n"
+    "https://s.shopee.com.br/70GSVaUJxC\n\n-Link carrinho:\n"
+    "https://s.shopee.com.br/7fW9IpEnZG\n\n-Anúncio"
+)
+COUPON_LINKS = ("https://s.shopee.com.br/70GSVaUJxC", "https://s.shopee.com.br/7fW9IpEnZG")
+
+
+def _coupon_msg(**kw: object) -> MessageData:
+    return _msg(
+        SHOPEE_COUPON,
+        message_id=50,
+        date=NOW - timedelta(minutes=5),
+        links=COUPON_LINKS,
+        **kw,
+    )
+
+
+def _product_msg(message_id: int, text: str = "SSD Kingston 1TB por R$ 99") -> MessageData:
+    return _msg(
+        text,
+        message_id=message_id,
+        date=NOW - timedelta(hours=2),
+        links=("https://s.shopee.com.br/prod",),
+    )
+
+
+class Published:
+    def __init__(self) -> None:
+        self.events: list[Event] = []
+        self.fail = False
+
+    async def __call__(self, e: Event) -> None:
+        if self.fail:
+            raise RuntimeError("bus down")
+        self.events.append(e)
+
+
+@pytest.fixture
+def published() -> Published:
+    return Published()
+
+
+@pytest.fixture
+def pub_builder(
+    repo: InMemoryOfferRepository, wishes: FakeWishReader, published: Published
+) -> OfferBuilder:
+    wishes.views = [_wish(1, 20000), _wish(2, 20000)]
+    wishes.enabled_ids = {1, 2}
+    b = OfferBuilder(repo, wishes, FakeClock(NOW), publish=published)
+    b.ingest(_product_msg(10), source=MatchSource.retro)
+    return b
+
+
+async def _feed(b: OfferBuilder, m: MessageData) -> None:
+    await b.on_received(MessageReceived(m))
+    await b.drain()
+
+
+async def test_live_coupon_publishes_one_event_with_every_target(
+    pub_builder: OfferBuilder, published: Published
+) -> None:
+    await _feed(pub_builder, _coupon_msg())
+    [event] = published.events
+    assert isinstance(event, CouponMatchedWish)
+    assert (event.coupon_channel_id, event.coupon_message_id) == (1, 50)
+    assert event.store == "shopee"
+    assert event.link == "https://s.shopee.com.br/70GSVaUJxC"
+    assert event.coupon_posted_at == NOW - timedelta(minutes=5)
+    assert event.coupon_received_at == NOW
+    assert (event.coupon_origin_channel_id, event.coupon_origin_message_id) == (None, None)
+    assert [t.wish_id for t in event.targets] == [1, 2]
+    assert event.targets[0].codes == ("QIP98Q1ZXO",)
+
+
+async def test_forwarded_live_coupon_publishes_with_its_origin(
+    pub_builder: OfferBuilder, published: Published
+) -> None:
+    await _feed(pub_builder, _coupon_msg(fwd_from_channel_id=77, fwd_from_message_id=88))
+    [event] = published.events
+    assert isinstance(event, CouponMatchedWish)
+    assert (event.coupon_origin_channel_id, event.coupon_origin_message_id) == (77, 88)
+
+
+async def test_edit_republishes(pub_builder: OfferBuilder, published: Published) -> None:
+    await _feed(pub_builder, _coupon_msg())
+    await pub_builder.on_edited(_edited(_coupon_msg()))
+    await pub_builder.drain()
+    assert len(published.events) == 2
+
+
+async def test_disabled_wish_is_not_a_target(
+    pub_builder: OfferBuilder, published: Published, wishes: FakeWishReader
+) -> None:
+    wishes.enabled_ids = {1}
+    await _feed(pub_builder, _coupon_msg())
+    [event] = published.events
+    assert isinstance(event, CouponMatchedWish)
+    assert [t.wish_id for t in event.targets] == [1]
+
+
+async def test_no_targets_publishes_nothing(
+    pub_builder: OfferBuilder, published: Published, wishes: FakeWishReader
+) -> None:
+    wishes.enabled_ids = set()
+    await _feed(pub_builder, _coupon_msg())
+    assert published.events == []
+
+
+async def test_plain_product_publishes_nothing(
+    pub_builder: OfferBuilder, published: Published
+) -> None:
+    await _feed(pub_builder, _product_msg(11))
+    assert published.events == []
+
+
+async def test_backfill_source_message_publishes_nothing(
+    pub_builder: OfferBuilder, published: Published
+) -> None:
+    await _feed(pub_builder, _coupon_msg(source="backfill"))
+    assert published.events == []
+
+
+async def test_coupon_older_than_thirty_minutes_publishes_nothing(
+    pub_builder: OfferBuilder, published: Published
+) -> None:
+    await _feed(pub_builder, replace(_coupon_msg(), date=NOW - timedelta(minutes=31)))
+    assert published.events == []
+    await _feed(pub_builder, replace(_coupon_msg(), date=NOW - timedelta(minutes=30)))
+    assert len(published.events) == 1
+
+
+async def test_ingest_many_and_rebuild_publish_nothing_even_for_fresh_live_messages(
+    pub_builder: OfferBuilder, published: Published
+) -> None:
+    item = SourceMessage(_coupon_msg(), deleted=False, sold_out=False)
+    assert pub_builder.ingest_many([item], source=MatchSource.retro) == 1
+    assert pub_builder.ingest_many([item], source=MatchSource.live) == 1
+    assert rebuild_offers(FakeMessageSource([item]), pub_builder) == 1
+    await pub_builder.drain()
+    assert published.events == []
+    assert pub_builder._outbox == []
+
+
+def test_builder_without_publish_never_grows_its_outbox(
+    repo: InMemoryOfferRepository, wishes: FakeWishReader
+) -> None:
+    wishes.views = [_wish(1, 20000)]
+    wishes.enabled_ids = {1}
+    b = OfferBuilder(repo, wishes, FakeClock(NOW))
+    b.ingest(_product_msg(10), source=MatchSource.retro)
+    b.ingest(_coupon_msg())
+    assert b._outbox == []
+
+
+async def test_target_failure_is_logged_and_the_offer_stays_stored(
+    pub_builder: OfferBuilder,
+    published: Published,
+    repo: InMemoryOfferRepository,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(*_a: object, **_k: object) -> None:
+        raise RuntimeError("db gone")
+
+    monkeypatch.setattr(repo, "recent_store_offers", boom)
+    with caplog.at_level(logging.ERROR):
+        await _feed(pub_builder, _coupon_msg())
+    assert repo.get(1, 50) is not None
+    assert published.events == []
+    assert [r for r in caplog.records if r.message == "coupon_targets_failed"]
+
+
+async def test_publish_failure_is_logged_and_the_worker_keeps_running(
+    pub_builder: OfferBuilder, published: Published, caplog: pytest.LogCaptureFixture
+) -> None:
+    published.fail = True
+    with caplog.at_level(logging.ERROR):
+        await _feed(pub_builder, _coupon_msg())
+    assert [r for r in caplog.records if r.message == "coupon_event_publish_failed"]
+    published.fail = False
+    await _feed(pub_builder, replace(_coupon_msg(), message_id=51))
+    assert len(published.events) == 1

@@ -49,7 +49,7 @@ def decode_tiers(raw: str | None) -> tuple[CouponTier, ...]:
     )
 
 
-def _to_offer(row: sqlite3.Row) -> Offer:
+def to_offer(row: sqlite3.Row) -> Offer:
     return Offer(
         channel_id=int(row["channel_id"]),
         message_id=int(row["message_id"]),
@@ -167,7 +167,7 @@ class SqliteOfferRepository:
             "SELECT * FROM offers WHERE channel_id = ? AND message_id = ?",
             (channel_id, message_id),
         ).fetchone()
-        return _to_offer(row) if row is not None else None
+        return to_offer(row) if row is not None else None
 
     def mark_deleted(self, channel_id: int, message_ids: Sequence[int], at: datetime) -> None:
         if not message_ids:
@@ -240,6 +240,15 @@ class SqliteOfferRepository:
             (wish_id,),
         ).fetchall()
         return [(from_iso(r["posted_at"]), _opt_int(r["price_cents"])) for r in rows]
+
+    def recent_store_offers(self, store: str, since: datetime, limit: int = 500) -> list[Offer]:
+        rows = self._conn.execute(
+            "SELECT * FROM offers WHERE store = ? AND kind = 'product' AND posted_at >= ? "
+            "AND price_cents IS NOT NULL AND deleted = 0 AND sold_out = 0 "
+            "ORDER BY posted_at DESC, channel_id DESC, message_id DESC LIMIT ?",
+            (store, to_iso(since), limit),
+        ).fetchall()
+        return [to_offer(r) for r in rows]
 
     def purge_text_before(self, cutoff: datetime) -> int:
         with transaction(self._conn) as c:

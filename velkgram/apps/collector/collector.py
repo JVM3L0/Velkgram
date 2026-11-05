@@ -111,7 +111,7 @@ class Collector:
         )
         self._offers = SqliteOfferRepository(conn)
         offer_wishes = WishlistApiWishReader(self._wish_repo)
-        self.offer_builder = OfferBuilder(self._offers, offer_wishes, clock)
+        self.offer_builder = OfferBuilder(self._offers, offer_wishes, clock, publish=bus.publish)
         # Default asyncio.sleep on purpose: the injected `sleep` is for backoff and loops only.
         self.retro = RetroMatcher(self._offers, offer_wishes, clock, retention_days)
         self.retention = RetentionSchedule(app_timezone or ZoneInfo("America/Sao_Paulo"))
