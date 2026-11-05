@@ -25,7 +25,7 @@ Coupon posts usually apply to many products. Example: "Cupom KaBuM! 10% OFF acim
 - Coupon expiry parsing. "Active" means posted in the last 24 h, not sold out and not deleted.
 
 ## 3. Definitions
-- **Store of a message:** `offers.store_for_message(m)` is a new public, pure function. It uses the same `main_link` + `store_of` that `offer_from_message` uses. For posts whose title starts with "cupom", it falls back to `store_in_title`. It returns None when the store is unknown.
+- **Store of a message:** `offers.classify_message(m)` (returns the store and whether the post is a coupon post) is a new public, pure function. It uses the same `main_link` + `store_of` that `offer_from_message` uses. For posts whose title starts with "cupom", it falls back to `store_in_title`. It returns None when the store is unknown.
 - **Coupon offer:** an offer with `kind = 'coupon'`, a known store and at least one code, that is neither deleted nor sold out.
 - **Applies to a price:**
   - **Single-tier coupon:** it applies when `coupon_min_cents` is None or ≤ the price.
@@ -42,7 +42,7 @@ Coupon posts usually apply to many products. Example: "Cupom KaBuM! 10% OFF acim
 1. **Trigger.** `OfferBuilder.ingest` is the single live and edit path.
    - When it stores a coupon offer with `MessageData.source == "live"` and `now − m.date ≤ 30 min` (the v1 backfill age limit), it computes targets.
    - Edits re-run the computation; dedup prevents duplicate alerts, and a coupon whose codes were only added by an edit can still alert.
-   - Reposts never trigger (existing repost rule).
+   - Forwarded coupons trigger too; alerting dedups them by origin (§4.4).
    - `ingest_many`, `rebuild-offers` and `retro_match` never emit coupon events. A test pins this.
 2. **Targets.** The pure rule `coupon_targets(coupon, wishes, offers, now) -> list[CouponTarget]` lives in `velkgram/offers/domain/`. Its inputs:
    - the enabled wishes, from the wish reader offers already uses for retro matching;
@@ -77,7 +77,7 @@ Coupon posts usually apply to many products. Example: "Cupom KaBuM! 10% OFF acim
    - **Query:** it returns the coupon offers of that store posted at or after `since`. When `price_cents` is given, it keeps only coupons that apply to that price. Results come newest first, at most 3. The existing index `idx_offers_store_kind_feed` covers it: verify with `EXPLAIN QUERY PLAN`, and add no new index.
    - **Contract:** it is synchronous, a single indexed query, and has no timeout. Calls slower than 50 ms are logged as `active_coupons_slow`.
 2. **Above-max decision.** This step runs inline, at most once per message.
-   - In `_evaluate`, the evaluator first computes `store_for_message(m)` and memoizes it for the message.
+   - In `_evaluate`, the evaluator first computes `classify_message(m)` and memoizes it for the message.
    - It calls the port lazily, only when some term-matched wish has a price above its max, and calls it once with `since = now − 24 h` and the message price.
    - If a coupon applies, every term-matched wish whose price satisfies `max < price ≤ max × 1.5` gets an alert, through the normal `_decide` and the v1 dedup keys. The alert is stored with `over_max = 1`.
    - Coupon posts themselves (title starting with "cupom") never take this path.
@@ -138,7 +138,7 @@ Links use the Telegram post links. The page does not include offers templates.
   - add `offer_channel_id INTEGER NULL`, `offer_message_id INTEGER NULL` and `payload TEXT NULL`.
   - For coupon alerts, `channel_id`/`message_id` point to the coupon post, and `price_cents` holds the offer price.
   - Rebuild `alert_suppressions` to add `wish_coupon` to its rule CHECK: create the new table, copy the rows, drop the old one, rename, and recreate the index, all in this one migration. Test it on a populated DB.
-- **Offers:** no schema change. The public additions are `store_for_message` and the active-coupons query.
+- **Offers:** no schema change. The public additions are `classify_message` and the active-coupons query.
 - **Ownership:** alerting reads offers only through the port and the event, and offers never imports alerting.
 
 ## 6. Error handling
@@ -178,7 +178,7 @@ Links use the Telegram post links. The page does not include offers templates.
   - two qualifying offers, where the cheapest wins;
   - two wishes, giving two targets in one event;
   - a coupon and an offer from different channels of the same store;
-  - `store_for_message` with tidd.ly, amzn.to, no links, and a store taken from the title.
+  - `classify_message` with tidd.ly, amzn.to, no links, and a store taken from the title.
 - **Services, with fakes:**
   - a live coupon publishes one event;
   - backfill older than 30 min, `ingest_many` and `rebuild-offers` publish nothing;
