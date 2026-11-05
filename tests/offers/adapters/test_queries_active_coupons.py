@@ -69,6 +69,15 @@ def test_newest_first_and_window_store_kind_filters(conn: sqlite3.Connection) ->
     assert _ids(_active(conn)) == [2, 1]
 
 
+def test_since_boundary_is_inclusive(conn: sqlite3.Connection) -> None:
+    put(
+        conn,
+        coupon(1, 24),  # exactly at `since`
+        coupon(2, 24 + 1 / 3600),  # one second before
+    )
+    assert _ids(_active(conn)) == [1]
+
+
 def test_codeless_sold_out_and_deleted_coupons_are_dropped(conn: sqlite3.Connection) -> None:
     put(
         conn,

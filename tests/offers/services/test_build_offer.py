@@ -450,3 +450,60 @@ async def test_publish_failure_is_logged_and_the_worker_keeps_running(
     published.fail = False
     await _feed(pub_builder, replace(_coupon_msg(), message_id=51))
     assert len(published.events) == 1
+
+
+async def test_retro_ingest_of_a_fresh_live_message_publishes_nothing(
+    pub_builder: OfferBuilder, published: Published
+) -> None:
+    pub_builder.ingest(_coupon_msg(), source=MatchSource.retro)
+    assert pub_builder._outbox == []
+    await pub_builder.drain()
+    assert published.events == []
+
+
+async def test_failed_handle_discards_events_queued_before_the_failure(
+    pub_builder: OfferBuilder, published: Published, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = pub_builder._queue_coupon_event
+
+    def queue_then_fail(*args: object, **kwargs: object) -> None:
+        original(*args, **kwargs)  # type: ignore[arg-type]
+        raise RuntimeError("late failure")
+
+    monkeypatch.setattr(pub_builder, "_queue_coupon_event", queue_then_fail)
+    await _feed(pub_builder, _coupon_msg())
+    assert pub_builder._outbox == []
+    assert published.events == []
+
+
+async def test_product_posted_two_and_a_half_days_before_the_coupon_is_a_target(
+    repo: InMemoryOfferRepository, wishes: FakeWishReader, published: Published
+) -> None:
+    wishes.views = [_wish(1, 20000)]
+    wishes.enabled_ids = {1}
+    b = OfferBuilder(repo, wishes, FakeClock(NOW), publish=published)
+    old = replace(_product_msg(10), date=NOW - timedelta(minutes=5) - timedelta(days=2, hours=12))
+    b.ingest(old, source=MatchSource.retro)
+    await _feed(b, _coupon_msg())
+    [event] = published.events
+    assert isinstance(event, CouponMatchedWish)
+    assert [t.wish_id for t in event.targets] == [1]
+
+
+async def test_partial_forward_origin_is_not_reported(
+    pub_builder: OfferBuilder, published: Published
+) -> None:
+    await _feed(pub_builder, _coupon_msg(fwd_from_channel_id=77))
+    [event] = published.events
+    assert isinstance(event, CouponMatchedWish)
+    assert (event.coupon_origin_channel_id, event.coupon_origin_message_id) == (None, None)
+
+
+async def test_event_link_is_the_redeem_link(
+    pub_builder: OfferBuilder, published: Published
+) -> None:
+    # The cart link comes first in `links`, so `main_link` differs from the redeem link.
+    await _feed(pub_builder, replace(_coupon_msg(), links=COUPON_LINKS[::-1]))
+    [event] = published.events
+    assert isinstance(event, CouponMatchedWish)
+    assert event.link == COUPON_LINKS[0]
