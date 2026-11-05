@@ -12,6 +12,7 @@ from tests.fakes.messages import msg
 from tests.fakes.notifier import FakeNotifier
 from tests.fakes.telegram import FakeTelegramGateway
 from velkgram.apps.cli import build_parser
+from velkgram.apps.collector.collector import Collector
 from velkgram.apps.collector.main import run, run_loops
 from velkgram.ingestion import TelegramDeferred
 from velkgram.shared.config import Settings
@@ -255,6 +256,35 @@ async def test_non_auth_exception_propagates(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="network"):
         await run(_settings(tmp_path), client, notifier=notifier)
     assert notifier.system == []
+
+
+async def test_start_failure_notifies_once_then_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def boom(self: Collector) -> None:
+        raise RuntimeError("db locked")
+
+    monkeypatch.setattr(Collector, "start", boom)
+    notifier = FakeNotifier()
+    with pytest.raises(RuntimeError, match="db locked"):
+        await run(_settings(tmp_path), _client(), notifier=notifier)
+    assert notifier.system == ["Velkgram: o coletor falhou ao iniciar: RuntimeError"]
+
+
+async def test_start_failure_notify_error_does_not_mask_original(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def boom(self: Collector) -> None:
+        raise RuntimeError("db locked")
+
+    async def bad_notify(text: str) -> None:
+        raise ValueError("notifier down")
+
+    monkeypatch.setattr(Collector, "start", boom)
+    notifier = FakeNotifier()
+    notifier.notify_system = bad_notify  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="db locked"):
+        await run(_settings(tmp_path), _client(), notifier=notifier)
 
 
 async def test_startup_order(tmp_path: Path) -> None:

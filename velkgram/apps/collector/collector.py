@@ -121,13 +121,18 @@ class Collector:
         await self.evaluator.wait_idle()
 
     async def fatal(self, reason: str) -> None:
+        if self.stopped:
+            return
         self.stopped = True
         self.ingestor.stop()
-        self.heartbeat.beat("fatal", reason)
-        try:
+        try:  # alert first (spec §7): the heartbeat write must not delay or block it
             await self._notifier.notify_system(f"Velkgram parou: {reason}")
         except Exception:
             log.exception("fatal_notify_failed")
+        try:
+            self.heartbeat.beat("fatal", reason)
+        except Exception:
+            log.exception("fatal_heartbeat_failed")
 
     # --- state reload ----------------------------------------------------------------------
 
@@ -175,18 +180,33 @@ class Collector:
                 if channel.id is None:
                     continue
                 try:
-                    resolved = await self._gateway.resolve_and_join(channel.ref)
-                except ChannelResolutionError as e:
-                    self._channels.fail(channel.id, str(e))
-                    continue
+                    telegram_id = await self._resolve_one(channel.id, channel.ref)
                 except TelegramDeferred as e:
                     log.warning(
                         "telegram_deferred", extra={"ref": channel.ref, "seconds": e.seconds}
                     )
-                    continue
-                self._channels.activate(channel.id, resolved.telegram_id, resolved.title)
-                self._load_channels()
-                await self._backfill_one(resolved.telegram_id)
+                except ChannelResolutionError as e:
+                    self._fail_channel(channel.id, str(e))
+                except sqlite3.IntegrityError:
+                    log.exception("channel_activate_conflict", extra={"ref": channel.ref})
+                    self._fail_channel(channel.id, "Canal já cadastrado")
+                except Exception:
+                    log.exception("channel_activate_failed", extra={"ref": channel.ref})
+                    self._fail_channel(channel.id, "Erro ao ativar o canal")
+                else:  # the channel is active now; a backfill problem must not mark it failed
+                    await self._safe(self._backfill_one(telegram_id), "new_channel_backfill_failed")
+
+    async def _resolve_one(self, id: int, ref: str) -> int:
+        resolved = await self._gateway.resolve_and_join(ref)
+        self._channels.activate(id, resolved.telegram_id, resolved.title)
+        self._load_channels()
+        return resolved.telegram_id
+
+    def _fail_channel(self, id: int, reason_pt: str) -> None:
+        try:
+            self._channels.fail(id, reason_pt)
+        except Exception:
+            log.exception("channel_fail_failed", extra={"channel_id": id})
 
     async def _backfill_one(self, channel_id: int) -> None:
         try:

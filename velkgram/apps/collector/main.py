@@ -91,6 +91,13 @@ async def _idle_forever() -> None:
     await asyncio.Event().wait()
 
 
+async def _notify_start_failure(notifier: Notifier, exc: Exception) -> None:
+    try:
+        await notifier.notify_system(f"Velkgram: o coletor falhou ao iniciar: {type(exc).__name__}")
+    except Exception:
+        log.exception("start_failure_notify_failed")
+
+
 async def run(
     settings: Settings,
     client: TelegramClient,
@@ -101,7 +108,8 @@ async def run(
     conn = connect(settings.db_path)
     apply_migrations(conn, MIGRATION_PACKAGES)  # fatal() writes a heartbeat row
     gateway = TelethonGateway(client, clock)
-    collector = Collector(conn, gateway, notifier or LogNotifier(), clock, MemoryBus(), sleep)
+    notifier_ = notifier or LogNotifier()
+    collector = Collector(conn, gateway, notifier_, clock, MemoryBus(), sleep)
     tasks: list[asyncio.Task[None]] = []
     try:
         await client.connect()  # type: ignore[misc]
@@ -111,7 +119,12 @@ async def run(
         else:
             await gateway.warm_entity_cache()
             register_handlers(client, collector.ingestor, clock)
-            await collector.start()
+            try:
+                await collector.start()
+            except Exception as exc:
+                if not is_auth_fatal(exc):
+                    await _notify_start_failure(notifier_, exc)
+                raise
             tasks = run_loops(collector, PollingChangeSignal(conn), sleep)
             await client.run_until_disconnected()  # type: ignore[misc]
     except Exception as exc:

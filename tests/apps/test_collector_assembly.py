@@ -219,3 +219,67 @@ async def test_loop_entry_points_swallow_errors(env: Env) -> None:
     await env.collector.run_gap_check()
     await env.collector.run_retry_failed()
     await env.collector.housekeeping_tick()
+
+
+async def test_duplicate_telegram_id_marks_second_channel_failed_and_start_completes(
+    env: Env,
+) -> None:
+    env.gateway.resolutions["@dupl"] = ResolvedChannel(CH, "Loja de novo")
+    first = env.channel("@loja")
+    second = env.channel("@dupl")
+    await env.collector.start()
+    assert _status(env.conn, first) == ("active", None, CH)
+    status, error, _ = _status(env.conn, second)
+    assert status == ChannelStatus.ERROR.value
+    assert error == "Canal já cadastrado"
+
+
+async def test_unexpected_error_for_one_channel_does_not_stop_the_rest(env: Env) -> None:
+    env.gateway.resolutions["@okay"] = ResolvedChannel(-1005555555555, "Ok")
+    bad = env.channel("@loja")
+    good = env.channel("@okay")
+    original = env.gateway.resolve_and_join
+
+    async def flaky(ref: str) -> ResolvedChannel:
+        if ref == "@loja":
+            raise RuntimeError("boom")
+        return await original(ref)
+
+    env.gateway.resolve_and_join = flaky  # type: ignore[method-assign]
+    await env.collector.start()
+    assert _status(env.conn, bad)[1] == "Erro ao ativar o canal"
+    assert _status(env.conn, good)[0] == "active"
+
+
+async def test_fatal_notifies_before_heartbeat(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
+    order: list[str] = []
+    original_notify = env.notifier.notify_system
+
+    async def notify(text: str) -> None:
+        order.append("notify")
+        await original_notify(text)
+
+    def beat(*_a: object, **_k: object) -> None:
+        order.append("beat")
+
+    env.notifier.notify_system = notify  # type: ignore[method-assign]
+    monkeypatch.setattr(env.collector.heartbeat, "beat", beat)
+    await env.collector.fatal("x")
+    assert order == ["notify", "beat"]
+
+
+async def test_fatal_beat_failure_does_not_prevent_notify(
+    env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def beat(*_a: object, **_k: object) -> None:
+        raise sqlite3.OperationalError("locked")
+
+    monkeypatch.setattr(env.collector.heartbeat, "beat", beat)
+    await env.collector.fatal("x")
+    assert len(env.notifier.system) == 1
+
+
+async def test_fatal_is_idempotent(env: Env) -> None:
+    await env.collector.fatal("x")
+    await env.collector.fatal("y")
+    assert len(env.notifier.system) == 1
