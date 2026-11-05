@@ -104,6 +104,14 @@ class OfferQueries(Protocol):
         """Live (not deleted, not a repost) coupon offers, newest first."""
         ...
 
+    def count_feed_after(self, f: FeedFilter, since: FeedCursor) -> int:
+        """Feed rows strictly newer than `since` (same ordering as `feed`) under the filters."""
+        ...
+
+    def count_coupons_after(self, f: CouponFilter, since: FeedCursor) -> int:
+        """Coupon rows strictly newer than `since` under the filters."""
+        ...
+
     def coupon_stores(self) -> list[str]:
         """Stores that have at least one live coupon, sorted."""
         ...

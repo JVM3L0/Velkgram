@@ -100,7 +100,8 @@ class SqliteOfferQueries:
         self._conn = conn
         self._repo = SqliteOfferRepository(conn)
 
-    def feed(self, f: FeedFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
+    @staticmethod
+    def _feed_where(f: FeedFilter) -> tuple[list[str], list[object]]:
         where = [_NOT_REPOST, "o.kind = 'product'"]
         params: list[object] = []
         match = fts_query(f.q) if f.q is not None else None
@@ -121,19 +122,10 @@ class SqliteOfferQueries:
         if f.channel_id is not None:
             where.append("o.channel_id = ?")
             params.append(f.channel_id)
-        if cursor is not None:
-            where.append("(o.posted_at, o.channel_id, o.message_id) < (?, ?, ?)")
-            params.extend((to_iso(cursor.posted_at), cursor.channel_id, cursor.message_id))
-        rows = self._conn.execute(
-            f"SELECT {_CARD_COLUMNS} FROM offers o WHERE {' AND '.join(where)} "
-            "ORDER BY o.posted_at DESC, o.channel_id DESC, o.message_id DESC LIMIT ?",
-            (*params, limit + 1),
-        ).fetchall()
-        cards = tuple(_card(r) for r in rows[:limit])
-        more = len(rows) > limit
-        return FeedPage(cards, _cursor_of(cards[-1]) if more and cards else None)
+        return where, params
 
-    def coupons(self, f: CouponFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
+    @staticmethod
+    def _coupon_where(f: CouponFilter) -> tuple[list[str], list[object]]:
         where = ["o.kind = 'coupon'", "o.deleted = 0", _NOT_REPOST]
         params: list[object] = []
         if f.since is not None:
@@ -155,9 +147,14 @@ class SqliteOfferQueries:
                 clauses.append(f"o.store IN ({', '.join('?' * len(f.q_stores))})")
                 params.extend(f.q_stores)
             where.append(f"({' OR '.join(clauses)})")
+        return where, params
+
+    def _page(
+        self, where: list[str], params: list[object], cursor: FeedCursor | None, limit: int
+    ) -> FeedPage:
         if cursor is not None:
-            where.append("(o.posted_at, o.channel_id, o.message_id) < (?, ?, ?)")
-            params.extend((to_iso(cursor.posted_at), cursor.channel_id, cursor.message_id))
+            where = [*where, "(o.posted_at, o.channel_id, o.message_id) < (?, ?, ?)"]
+            params = [*params, to_iso(cursor.posted_at), cursor.channel_id, cursor.message_id]
         rows = self._conn.execute(
             f"SELECT {_CARD_COLUMNS} FROM offers o WHERE {' AND '.join(where)} "
             "ORDER BY o.posted_at DESC, o.channel_id DESC, o.message_id DESC LIMIT ?",
@@ -166,6 +163,30 @@ class SqliteOfferQueries:
         cards = tuple(_card(r) for r in rows[:limit])
         more = len(rows) > limit
         return FeedPage(cards, _cursor_of(cards[-1]) if more and cards else None)
+
+    def _count_after(self, where: list[str], params: list[object], since: FeedCursor) -> int:
+        row = self._conn.execute(
+            f"SELECT COUNT(*) FROM offers o WHERE {' AND '.join(where)} "
+            "AND (o.posted_at, o.channel_id, o.message_id) > (?, ?, ?)",
+            (*params, to_iso(since.posted_at), since.channel_id, since.message_id),
+        ).fetchone()
+        return int(row[0])
+
+    def feed(self, f: FeedFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
+        where, params = self._feed_where(f)
+        return self._page(where, params, cursor, limit)
+
+    def coupons(self, f: CouponFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
+        where, params = self._coupon_where(f)
+        return self._page(where, params, cursor, limit)
+
+    def count_feed_after(self, f: FeedFilter, since: FeedCursor) -> int:
+        where, params = self._feed_where(f)
+        return self._count_after(where, params, since)
+
+    def count_coupons_after(self, f: CouponFilter, since: FeedCursor) -> int:
+        where, params = self._coupon_where(f)
+        return self._count_after(where, params, since)
 
     def coupon_stores(self) -> list[str]:
         rows = self._conn.execute(

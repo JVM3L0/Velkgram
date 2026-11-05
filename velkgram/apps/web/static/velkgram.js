@@ -80,3 +80,34 @@
     }
   });
 })();
+
+// Live updates: the page polls a count of newer rows and shows it as a pill. Visiting the tab
+// again refreshes at once; at the top of the page the pill applies itself; the title carries
+// the count while the pill is up.
+(() => {
+  const TOP_PX = 100;
+  const BADGE = /^\(\d+\) /;
+
+  const syncTitle = () => {
+    const pill = document.querySelector("[data-live-pill]");
+    const base = document.title.replace(BADGE, "");
+    document.title = pill ? `(${pill.dataset.liveCount}) ${base}` : base;
+  };
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    for (const live of document.querySelectorAll("[data-live]")) {
+      live.dispatchEvent(new CustomEvent("live-refresh"));
+    }
+  });
+
+  document.addEventListener("htmx:afterSwap", syncTitle);
+
+  // Settled, not just swapped: the pill's own hx-get is processed by then, so a click works.
+  document.addEventListener("htmx:afterSettle", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element) || !target.matches("[data-live]")) return;
+    const pill = target.querySelector("[data-live-pill]");
+    if (pill instanceof HTMLElement && window.scrollY < TOP_PX) pill.click();
+  });
+})();

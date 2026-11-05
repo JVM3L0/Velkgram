@@ -126,6 +126,15 @@ def _parse_cursor(raw: str) -> FeedCursor | None:
     return FeedCursor(posted_at, channel_id, message_id)
 
 
+def _cursor_of(card: OfferCard) -> FeedCursor:
+    return FeedCursor(card.posted_at, card.channel_id, card.message_id)
+
+
+def _render_cursor(now: datetime) -> FeedCursor:
+    """Sorts after every row posted up to `now`: an empty list counts what arrives afterwards."""
+    return FeedCursor(now, SQLITE_MAX_INT, SQLITE_MAX_INT)
+
+
 def _cursor_text(c: FeedCursor) -> str:
     return f"{c.posted_at.isoformat()}|{c.channel_id}|{c.message_id}"
 
@@ -421,6 +430,123 @@ def build_router(
         request_retro(conn, wish.id)
         return retro_response(request, wish.id, RetroStatus.running, poll=False)
 
+    def feed_filter(
+        names: dict[int, str],
+        q: str,
+        min_raw: str,
+        max_raw: str,
+        store: list[str] | None,
+        priced: str,
+        channel: str,
+    ) -> tuple[FeedFilter, str]:
+        channel_id = _int_or_none(channel)
+        if channel_id not in names:
+            channel_id = None
+        query = q.strip()
+        return (
+            FeedFilter(
+                q=query or None,
+                min_cents=parse_price_cents(min_raw),
+                max_cents=parse_price_cents(max_raw),
+                stores=tuple(dict.fromkeys(s for s in (store or []) if s)),
+                priced_only=priced == "1",
+                channel_id=channel_id,
+            ),
+            query,
+        )
+
+    def feed_params(flt: FeedFilter, view: str) -> list[tuple[str, str]]:
+        params: list[tuple[str, str]] = []
+        if flt.q:
+            params.append(("q", flt.q))
+        if flt.min_cents is not None:
+            params.append(("min", format_price(flt.min_cents)))
+        if flt.max_cents is not None:
+            params.append(("max", format_price(flt.max_cents)))
+        params.extend(("store", s) for s in flt.stores)
+        if flt.priced_only:
+            params.append(("priced", "1"))
+        if flt.channel_id is not None:
+            params.append(("channel", str(flt.channel_id)))
+        params.append(("view", view))
+        return params
+
+    def coupon_filter(
+        queries: OfferQueries,
+        now: datetime,
+        q: str,
+        loja: list[str] | None,
+        ativos: list[str] | None,
+    ) -> tuple[CouponFilter, str, bool]:
+        stores = queries.coupon_stores()
+        query = q.strip()
+        selected = tuple(dict.fromkeys(s for s in (loja or []) if s))
+        # The switch posts a hidden "0" before its checkbox "1": the last value wins.
+        only_active = not ativos or ativos[-1] != "0"
+        flt = CouponFilter(
+            q=query or None,
+            stores=selected,
+            since=now - timedelta(hours=_ACTIVE_HOURS) if only_active else None,
+            q_stores=tuple(
+                s for s in stores if query and query.casefold() in STORE_NAMES.get(s, s).casefold()
+            ),
+        )
+        return flt, query, only_active
+
+    def coupon_params(flt: CouponFilter, query: str, only_active: bool) -> list[tuple[str, str]]:
+        params = [("q", query)] if query else []
+        params.extend(("loja", s) for s in flt.stores)
+        params.append(("ativos", "1" if only_active else "0"))
+        return params
+
+    def pill_response(request: Request, count: int, noun: tuple[str, str], url: str) -> Response:
+        if count <= 0:
+            return Response(status_code=204)
+        label = f"1 {noun[0]}" if count == 1 else f"{count} {noun[1]}"
+        return templates.TemplateResponse(
+            request, "_live_pill.html", {"count": count, "label": label, "reload_url": url}
+        )
+
+    @router.get("/novidades", response_class=HTMLResponse)
+    def feed_news(
+        request: Request,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        since: str = "",
+        q: str = "",
+        min_raw: Annotated[str, Query(alias="min")] = "",
+        max_raw: Annotated[str, Query(alias="max")] = "",
+        store: Annotated[list[str] | None, Query()] = None,
+        priced: str = "",
+        channel: str = "",
+        view: str = "cards",
+    ) -> Response:
+        after = _parse_cursor(since)
+        if after is None:
+            return Response(status_code=204)
+        flt, _ = feed_filter(channel_names(conn), q, min_raw, max_raw, store, priced, channel)
+        view = view if view in _VIEWS else "cards"
+        count = make_queries(conn).count_feed_after(flt, after)
+        url = "/?" + urlencode(feed_params(flt, view))
+        return pill_response(request, count, ("nova oferta", "novas ofertas"), url)
+
+    @router.get("/cupons/novidades", response_class=HTMLResponse)
+    def coupons_news(
+        request: Request,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        since: str = "",
+        q: str = "",
+        loja: Annotated[list[str] | None, Query()] = None,
+        ativos: Annotated[list[str] | None, Query()] = None,
+    ) -> Response:
+        after = _parse_cursor(since)
+        if after is None:
+            return Response(status_code=204)
+        queries = make_queries(conn)
+        flt, query, only_active = coupon_filter(queries, clock.now(), q, loja, ativos)
+        count = queries.count_coupons_after(flt, after)
+        url = "/cupons?" + urlencode(coupon_params(flt, query, only_active))
+        return pill_response(request, count, ("novo cupom", "novos cupons"), url)
+
     @router.get("/", response_class=HTMLResponse)
     def feed(
         request: Request,
@@ -439,21 +565,7 @@ def build_router(
         if tipo == _COUPONS_TYPE:
             return _redirect_to_coupons(q, store, ativos)
         names = channel_names(conn)
-        channel_id = _int_or_none(channel)
-        if channel_id not in names:
-            channel_id = None
-        stores = tuple(dict.fromkeys(s for s in (store or []) if s))
-        query = q.strip()
-        min_cents = parse_price_cents(min_raw)
-        max_cents = parse_price_cents(max_raw)
-        flt = FeedFilter(
-            q=query or None,
-            min_cents=min_cents,
-            max_cents=max_cents,
-            stores=stores,
-            priced_only=priced == "1",
-            channel_id=channel_id,
-        )
+        flt, query = feed_filter(names, q, min_raw, max_raw, store, priced, channel)
         view = view if view in _VIEWS else "cards"
         queries = make_queries(conn)
         page = queries.feed(flt, _parse_cursor(cursor), _PAGE_SIZE)
@@ -462,21 +574,11 @@ def build_router(
         rows = [card_view(c, now, names, counts) for c in page.cards]
         next_url: str | None = None
         if rows and page.next_cursor is not None:
-            params: list[tuple[str, str]] = []
-            if flt.q:
-                params.append(("q", flt.q))
-            if min_cents is not None:
-                params.append(("min", format_price(min_cents)))
-            if max_cents is not None:
-                params.append(("max", format_price(max_cents)))
-            params.extend(("store", s) for s in stores)
-            if flt.priced_only:
-                params.append(("priced", "1"))
-            if channel_id is not None:
-                params.append(("channel", str(channel_id)))
-            params.append(("view", view))
+            params = feed_params(flt, view)
             params.append(("cursor", _cursor_text(page.next_cursor)))
             next_url = "/?" + urlencode(params)
+        since = _cursor_text(_cursor_of(page.cards[0]) if page.cards else _render_cursor(now))
+        live_url = "/novidades?" + urlencode([*feed_params(flt, view), ("since", since)])
         is_fragment = request.headers.get("HX-Request") == "true" and bool(cursor)
         context: dict[str, object] = {"rows": rows, "next_url": next_url}
         if is_fragment:
@@ -486,13 +588,14 @@ def build_router(
                 "q": query,
                 "min_value": min_raw.strip(),
                 "max_value": max_raw.strip(),
-                "selected_stores": stores,
+                "selected_stores": flt.stores,
                 "store_options": [(s, STORE_NAMES.get(s, s)) for s in queries.stores_seen()],
                 "priced_only": flt.priced_only,
-                "channel_id": channel_id,
+                "channel_id": flt.channel_id,
                 "channels": sorted(names.items(), key=lambda kv: kv[1].casefold()),
                 "view": view,
                 "retention_days": retention_days,
+                "live_url": live_url,
             }
         )
         return templates.TemplateResponse(request, "feed.html", context)
@@ -509,28 +612,20 @@ def build_router(
         queries = make_queries(conn)
         now = clock.now()
         stores = queries.coupon_stores()
-        query = q.strip()
-        selected = tuple(dict.fromkeys(s for s in (loja or []) if s))
-        # The switch posts a hidden "0" before its checkbox "1": the last value wins.
-        only_active = not ativos or ativos[-1] != "0"
-        flt = CouponFilter(
-            q=query or None,
-            stores=selected,
-            since=now - timedelta(hours=_ACTIVE_HOURS) if only_active else None,
-            q_stores=tuple(
-                s for s in stores if query and query.casefold() in STORE_NAMES.get(s, s).casefold()
-            ),
-        )
+        flt, query, only_active = coupon_filter(queries, now, q, loja, ativos)
+        selected = flt.stores
         page = queries.coupons(flt, _parse_cursor(cursor), _PAGE_SIZE)
         names = channel_names(conn)
         rows = [card_view(c, now, names) for c in page.cards]
         next_url: str | None = None
         if rows and page.next_cursor is not None:
-            params = [("q", query)] if query else []
-            params.extend(("loja", s) for s in selected)
-            params.append(("ativos", "1" if only_active else "0"))
+            params = coupon_params(flt, query, only_active)
             params.append(("cursor", _cursor_text(page.next_cursor)))
             next_url = "/cupons?" + urlencode(params)
+        since = _cursor_text(_cursor_of(page.cards[0]) if page.cards else _render_cursor(now))
+        live_url = "/cupons/novidades?" + urlencode(
+            [*coupon_params(flt, query, only_active), ("since", since)]
+        )
         if request.headers.get("HX-Request") == "true" and cursor:
             return templates.TemplateResponse(
                 request, "_coupons_page.html", {"rows": rows, "next_url": next_url}
@@ -549,6 +644,7 @@ def build_router(
                     for s in (*stores, *(x for x in selected if x not in stores))
                 ],
                 "has_filters": bool(query or selected),
+                "live_url": live_url,
             },
         )
 

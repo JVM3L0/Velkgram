@@ -30,6 +30,7 @@
 </form>
 
 <section id="results" class="results" aria-label="Cupons">
+  {% include "_live.html" %}
   <div id="feed" class="feed feed-cards coupon-feed">
     {% if rows %}{% include "_coupons_page.html" %}{% else %}
     <div class="empty">

@@ -75,6 +75,7 @@
 </form>
 
 <section id="results" class="results" aria-label="Resultados">
+  {% include "_live.html" %}
   {% if q %}<p class="note"><i aria-hidden="true">info</i>A busca cobre os últimos {{ retention_days }} dias.</p>{% endif %}
   <div id="feed" class="feed feed-{{ view }}">
     {% if rows %}{% include "_feed_page.html" %}{% else %}
