@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from velkgram.offers.domain.models import MatchSource, OfferKind, ProductStats, RetroRun
+from velkgram.offers.domain.models import CouponTier, MatchSource, OfferKind, ProductStats, RetroRun
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +48,7 @@ class OfferCard:
     redeem_link: str | None = None
     cart_link: str | None = None
     text: str | None = None
+    coupon_tiers: tuple[CouponTier, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

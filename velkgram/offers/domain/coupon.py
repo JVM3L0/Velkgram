@@ -5,6 +5,7 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from velkgram.offers.domain.models import CouponTier
 from velkgram.offers.domain.title import STORE_TITLES
 from velkgram.shared.text import URL_PATTERN
 
@@ -21,6 +22,7 @@ class CouponDeal:
     scope: str | None
     redeem_link: str | None
     cart_link: str | None
+    tiers: tuple[CouponTier, ...] = ()
 
 
 def _plain(text: str) -> str:
@@ -50,17 +52,56 @@ def _cents(reais: str, cents: str | None) -> int:
     return int(reais.replace(".", "")) * 100 + (int(cents) if cents else 0)
 
 
-def _discount(text: str) -> str:
-    match = _DISCOUNT.search(text)
-    if match is None:
-        return ""
+def _discount_text(match: re.Match[str]) -> str:
     if match.group(3) is not None:
         return f"{match.group(3)}% OFF"
-    return (
-        f"R$ {match.group(1).replace('.', '')} OFF"
-        if match.group(2) is None
-        else (f"R$ {match.group(1).replace('.', '')},{match.group(2)} OFF")
-    )
+    reais = match.group(1).replace(".", "")
+    return f"R$ {reais} OFF" if match.group(2) is None else f"R$ {reais},{match.group(2)} OFF"
+
+
+def _tiers(text: str) -> tuple[CouponTier, ...]:
+    tiers: list[CouponTier] = []
+    for line in text.splitlines():
+        discount = _DISCOUNT.search(line)
+        if discount is None:
+            continue
+        minimum = _MIN_SPEND.search(line)
+        tiers.append(
+            CouponTier(
+                _discount_text(discount),
+                _cents(minimum.group(1), minimum.group(2)) if minimum else None,
+            )
+        )
+    return tuple(tiers)
+
+
+def _tier_value(tier: CouponTier) -> int:
+    number = re.search(r"\d[\d.]*(?:,\d+)?", tier.discount)
+    return int(float(number.group(0).replace(".", "").replace(",", ".")) * 100) if number else 0
+
+
+def best_tier(tiers: Sequence[CouponTier]) -> CouponTier | None:
+    """The headline tier: the biggest cash discount, else the biggest percentage."""
+    cash = [t for t in tiers if t.discount.startswith("R$")]
+    pool = cash or list(tiers)
+    return max(pool, key=_tier_value, default=None)
+
+
+_LEADING_CUPOM = re.compile(r"^cupom(?:ns)?\b[\s:,-]*", re.IGNORECASE)
+_EDGE_NOISE = " \t-–—:,;"
+
+
+def coupon_title(title: str) -> str:
+    """The title without what the card already shows: discount phrases and "Cupom <Store>"."""
+    rest = " ".join(_DISCOUNT.sub(" ", title).split()).strip(_EDGE_NOISE)
+    rest = _LEADING_CUPOM.sub("", rest)
+    for slug in STORE_TITLES:
+        for name in sorted({slug, STORE_TITLES[slug]}, key=len, reverse=True):
+            if _plain(rest[: len(name)]) == _plain(name) and (
+                len(rest) == len(name) or not rest[len(name)].isalnum()
+            ):
+                return rest[len(name) :].strip(_EDGE_NOISE)
+    return rest.strip(_EDGE_NOISE)
 
 
 def _links_after_keywords(text: str, links: Sequence[str]) -> tuple[str | None, str | None]:
@@ -86,13 +127,19 @@ def coupon_deal(title: str, text: str | None, links: Sequence[str]) -> CouponDea
         return None
     if text is None:
         return CouponDeal("", None, None, None, None)
-    minimum = _MIN_SPEND.search(text)
+    tiers = _tiers(text)
+    first = tiers[0] if tiers else CouponTier("", None)
+    minimum = _MIN_SPEND.search(text) if len(tiers) <= 1 else None
+    min_cents = first.min_cents
+    if min_cents is None and minimum:
+        min_cents = _cents(minimum.group(1), minimum.group(2))
     scope = _SCOPE.search(text)
     redeem, cart = _links_after_keywords(text, links)
     return CouponDeal(
-        discount=_discount(text),
-        min_cents=_cents(minimum.group(1), minimum.group(2)) if minimum else None,
+        discount=first.discount,
+        min_cents=min_cents,
         scope=scope.group(1).strip() if scope else None,
         redeem_link=redeem,
         cart_link=cart,
+        tiers=tiers,
     )

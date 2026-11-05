@@ -10,6 +10,7 @@ from tests.fakes.repositories import InMemoryOfferRepository
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.domain.models import (
+    CouponTier,
     MatchSource,
     Offer,
     OfferKind,
@@ -93,6 +94,7 @@ def test_coupon_fields_round_trip_and_upsert_updates_them(handle: Handle) -> Non
         coupon_discount="R$ 10 OFF",
         coupon_min_cents=4000,
         coupon_scope="Selecionados",
+        coupon_tiers=(CouponTier("R$ 10 OFF", 4000), CouponTier("10% OFF", None)),
         redeem_link="https://s.shopee.com.br/a",
         cart_link="https://s.shopee.com.br/b",
     )

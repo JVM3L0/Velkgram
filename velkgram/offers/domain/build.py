@@ -49,6 +49,7 @@ def offer_from_message(
         coupon_scope=deal.scope if deal else None,
         redeem_link=deal.redeem_link if deal else None,
         cart_link=deal.cart_link if deal else None,
+        coupon_tiers=deal.tiers if deal else (),
     )
 
 

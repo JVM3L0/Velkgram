@@ -1,7 +1,10 @@
 import pytest
 
+from velkgram.offers.domain.models import CouponTier
 from velkgram.offers.domain.coupon import (
     CouponDeal,
+    best_tier,
+    coupon_title,
     coupon_deal,
     starts_with_coupon_word,
     store_in_title,
@@ -38,6 +41,7 @@ def test_shopee_cash_coupon_with_redeem_and_cart_links() -> None:
         scope=None,
         redeem_link="https://s.shopee.com.br/70GSVaUJxC",
         cart_link="https://s.shopee.com.br/7fW9IpEnZG",
+        tiers=(CouponTier("R$ 10 OFF", 4000),),
     )
 
 
@@ -86,3 +90,54 @@ def test_title_only_coupon_has_no_extras() -> None:
 )
 def test_store_is_inferred_from_a_coupon_title_by_whole_word(title: str, store: str | None) -> None:
     assert store_in_title(title) == store
+
+
+MERCADO_LIVRE = (
+    "Cupom Mercado Livre\n\nR$ 90 OFF em R$ 699: \n"
+    "10% OFF em R$ 79, Limite de R$ 40 OFF: SEMPRESAUDE\n"
+    "10% OFF em R$ 149, Limite de R$ 200 OFF: PROMOSML, CLIENTESTOP\n"
+    "25% OFF em R$ 1, Limite de R$ 500 OFF: GARANTAJA, OFERTABOA\n"
+    "30% OFF em R$ 1, Limite de R$ 500 OFF: ECONOMIZAML, DESCONTONAHORA\n\n"
+    "-Resgate aqui: https://mercadolivre.com/sec/2U6U32Q"
+)
+
+
+def test_multi_tier_coupon_lists_every_tier_in_post_order() -> None:
+    deal = coupon_deal("Cupom Mercado Livre", MERCADO_LIVRE, ())
+    assert deal is not None
+    assert deal.tiers == (
+        CouponTier("R$ 90 OFF", 69900),
+        CouponTier("10% OFF", 7900),
+        CouponTier("10% OFF", 14900),
+        CouponTier("25% OFF", 100),
+        CouponTier("30% OFF", 100),
+    )
+    assert (deal.discount, deal.min_cents) == ("R$ 90 OFF", 69900)
+    assert deal.redeem_link == "https://mercadolivre.com/sec/2U6U32Q"
+
+
+def test_best_tier_prefers_the_largest_cash_discount_then_the_largest_percent() -> None:
+    deal = coupon_deal("Cupom Mercado Livre", MERCADO_LIVRE, ())
+    assert deal is not None
+    assert best_tier(deal.tiers) == CouponTier("R$ 90 OFF", 69900)
+    percents = (CouponTier("10% OFF", None), CouponTier("30% OFF", 100), CouponTier("5% OFF", None))
+    assert best_tier(percents) == CouponTier("30% OFF", 100)
+    assert best_tier(()) is None
+
+
+@pytest.mark.parametrize(
+    ("title", "shown"),
+    [
+        ("Cupom KaBuM em produtos selecionados - 11% OFF", "em produtos selecionados"),
+        ("Cupom Shopee", ""),
+        ("Cupom Mercado Livre", ""),
+        ("CUPOM MAGALU 10% OFF", ""),
+        ("Cupom Amazon Primeira Compra", "Primeira Compra"),
+        ("Cupom Casas Bahia R$ 50 OFF em eletro", "em eletro"),
+        ("Cupom de desconto R$ 10 OFF", "de desconto"),
+    ],
+)
+def test_coupon_title_drops_the_discount_and_the_leading_cupom_store(
+    title: str, shown: str
+) -> None:
+    assert coupon_title(title) == shown

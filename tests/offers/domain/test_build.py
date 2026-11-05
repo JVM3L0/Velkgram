@@ -2,7 +2,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 
 from velkgram.offers.domain.build import offer_from_message, wish_fingerprint
-from velkgram.offers.domain.models import OfferKind
+from velkgram.offers.domain.models import CouponTier, OfferKind
 from velkgram.shared.deals import WishView
 from velkgram.shared.events import MessageData
 from velkgram.shared.text import normalize_text
@@ -139,6 +139,7 @@ def test_coupon_post_has_no_price_and_carries_the_deal() -> None:
         4000,
         None,
     )
+    assert offer.coupon_tiers == (CouponTier("R$ 10 OFF", 4000),)
     assert offer.redeem_link == links[0]
     assert offer.cart_link == links[1]
 

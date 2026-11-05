@@ -22,6 +22,14 @@ class OfferKind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class CouponTier:
+    """One "R$ 90 OFF em R$ 699" line of a coupon post."""
+
+    discount: str
+    min_cents: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class Offer:
     channel_id: int
     message_id: int
@@ -46,6 +54,7 @@ class Offer:
     coupon_scope: str | None = None
     redeem_link: str | None = None
     cart_link: str | None = None
+    coupon_tiers: tuple[CouponTier, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

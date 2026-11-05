@@ -85,9 +85,9 @@ def test_coupon_migration_adds_columns_and_marks_coupon_titles(tmp_path: Path) -
     c.executescript((files("velkgram.offers") / "migrations" / "003_offer_coupons.sql").read_text())
     rows = c.execute(
         "SELECT message_id, kind, price_cents, coupons, coupon_discount, coupon_min_cents, "
-        "coupon_scope, redeem_link, cart_link FROM offers ORDER BY message_id"
+        "coupon_scope, redeem_link, cart_link, coupon_tiers FROM offers ORDER BY message_id"
     ).fetchall()
     assert [tuple(r) for r in rows] == [
-        (1, "coupon", None, None, None, None, None, None, None),
-        (2, "product", 1000, None, None, None, None, None, None),
+        (1, "coupon", None, None, None, None, None, None, None, None),
+        (2, "product", 1000, None, None, None, None, None, None, None),
     ]

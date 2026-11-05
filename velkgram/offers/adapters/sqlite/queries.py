@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 from velkgram.offers.adapters.sqlite.repository import (
     SqliteOfferRepository,
+    decode_tiers,
     from_iso,
     to_iso,
 )
@@ -35,7 +36,7 @@ _COMPARABLE_MATCH = "m.price_cents IS NOT NULL AND o.comparable = 1"
 _CARD_COLUMNS = (
     "o.channel_id, o.message_id, o.posted_at, o.title, o.price_cents, o.store, o.main_link, "
     "o.has_photo, o.sold_out, o.deleted, o.comparable, o.kind, o.coupons, o.coupon_discount, "
-    "o.coupon_min_cents, o.coupon_scope, o.redeem_link, o.cart_link, o.text, "
+    "o.coupon_min_cents, o.coupon_scope, o.redeem_link, o.cart_link, o.coupon_tiers, o.text, "
     "(SELECT COUNT(*) FROM offers r WHERE r.origin_channel_id = o.channel_id "
     "AND r.origin_message_id = o.message_id) AS repost_count"
 )
@@ -75,6 +76,7 @@ def _card(row: sqlite3.Row) -> OfferCard:
         redeem_link=row["redeem_link"],
         cart_link=row["cart_link"],
         text=row["text"],
+        coupon_tiers=decode_tiers(row["coupon_tiers"]),
     )
 
 

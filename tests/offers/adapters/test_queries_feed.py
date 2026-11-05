@@ -9,7 +9,7 @@ import pytest
 from tests.offers.adapters._queries_helpers import T0, offer, put
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries, fts_query
-from velkgram.offers.domain.models import OfferKind
+from velkgram.offers.domain.models import CouponTier, OfferKind
 from velkgram.offers.ports.queries import FeedFilter
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
@@ -157,6 +157,7 @@ def test_card_carries_coupon_data_and_post_text(conn: sqlite3.Connection) -> Non
     assert coupon.kind is OfferKind.coupon
     assert (coupon.coupon_discount, coupon.coupon_min_cents) == ("R$ 10 OFF", 4000)
     assert coupon.redeem_link == "https://x.test/resgate"
+    assert coupon.coupon_tiers == (CouponTier("R$ 10 OFF", 4000),)
 
 
 def test_active_coupons_are_recent_newest_first_and_capped(conn: sqlite3.Connection) -> None:

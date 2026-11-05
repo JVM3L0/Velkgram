@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from velkgram.offers.domain.models import (
     MatchSource,
+    CouponTier,
     Offer,
     OfferKind,
     OfferMatch,
@@ -29,6 +30,14 @@ def from_iso(value: str) -> datetime:
 
 def _opt_int(value: object) -> int | None:
     return None if value is None else int(str(value))
+
+
+def encode_tiers(tiers: Sequence[CouponTier]) -> str | None:
+    return json.dumps([[t.discount, t.min_cents] for t in tiers]) if tiers else None
+
+
+def decode_tiers(raw: str | None) -> tuple[CouponTier, ...]:
+    return tuple(CouponTier(str(d), _opt_int(m)) for d, m in json.loads(raw)) if raw else ()
 
 
 def _to_offer(row: sqlite3.Row) -> Offer:
@@ -56,6 +65,7 @@ def _to_offer(row: sqlite3.Row) -> Offer:
         coupon_scope=row["coupon_scope"],
         redeem_link=row["redeem_link"],
         cart_link=row["cart_link"],
+        coupon_tiers=decode_tiers(row["coupon_tiers"]),
     )
 
 
@@ -92,8 +102,8 @@ _UPSERT = (
     "INSERT INTO offers (channel_id, message_id, posted_at, title, price_cents, store, "
     "main_link, has_photo, text, norm_text, origin_channel_id, origin_message_id, sold_out, "
     "deleted, updated_at, comparable, kind, coupons, coupon_discount, coupon_min_cents, "
-    "coupon_scope, redeem_link, cart_link) VALUES "
-    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+    "coupon_scope, redeem_link, cart_link, coupon_tiers) VALUES "
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
     "ON CONFLICT(channel_id, message_id) DO UPDATE SET "
     "posted_at = excluded.posted_at, title = excluded.title, "
     "price_cents = excluded.price_cents, store = excluded.store, "
@@ -104,7 +114,8 @@ _UPSERT = (
     "comparable = excluded.comparable, kind = excluded.kind, coupons = excluded.coupons, "
     "coupon_discount = excluded.coupon_discount, "
     "coupon_min_cents = excluded.coupon_min_cents, coupon_scope = excluded.coupon_scope, "
-    "redeem_link = excluded.redeem_link, cart_link = excluded.cart_link"
+    "redeem_link = excluded.redeem_link, cart_link = excluded.cart_link, "
+    "coupon_tiers = excluded.coupon_tiers"
 )
 
 
@@ -137,6 +148,7 @@ class SqliteOfferRepository:
             o.coupon_scope,
             o.redeem_link,
             o.cart_link,
+            encode_tiers(o.coupon_tiers),
         )
         with transaction(self._conn) as c:
             c.execute(_UPSERT, params)
