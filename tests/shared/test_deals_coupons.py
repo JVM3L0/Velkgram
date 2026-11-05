@@ -65,6 +65,42 @@ def _post(*lines: str) -> str:
         (_post("Use code: OFF", "cupom: FRETE", "cupom: PIX", "cupom: 12345"), ()),
         (_post("Cupom: A1B", "cupom: B2C"), ("A1B", "B2C")),
         (_post("Cupom: " + "A" * 26), ()),
+        (
+            _post("Ar Condicionado Hisense", "R$ 1453", "-CUPOM: IFPWBISS ou ISKANDAR5 + moedas"),
+            ("IFPWBISS", "ISKANDAR5"),
+        ),
+        (
+            _post(
+                "Cupom Mercado Livre",
+                "10% OFF em R$ 149, Limite de R$ 200 OFF: PROMOSML, CLIENTESTOP",
+            ),
+            ("PROMOSML", "CLIENTESTOP"),
+        ),
+        (
+            _post(
+                "Cupom Mercado Livre",
+                "20% OFF em R$ 79, Limite de R$ 80 OFF: CONSTRUIRAQUI, CASAAQUI",
+            ),
+            ("CONSTRUIRAQUI", "CASAAQUI"),
+        ),
+        (
+            _post(
+                "Cupom Mercado Livre", "25% OFF em R$ 1, Limite de R$ 500 OFF: GARANTAJA, OFERTABOA"
+            ),
+            ("GARANTAJA", "OFERTABOA"),
+        ),
+        (
+            _post("Cupom: AAA111 / BBB222 + CCC333 e DDD444"),
+            ("AAA111", "BBB222", "CCC333", "DDD444"),
+        ),
+        (_post("Cupom: AAA111, depois fale com a loja, ZZZ999"), ("AAA111",)),
+        (_post("Hoje às 10:00 use cupom ABC12"), ("ABC12",)),
+        (_post("Cupom Shopee", "ATENÇÃO: LIMITADO"), ()),
+        (_post("Cupom Shopee", "R$ 10 OFF em R$ 40: LIMITADO"), ()),
+        (
+            _post("Cupom: NOVO", "cupom: HOJE", "cupom: ACIMA", "cupom: ATENCAO", "cupom: GRÁTIS"),
+            (),
+        ),
         (_post("Notebook X", "R$ 3479", "-CUPOM: SELECIONADAS + Resgate cupom do anúncio"), ()),
     ],
 )

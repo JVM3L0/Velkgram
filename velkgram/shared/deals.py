@@ -86,10 +86,15 @@ def matches(wish: WishView, normalized_text: str, price_cents: int | None) -> bo
 
 _COUPON_KEYWORD = re.compile(r"\b(?:cupom|cupons|cupon|c[óo]digo|code)\b", re.IGNORECASE)
 _COUPON_TOKEN = re.compile(r"(?=[A-Z0-9_-]*[A-Z])[A-Z0-9_-]{3,25}")
-_COUPON_TAIL = re.compile(r":\s*(\S+)\s*$")
 _NOT_CODES = frozenset(
     {
         "OFF",
+        "LIMITADO",
+        "ATENÇÃO",
+        "ATENCAO",
+        "NOVO",
+        "HOJE",
+        "ACIMA",
         "FRETE",
         "GRATIS",
         "GRÁTIS",
@@ -133,17 +138,38 @@ def _starts_with_coupon_word(text: str) -> bool:
     return "".join(c for c in head if unicodedata.category(c) != "Mn").startswith("cupom")
 
 
-def _line_code(line: str, *, coupon_post: bool) -> str | None:
+_COUPON_OFF = re.compile(r"\bOFF\b", re.IGNORECASE)
+_ALTERNATIVES = re.compile(r"\s*(?:,|/|\+|\bou\b|\be\b)\s*", re.IGNORECASE)
+
+
+def _codes_in(remainder: str) -> list[str]:
+    """Codes joined by ",", "/", "+", "ou" or "e"; stops at the first piece that is not one."""
+    codes: list[str] = []
+    for piece in _ALTERNATIVES.split(remainder):
+        words = piece.split()
+        code = _as_code(words[0]) if words else None
+        if code is None:
+            break
+        codes.append(code)
+        if len(words) > 1:  # trailing prose: the list is over
+            break
+    return codes
+
+
+def _line_codes(line: str, *, coupon_post: bool) -> list[str]:
     keyword = _COUPON_KEYWORD.search(line)
-    if keyword is None:
-        # "Cupom Shopee" posts put the code on its own "R$ 10 OFF em R$ 40: CODE" line.
-        tail = _COUPON_TAIL.search(line) if coupon_post else None
-        return _as_code(tail.group(1)) if tail else None
-    if ":" in line:
-        remainder = line.rsplit(":", 1)[1].split()
-        return _as_code(remainder[0]) if remainder else None
-    following = line[keyword.end() :].split()
-    return _as_code(following[0]) if following else None
+    if keyword is not None:
+        anchor = keyword.end()
+    else:
+        # "Cupom Shopee" posts put codes on their own "R$ 10 OFF em R$ 40: CODE" lines.
+        off = _COUPON_OFF.search(line) if coupon_post else None
+        if off is None:
+            return []
+        anchor = off.end()
+    colon = line.find(":", anchor)
+    if colon != -1:
+        return _codes_in(line[colon + 1 :])
+    return _codes_in(line[anchor:]) if keyword is not None else []
 
 
 def extract_coupons(text: str) -> tuple[str, ...]:
@@ -151,7 +177,6 @@ def extract_coupons(text: str) -> tuple[str, ...]:
     coupon_post = _starts_with_coupon_word(text)
     found: dict[str, None] = {}
     for line in text.splitlines():
-        code = _line_code(line, coupon_post=coupon_post)
-        if code is not None:
+        for code in _line_codes(line, coupon_post=coupon_post):
             found[code] = None
     return tuple(found)
