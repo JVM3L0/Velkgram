@@ -150,3 +150,8 @@ def test_login_page_uses_base_theme(tmp_path: Path) -> None:
     assert "Entrar" in page
     assert 'type="password"' in page
     assert "Navegação principal" not in page
+
+
+def test_theme_button_is_labelled_tema(tmp_path: Path) -> None:
+    page = make_client(tmp_path).get("/wishes").text
+    assert 'aria-label="Tema"' in page and 'title="Tema"' in page

@@ -52,6 +52,8 @@ def _pairs() -> list[tuple[str, str, float]]:
     for fg in ("on-surface", "on-surface-variant"):
         pairs += [(fg, bg, 4.5) for bg in SURFACES]
     pairs += [("on-surface", bg, 4.5) for bg in LOUD_SURFACES]
+    # The teal "Abrir" link and price text sit on cards and containers.
+    pairs += [("primary", bg, 4.5) for bg in SURFACES[:3]]  # cards use surface..low
     pairs += [(role, "surface", 4.5) for role in ("primary", "success", "warning")]
     pairs.append(("outline", "surface", 3.0))
     return pairs
