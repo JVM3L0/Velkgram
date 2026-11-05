@@ -1,6 +1,8 @@
 """Web app factory: `uvicorn --factory velkgram.apps.web.main:create_app`."""
 
 import os
+import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, Request
@@ -9,13 +11,19 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from starlette.middleware.sessions import SessionMiddleware
 
+import velkgram.alerting.web as alerting_web
 import velkgram.channels.web as channels_web
+import velkgram.ingestion.web as ingestion_web
 import velkgram.wishlist.web as wishlist_web
+from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
+from velkgram.alerting.web.router import build_router as build_alerts_router
 from velkgram.apps.web.auth import verify_password
 from velkgram.apps.web.deps import SESSION_KEY, SESSION_USER, get_conn, require_user
 from velkgram.apps.web.throttle import LoginThrottle
 from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.channels.web.router import build_router as build_channels_router
+from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
+from velkgram.ingestion.web.router import build_router as build_status_router
 from velkgram.shared.adapters.clock_system import SystemClock
 from velkgram.shared.config import Settings, load_settings
 from velkgram.shared.ports import Clock
@@ -26,13 +34,46 @@ _APP_TEMPLATES = Path(__file__).parent / "templates"
 _MODULE_TEMPLATE_DIRS = (
     Path(wishlist_web.__file__).parent / "templates",
     Path(channels_web.__file__).parent / "templates",
+    Path(alerting_web.__file__).parent / "templates",
+    Path(ingestion_web.__file__).parent / "templates",
 )
+
+
+_RECENT_FAILURES = 10
 
 
 def _build_templates() -> Jinja2Templates:
     loaders = [FileSystemLoader(d) for d in (_APP_TEMPLATES, *_MODULE_TEMPLATE_DIRS)]
     env = Environment(loader=ChoiceLoader(loaders), autoescape=True)
     return Jinja2Templates(env=env)
+
+
+def _wish_names(conn: sqlite3.Connection) -> dict[int, str]:
+    return {w.id: w.name for w in SqliteWishRepository(conn).list_all() if w.id is not None}
+
+
+def _channel_names(conn: sqlite3.Connection) -> dict[int, str]:
+    return {
+        c.telegram_id: c.name or c.ref
+        for c in SqliteChannelRepository(conn).list_all()
+        if c.telegram_id is not None
+    }
+
+
+def _active_channels(conn: sqlite3.Connection) -> list[tuple[int, str, int, datetime]]:
+    return [
+        (c.telegram_id, c.name or c.ref, c.silent_after_hours, c.created_at)
+        for c in SqliteChannelRepository(conn).list_enabled_active()
+        if c.telegram_id is not None
+    ]
+
+
+def _recent_failures(conn: sqlite3.Connection) -> list[tuple[str, str, datetime]]:
+    names = _wish_names(conn)
+    return [
+        (names.get(a.wish_id, f"#{a.wish_id}"), a.status.value, a.created_at)
+        for a in SqliteAlertQueries(conn).recent_failures(_RECENT_FAILURES)
+    ]
 
 
 def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
@@ -105,6 +146,29 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             clock=clock,
         ),
         prefix="/channels",
+        dependencies=[Depends(require_user)],
+    )
+    app.include_router(
+        build_alerts_router(
+            get_conn=get_conn,
+            templates=templates,
+            make_queries=SqliteAlertQueries,
+            wish_names=_wish_names,
+            channel_names=_channel_names,
+        ),
+        prefix="/alerts",
+        dependencies=[Depends(require_user)],
+    )
+    app.include_router(
+        build_status_router(
+            get_conn=get_conn,
+            templates=templates,
+            make_queries=SqliteIngestionQueries,
+            channels=_active_channels,
+            recent_failures=_recent_failures,
+            clock=clock,
+        ),
+        prefix="/status",
         dependencies=[Depends(require_user)],
     )
     return app

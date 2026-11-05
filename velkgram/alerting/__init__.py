@@ -1,6 +1,6 @@
 """Alerting module public API (the SQLite adapters are wired by the apps)."""
 
-from velkgram.alerting.domain.format import format_alert
+from velkgram.alerting.domain.format import format_alert, format_brl, telegram_link
 from velkgram.alerting.domain.models import Alert, AlertMessage, AlertStatus, SuppressionRule
 from velkgram.alerting.domain.pricing import extract_price
 from velkgram.alerting.ports.notifier import Notifier, NotifierError
@@ -27,5 +27,7 @@ __all__ = [
     "SuppressionRule",
     "extract_price",
     "format_alert",
+    "format_brl",
     "send_with_retry",
+    "telegram_link",
 ]
