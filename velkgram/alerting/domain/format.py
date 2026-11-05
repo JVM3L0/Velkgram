@@ -1,6 +1,7 @@
 """Link helpers and pt-BR alert text."""
 
 from velkgram.alerting.domain.models import AlertMessage
+from velkgram.shared.deals import extract_coupons
 from velkgram.shared.events import MessageData
 
 _MAX_TEXT = 300
@@ -23,6 +24,9 @@ def format_alert(msg: AlertMessage) -> str:
     price = (
         format_brl(msg.price_cents) if msg.price_cents is not None else "⚠️ preço não identificado"
     )
+    codes = extract_coupons(msg.text)
+    if codes:
+        price += f" com {'cupom' if len(codes) == 1 else 'cupons'} {', '.join(codes)}"
     lines = [f"🔔 {msg.wish_name}", price]
     if msg.delayed_minutes is not None:
         lines.append(f"⏱ atrasado {msg.delayed_minutes} min")

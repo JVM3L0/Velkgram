@@ -57,3 +57,20 @@ def test_format_price_unknown_and_delayed() -> None:
     assert "⏱ atrasado 12 min" in out
     assert "y" * 300 in out
     assert "y" * 301 not in out
+
+
+def test_alert_mentions_the_coupon_right_after_the_price() -> None:
+    text = "Placa de Video Palit RTX 5070\n\nR$ 4679\n-CUPOM: ZAFADINHO10\n\n-Anúncio"
+    lines = format_alert(_msg(price_cents=467900, text=text)).splitlines()
+    assert lines[1] == "R$ 4.679,00 com cupom ZAFADINHO10"
+
+
+def test_alert_lists_several_coupons() -> None:
+    text = "Teclado\nR$ 80\ncupom: AAA111\nCódigo: BBB222"
+    assert format_alert(_msg(price_cents=8000, text=text)).splitlines()[1] == (
+        "R$ 80,00 com cupons AAA111, BBB222"
+    )
+
+
+def test_alert_without_a_coupon_keeps_the_plain_price_line() -> None:
+    assert format_alert(_msg()).splitlines()[1] == "R$ 1.299,90"

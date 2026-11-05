@@ -1,6 +1,7 @@
 """Deal rules shared by alerting and offers: term matching and price extraction (pure)."""
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -81,3 +82,76 @@ def matches(wish: WishView, normalized_text: str, price_cents: int | None) -> bo
     if not matches_terms(wish, normalized_text):
         return False
     return price_cents is None or price_cents <= wish.max_price_cents
+
+
+_COUPON_KEYWORD = re.compile(r"\b(?:cupom|cupons|cupon|c[óo]digo|code)\b", re.IGNORECASE)
+_COUPON_TOKEN = re.compile(r"(?=[A-Z0-9_-]*[A-Z])[A-Z0-9_-]{3,25}")
+_COUPON_TAIL = re.compile(r":\s*(\S+)\s*$")
+_NOT_CODES = frozenset(
+    {
+        "OFF",
+        "FRETE",
+        "GRATIS",
+        "GRÁTIS",
+        "PIX",
+        "APP",
+        "LINK",
+        "AQUI",
+        "SELECIONADAS",
+        "SELECIONADOS",
+    }
+    | {  # store names from offers/domain/stores.py; shared cannot import a module
+        "AMAZON",
+        "MERCADOLIVRE",
+        "MERCADO",
+        "LIVRE",
+        "SHOPEE",
+        "MAGALU",
+        "KABUM",
+        "ALIEXPRESS",
+        "PICHAU",
+        "TERABYTE",
+        "CASASBAHIA",
+        "AMERICANAS",
+        "CARREFOUR",
+        "NETSHOES",
+    }
+)
+_EDGE_PUNCTUATION = ".,;!?()[]\"'*"
+
+
+def _as_code(raw: str) -> str | None:
+    token = raw.strip(_EDGE_PUNCTUATION)
+    if token in _NOT_CODES or _COUPON_TOKEN.fullmatch(token) is None:
+        return None
+    return token
+
+
+def _starts_with_coupon_word(text: str) -> bool:
+    first = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
+    head = unicodedata.normalize("NFKD", first.lower())
+    return "".join(c for c in head if unicodedata.category(c) != "Mn").startswith("cupom")
+
+
+def _line_code(line: str, *, coupon_post: bool) -> str | None:
+    keyword = _COUPON_KEYWORD.search(line)
+    if keyword is None:
+        # "Cupom Shopee" posts put the code on its own "R$ 10 OFF em R$ 40: CODE" line.
+        tail = _COUPON_TAIL.search(line) if coupon_post else None
+        return _as_code(tail.group(1)) if tail else None
+    if ":" in line:
+        remainder = line.rsplit(":", 1)[1].split()
+        return _as_code(remainder[0]) if remainder else None
+    following = line[keyword.end() :].split()
+    return _as_code(following[0]) if following else None
+
+
+def extract_coupons(text: str) -> tuple[str, ...]:
+    """Coupon codes in order of appearance, without duplicates (pure)."""
+    coupon_post = _starts_with_coupon_word(text)
+    found: dict[str, None] = {}
+    for line in text.splitlines():
+        code = _line_code(line, coupon_post=coupon_post)
+        if code is not None:
+            found[code] = None
+    return tuple(found)
