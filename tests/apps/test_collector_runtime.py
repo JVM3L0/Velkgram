@@ -1,18 +1,21 @@
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from telethon import errors
 
-from tests.apps.test_collector_assembly import CH, Env
+from tests.apps.test_collector_assembly import CH, RES, Env
 from tests.fakes.messages import msg
 from tests.fakes.notifier import FakeNotifier
+from tests.fakes.telegram import FakeTelegramGateway
 from velkgram.apps.cli import build_parser
 from velkgram.apps.collector.main import run, run_loops
+from velkgram.ingestion import TelegramDeferred
 from velkgram.shared.config import Settings
-from velkgram.shared.events import ChannelsChanged, WishlistChanged
+from velkgram.shared.events import ChannelsChanged, MessageData, WishlistChanged
 
 
 @pytest.fixture
@@ -87,28 +90,73 @@ async def test_gap_check_triggers_backfill(env: Env) -> None:
     assert env.count("messages") == 1
 
 
-async def test_watcher_recovery_triggers_backfill(env: Env) -> None:
+async def test_watcher_recovery_triggers_backfill(tmp_path: Path) -> None:
+    # The gap check cannot see anything (latest id unknown) and iteration fails while
+    # disconnected, so only the watcher's recovery backfill can ingest the message.
+    class DownGateway(FakeTelegramGateway):
+        async def latest_message_id(self, channel_id: int) -> int | None:
+            return None
+
+        def iter_since(self, *args: Any, **kwargs: Any) -> AsyncIterator[MessageData]:
+            if not self.connected:
+                raise TelegramDeferred(30)
+            return super().iter_since(*args, **kwargs)
+
+    gw = DownGateway({}, dict(RES), connected=False)
+    env = Env(tmp_path, gw)
     env.channel()
     await env.collector.start()
-    env.gateway.connected = False
-    env.gateway.messages[CH] = [msg(9, CH, "Teclado R$ 100")]
-    calls: list[int] = []
-    sleep = fake_sleep(env)
+    gw.messages[CH] = [msg(9, CH, "Teclado R$ 100")]
+    ticks = 0
+    original = env.collector.housekeeping_tick
 
-    async def counting_sleep(s: float) -> None:
-        calls.append(1)
-        await sleep(s)  # type: ignore[misc]
-        if len(calls) == 40:
-            env.gateway.connected = True
+    async def counting_tick() -> None:
+        nonlocal ticks
+        await original()
+        ticks += 1
+        if ticks == 2:
+            gw.connected = True
 
-    tasks = run_loops(env.collector, FakeSignal(), sleep=counting_sleep)
+    env.collector.housekeeping_tick = counting_tick  # type: ignore[method-assign]
+    tasks = run_loops(env.collector, FakeSignal(), sleep=fake_sleep(env))  # type: ignore[arg-type]
     for _ in range(500):
         if env.count("messages") == 1:
             break
         await asyncio.sleep(0)
     await finish(tasks)
-    # Backfill from the gap check would need 600 s; the watcher alone fires within 30 s ticks.
     assert env.count("messages") == 1
+
+
+async def test_loop_intervals(env: Env) -> None:
+    await env.collector.start()
+    intervals: dict[str, float] = {}
+
+    async def recording_sleep(seconds: float) -> None:
+        task = asyncio.current_task()
+        assert task is not None
+        intervals[task.get_name()] = seconds
+        env.clock.advance(seconds)
+        await asyncio.sleep(0)
+
+    tasks = run_loops(env.collector, FakeSignal(), sleep=recording_sleep)
+    for _ in range(10):
+        await asyncio.sleep(0)
+    await finish(tasks)
+    assert intervals == {"signal": 3, "gap_check": 600, "retry_failed": 60, "housekeeping": 30}
+
+
+async def test_bus_failure_is_logged(env: Env, caplog: pytest.LogCaptureFixture) -> None:
+    await env.collector.start()
+
+    async def dying_run() -> None:
+        raise RuntimeError("bus down")
+
+    env.bus.run = dying_run  # type: ignore[method-assign]
+    tasks = run_loops(env.collector, FakeSignal(), sleep=fake_sleep(env))  # type: ignore[arg-type]
+    for _ in range(10):
+        await asyncio.sleep(0)
+    await finish(tasks)
+    assert any(r.message == "event_bus_stopped" for r in caplog.records)
 
 
 async def test_loops_stop_after_fatal(env: Env) -> None:
@@ -170,6 +218,19 @@ async def test_auth_fatal_exception_calls_fatal_and_does_not_exit(tmp_path: Path
     await _settle()
     assert not task.done()
     assert len(notifier.system) == 1
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_auth_fatal_during_catch_up_is_fatal(tmp_path: Path) -> None:
+    client = _client()
+    client.catch_up.side_effect = errors.AuthKeyUnregisteredError(None)
+    notifier = FakeNotifier()
+    task = asyncio.create_task(run(_settings(tmp_path), client, notifier=notifier))
+    await _settle()
+    assert not task.done()
+    assert len(notifier.system) == 1
+    client.run_until_disconnected.assert_not_called()
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
 

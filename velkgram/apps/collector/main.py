@@ -71,12 +71,20 @@ def run_loops(
         ("housekeeping", HOUSEKEEPING_INTERVAL_S, collector.housekeeping_tick),
     ]
     bus_coro: Coroutine[Any, Any, None] = collector.bus.run()  # type: ignore[assignment]
-    tasks = [asyncio.create_task(bus_coro)]
+    bus_task = asyncio.create_task(bus_coro, name="event_bus")
+    bus_task.add_done_callback(_log_bus_stopped)
+    tasks = [bus_task]
     tasks += [
-        asyncio.create_task(_loop(collector, sleep, interval, entry, name))
+        asyncio.create_task(_loop(collector, sleep, interval, entry, name), name=name)
         for name, interval, entry in specs
     ]
     return tasks
+
+
+def _log_bus_stopped(task: asyncio.Task[None]) -> None:
+    if task.cancelled():
+        return
+    log.error("event_bus_stopped", exc_info=task.exception())
 
 
 async def _idle_forever() -> None:
@@ -94,18 +102,18 @@ async def run(
     apply_migrations(conn, MIGRATION_PACKAGES)  # fatal() writes a heartbeat row
     gateway = TelethonGateway(client, clock)
     collector = Collector(conn, gateway, notifier or LogNotifier(), clock, MemoryBus(), sleep)
-    await client.connect()  # type: ignore[misc]
-    await client.catch_up()  # type: ignore[misc]
-    if not await client.is_user_authorized():
-        await collector.fatal("session not authorized")
-        await _idle_forever()
     tasks: list[asyncio.Task[None]] = []
     try:
-        await gateway.warm_entity_cache()
-        register_handlers(client, collector.ingestor, clock)
-        await collector.start()
-        tasks = run_loops(collector, PollingChangeSignal(conn), sleep)
-        await client.run_until_disconnected()  # type: ignore[misc]
+        await client.connect()  # type: ignore[misc]
+        await client.catch_up()  # type: ignore[misc]
+        if not await client.is_user_authorized():
+            await collector.fatal("session not authorized")
+        else:
+            await gateway.warm_entity_cache()
+            register_handlers(client, collector.ingestor, clock)
+            await collector.start()
+            tasks = run_loops(collector, PollingChangeSignal(conn), sleep)
+            await client.run_until_disconnected()  # type: ignore[misc]
     except Exception as exc:
         if not is_auth_fatal(exc):
             log.exception("collector_crashed")
