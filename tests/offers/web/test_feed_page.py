@@ -143,3 +143,8 @@ def test_price_filter_excludes_unknown_prices(tmp_path: Path) -> None:
 
 def test_old_root_redirect_is_gone(tmp_path: Path) -> None:
     assert _client(tmp_path).get("/").status_code == 200
+
+
+def test_feed_view_toggle_says_grade_not_cards(tmp_path: Path) -> None:
+    page = make_client(tmp_path).get("/").text
+    assert "Grade" in page and "Cards</span>" not in page

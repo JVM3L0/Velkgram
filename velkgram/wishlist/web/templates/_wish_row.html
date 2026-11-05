@@ -7,7 +7,7 @@
   {% if stats and stats.match_count %}
   <p class="wish-price">{% if stats.last_price_cents is not none %}{{ stats.last_price_cents | brl }}{% else %}<span class="wish-price-unknown">preço não identificado</span>{% endif %}</p>
   <div class="wish-spark">{{ stats.sparkline_svg | safe }}</div>
-  <p class="wish-count">{{ stats.match_count }} {{ "oferta" if stats.match_count == 1 else "ofertas" }}</p>
+  <p class="wish-count"><a href="/wishes/{{ wish.id }}">{{ stats.match_count }} {{ "oferta" if stats.match_count == 1 else "ofertas" }}</a></p>
   {% else %}
   <p class="wish-price wish-price-unknown">sem ofertas ainda</p>
   {% endif %}
@@ -16,5 +16,6 @@
     <button class="border" type="button" hx-post="/wishes/{{ wish.id }}/toggle" hx-target="#wish-{{ wish.id }}" hx-swap="outerHTML">
       <i aria-hidden="true">{{ "play_arrow" if paused else "pause" }}</i><span>{{ "Retomar" if paused else "Pausar" }}</span>
     </button>
+    <a class="button tonal" href="/wishes/{{ wish.id }}"><i aria-hidden="true">list</i><span>Ver ofertas</span></a>
   </div>
 </article>

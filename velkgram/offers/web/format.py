@@ -64,10 +64,23 @@ def safe_href(url: str | None) -> str | None:
     return url if scheme in ("http", "https") else None
 
 
+_NAME_MAX = 60
+
+
+def short_name(title: str, limit: int = _NAME_MAX) -> str:
+    """The title cut to `limit` characters on a word boundary, for a prefilled wish name."""
+    if len(title) <= limit:
+        return title
+    cut = title[:limit]
+    if title[limit] != " " and " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:-")
+
+
 def follow_url(card: OfferCard) -> str:
     """The new-wish form prefilled from an offer: name, suggested terms and price."""
     params: dict[str, object] = {
-        "name": card.title,
+        "name": short_name(card.title),
         "required": list(suggest_terms(card.title)),
     }
     if card.price_cents is not None:

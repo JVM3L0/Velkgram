@@ -2,7 +2,7 @@
   hx-get="/wishes/{{ wish.id }}/chart?range={{ range_key }}" hx-trigger="retro-done from:body" hx-swap="outerHTML">
   <dl class="stats">
     <div class="stat stat-main"><dt>Último preço</dt><dd>{{ stats.last }}</dd></div>
-    <div class="stat"><dt>Menor preço</dt><dd>{{ stats.lowest }}</dd></div>
+    <div class="stat"><dt>Menor preço (sempre)</dt><dd>{{ stats.lowest }}</dd></div>
     <div class="stat"><dt>Média 30 dias</dt><dd>{{ stats.average }}</dd></div>
     <div class="stat"><dt>Ofertas</dt><dd>{{ stats.count }}</dd></div>
   </dl>

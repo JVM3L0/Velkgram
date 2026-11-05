@@ -81,3 +81,18 @@ def test_safe_href_survives_malformed_url() -> None:
 
 def test_parse_price_rejects_values_beyond_sqlite_integer() -> None:
     assert parse_price_cents("99999999999999999999") is None
+
+
+def test_follow_url_truncates_long_names_on_a_word_boundary() -> None:
+    title = (
+        "Monitor Gamer Curvo Aoc Agon 34 Ultrawide Wqhd 180Hz 0.5ms Fast Va Adaptive-Sync Altura"
+    )
+    name = parse_qs(urlsplit(follow_url(_card(title))).query)["name"][0]
+    assert len(name) <= 60
+    assert title.startswith(name)
+    assert name == "Monitor Gamer Curvo Aoc Agon 34 Ultrawide Wqhd 180Hz 0.5ms"
+
+
+def test_follow_url_keeps_short_names_intact() -> None:
+    name = parse_qs(urlsplit(follow_url(_card("SSD 1TB"))).query)["name"][0]
+    assert name == "SSD 1TB"
