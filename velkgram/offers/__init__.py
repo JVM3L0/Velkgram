@@ -2,6 +2,17 @@
 
 from velkgram.offers.domain.models import MatchSource
 from velkgram.offers.ports.messages import MessageSource, SourceMessage
+from velkgram.offers.ports.queries import (
+    FeedCursor,
+    FeedFilter,
+    FeedPage,
+    MatchCard,
+    OfferCard,
+    OfferQueries,
+    PricePoint,
+    ProductHistory,
+    WishSummary,
+)
 from velkgram.offers.ports.repository import OfferRepository
 from velkgram.offers.ports.wishes import WishReader
 from velkgram.offers.services.build_offer import OfferBuilder
@@ -10,13 +21,22 @@ from velkgram.offers.services.retention import purge_offer_text_before
 from velkgram.offers.services.retro_match import RetroMatcher
 
 __all__ = [
+    "FeedCursor",
+    "FeedFilter",
+    "FeedPage",
+    "MatchCard",
     "MatchSource",
     "MessageSource",
     "OfferBuilder",
+    "OfferCard",
+    "OfferQueries",
     "OfferRepository",
+    "PricePoint",
+    "ProductHistory",
     "RetroMatcher",
     "SourceMessage",
     "WishReader",
+    "WishSummary",
     "purge_offer_text_before",
     "rebuild_offers",
 ]
