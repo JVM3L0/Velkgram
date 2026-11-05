@@ -73,3 +73,11 @@ def test_price_parsing_and_formatting() -> None:
 
 def test_store_names_reuse_titles() -> None:
     assert STORE_NAMES["mercadolivre"] == "Mercado Livre"
+
+
+def test_safe_href_survives_malformed_url() -> None:
+    assert safe_href("http://[::1") is None
+
+
+def test_parse_price_rejects_values_beyond_sqlite_integer() -> None:
+    assert parse_price_cents("99999999999999999999") is None

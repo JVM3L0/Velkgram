@@ -21,13 +21,17 @@ def brl(cents: int | None) -> str:
     return f"R$ {reais:,}".replace(",", ".") + f",{rest:02d}"
 
 
+SQLITE_MAX_INT = 2**63 - 1  # larger ints overflow SQLite bindings
+
+
 def parse_price_cents(raw: str) -> int | None:
     """pt-BR decimal (`599,90`, `1.299,90`, `599`) to cents; None when malformed."""
     text = raw.strip()
     if not _PRICE_RE.match(text):
         return None
     whole, _, frac = text.replace(".", "").partition(",")
-    return int(whole) * 100 + int(frac.ljust(2, "0") or "0")
+    cents = int(whole) * 100 + int(frac.ljust(2, "0") or "0")
+    return cents if cents <= SQLITE_MAX_INT else None
 
 
 def format_price(cents: int) -> str:
@@ -53,7 +57,11 @@ def safe_href(url: str | None) -> str | None:
     """The URL only when its scheme is http or https (never javascript:, tg:, data:)."""
     if url is None:
         return None
-    return url if urlsplit(url).scheme.lower() in ("http", "https") else None
+    try:
+        scheme = urlsplit(url).scheme.lower()
+    except ValueError:  # e.g. "http://[::1" — a garbled link must not break the page
+        return None
+    return url if scheme in ("http", "https") else None
 
 
 def follow_url(card: OfferCard) -> str:

@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from velkgram.offers.ports.queries import FeedCursor, FeedFilter, OfferCard, OfferQueries
 from velkgram.offers.web.format import (
+    SQLITE_MAX_INT,
     STORE_NAMES,
     brl,
     follow_url,
@@ -69,6 +70,8 @@ def _parse_cursor(raw: str) -> FeedCursor | None:
     except ValueError:
         return None
     if posted_at.tzinfo is None:
+        return None
+    if not all(abs(v) <= SQLITE_MAX_INT for v in (channel_id, message_id)):
         return None
     return FeedCursor(posted_at, channel_id, message_id)
 

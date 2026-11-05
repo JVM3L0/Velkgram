@@ -108,7 +108,14 @@ def test_next_page_link_preserves_filters(tmp_path: Path) -> None:
 
 def test_malformed_cursor_gives_first_page(tmp_path: Path) -> None:
     client = _client(tmp_path, *_many(3))
-    for cursor in ("garbage", "2026-01-01|x|y", "|1|2", "a|b"):
+    huge = "99999999999999999999"
+    for cursor in (
+        "garbage",
+        "2026-01-01|x|y",
+        "|1|2",
+        "a|b",
+        f"2026-11-05T00:00:00+00:00|{huge}|1",
+    ):
         response = client.get("/", params={"cursor": cursor})
         assert response.status_code == 200
         assert "Produto 3" in response.text
