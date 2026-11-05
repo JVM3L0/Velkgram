@@ -6,7 +6,7 @@
 <h1>Alertas</h1>
 {% if rows %}
 <div class="table-wrap">
-<table class="data">
+<table class="data alerts-table">
   <thead><tr>
     <th>Quando</th><th>Status</th><th>Preço</th>
     <th class="hide-compact">Latência</th><th class="hide-compact">Dedup</th>
@@ -15,12 +15,12 @@
   <tbody>
   {% for r in rows %}
     <tr>
-      <td>{{ r.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
-      <td><span class="chip small status-{{ r.status }}">{{ r.status_label }}</span></td>
-      <td>{% if r.price %}<strong class="num">{{ r.price }}</strong>{% else %}<span class="muted">preço não identificado</span>{% endif %}</td>
+      <td class="alert-when">{{ r.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
+      <td class="alert-status"><span class="chip small status-{{ r.status }}">{{ r.status_label }}</span></td>
+      <td class="alert-price">{% if r.price %}<strong class="num">{{ r.price }}</strong>{% else %}<span class="muted">preço não identificado</span>{% endif %}</td>
       <td class="hide-compact">Telegram {{ r.latency_telegram_ms }} ms · interno {{ r.latency_internal_ms }} ms</td>
       <td class="hide-compact">{{ r.dedup_keys }} {{ "chave" if r.dedup_keys == 1 else "chaves" }}</td>
-      <td>{{ r.wish }}{% if r.is_coupon %} <span class="chip small tonal-chip"><i aria-hidden="true">confirmation_number</i>cupom{% if r.coupon_codes %} {{ r.coupon_codes | join(", ") }}{% endif %}</span>{% endif %}{% if r.over_max %} <span class="chip small flag-warn">acima do limite</span>{% endif %}<span class="show-compact muted compact-sub">{{ r.channel }}</span><a class="show-compact compact-sub" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
+      <td class="wish-cell">{{ r.wish }}{% if r.is_coupon or r.over_max %}<span class="wish-flags">{% if r.is_coupon %}<span class="chip small tonal-chip"><i aria-hidden="true">confirmation_number</i><span class="coupon-text">cupom{% if r.coupon_codes %} {{ r.coupon_codes | join(", ") }}{% endif %}</span></span>{% endif %}{% if r.over_max %}<span class="chip small flag-warn">acima do limite</span>{% endif %}</span>{% endif %}<span class="show-compact muted compact-sub">{{ r.channel }}</span><a class="show-compact compact-sub" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
       <td class="hide-compact">{{ r.channel }}</td>
       <td class="hide-compact"><a class="button small border" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
     </tr>

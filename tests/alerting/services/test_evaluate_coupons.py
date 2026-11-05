@@ -9,7 +9,7 @@ from tests.fakes.clock import FakeClock
 from tests.fakes.messages import NOW, msg
 from tests.fakes.notifier import FakeNotifier
 from tests.fakes.repositories import InMemoryAlertRepository, InMemoryWishRepository
-from velkgram.alerting import Alert
+from velkgram.alerting import Alert, AlertMessage
 from velkgram.alerting.adapters.wishlist_api import WishlistApiReader
 from velkgram.alerting.domain.dedup import DedupCache
 from velkgram.alerting.domain.models import ActiveCoupon
@@ -209,16 +209,37 @@ async def test_without_a_port_v1_is_unchanged() -> None:
 async def test_notifier_runs_only_after_the_slow_port_returns(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    notifier = FakeNotifier()
-    port = FakeActiveCoupons([_coupon(5)], delay_s=0.06)
-    h = Harness(port, notifier=notifier)
+    order: list[str] = []
+
+    class OrderedPort(FakeActiveCoupons):
+        def for_store(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            order.append("port_start")
+            try:
+                return super().for_store(*args, **kwargs)
+            finally:
+                order.append("port_end")
+
+    class OrderedNotifier(FakeNotifier):
+        async def notify(self, message: AlertMessage) -> None:
+            order.append("notify")
+            await super().notify(message)
+
+    notifier = OrderedNotifier()
+    h = Harness(OrderedPort([_coupon(5)], delay_s=0.06), notifier=notifier)
     h.wish()
     with caplog.at_level(logging.WARNING):
-        await h.evaluator.on_received(MessageReceived(msg(7, text=UNDER)))
-        assert notifier.calls == 0  # nothing was sent while the port was still running
-        await h.evaluator.wait_idle()
+        await h.feed(msg(7, text=UNDER))
     assert notifier.calls == 1
+    assert order.index("notify") > order.index("port_end")
     assert any(r.message == "active_coupons_slow" for r in caplog.records)
+
+
+@pytest.mark.parametrize(("price", "alerts"), [("1.500,00", True), ("1.500,01", False)])
+async def test_ceiling_is_exactly_one_and_a_half_times_the_max(price: str, alerts: bool) -> None:
+    h = Harness(FakeActiveCoupons([_coupon(5)]))
+    h.wish()
+    await h.feed(msg(7, text=f"RTX 4060 por R$ {price}"))
+    assert bool(h.stored()) is alerts
 
 
 async def test_port_failure_is_logged(caplog: pytest.LogCaptureFixture) -> None:
