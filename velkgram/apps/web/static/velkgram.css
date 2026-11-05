@@ -417,10 +417,10 @@ nav.bottom a, nav.left a {
 }
 
 /* ---- Theme menu ---- */
-.theme-menu-wrap { position: relative; }
-.theme-menu { min-inline-size: 13rem; padding: 0.5rem; }
-.theme-menu form { display: contents; }
-.theme-menu button {
+.theme-menu-wrap, .row-menu-wrap { position: relative; }
+.theme-menu, .row-menu { min-inline-size: 13rem; padding: 0.5rem; }
+.theme-menu form, .row-menu form { display: contents; }
+.theme-menu button, .row-menu button {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -472,15 +472,12 @@ table.data th { font-weight: 600; font-size: 0.875rem; color: var(--on-surface-v
 table.data tbody tr:last-child td { border-block-end: 0; }
 table.data .num { font-variant-numeric: tabular-nums; }
 table.data .chip { margin: 0; }
-.row-paused td:first-child { color: var(--on-surface-variant); }
-.row-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.row-actions button { min-block-size: 3rem; margin: 0; }
 table.data .button.small { min-block-size: 3rem; margin: 0; }
 
-.add-row { display: flex; align-items: flex-start; gap: 0.75rem; }
+.add-row { display: flex; align-items: center; gap: 0.75rem; }
 .add-row .field { flex: 1; margin: 0; }
 .add-row label { margin: 0; font-weight: inherit; }
-.add-row button { min-block-size: 3.5rem; margin: 0; }
+.add-row button { min-block-size: 3rem; margin: 0; }
 .list-page .error[role="alert"] { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; border-radius: var(--shape-xl); background-color: var(--error-container); color: var(--on-error-container); }
 @media (max-width: 599.98px) {
   table.data th, table.data td { padding: 0.625rem 0.5rem; }
@@ -926,8 +923,6 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .kv dd .chip { margin: 0; }
 @media (max-width: 599.98px) { .kv-row { grid-template-columns: minmax(0, 1fr); gap: 0.125rem; } }
 
-.row-actions { flex-wrap: nowrap; gap: 0.75rem; align-items: center; }
-.row-actions form { display: flex; margin: 0; }
 
 .auth { min-block-size: 100dvh; display: flex; flex-direction: column; justify-content: center; }
 .form-page .stack { gap: 1.25rem; }
@@ -972,10 +967,6 @@ body:not(.frappe):not(.macchiato):not(.mocha) .login-card {
   .product-page .offer-actions .button { min-block-size: 2.5rem; }
 }
 
-@media (max-width: 599.98px) {
-  .row-actions button { min-inline-size: 3rem; padding-inline: 0; }
-  .row-actions button i { margin: 0; }
-}
 .add-row .field { min-inline-size: 0; }
 .add-row button { flex: none; }
 
@@ -983,6 +974,24 @@ body:not(.frappe):not(.macchiato):not(.mocha) .login-card {
 form.inline { margin: 0 !important; }
 .channel-name, .channel-handle { display: block; }
 .channel-handle { font-size: 0.875rem; }
-.row-actions button { min-block-size: 3rem; }
 .filter-switch { translate: -0.75rem 0; }
 .filter-channel { margin: 0 !important; }
+
+/* ---- Channels: an M3 list instead of a table ---- */
+/* Beer adds a top margin to any block after a sibling; the hint belongs to the field above. */
+.add-hint { margin: -0.5rem 0 0 1rem !important; font-size: 0.875rem; }
+.channel-list { list-style: none; margin: 0; padding: 0; overflow: visible; border-radius: var(--shape-xl); background-color: var(--surface-container-low); border: 1px solid var(--outline-variant); }
+.channel-item { display: flex; align-items: center; gap: 0.75rem; min-block-size: 4.5rem; margin: 0; padding: 0.75rem 0.5rem 0.75rem 1rem; border-radius: 0; }
+.channel-item + .channel-item { border-block-start: 1px solid var(--outline-variant); }
+.channel-item:first-child { border-start-start-radius: var(--shape-xl); border-start-end-radius: var(--shape-xl); }
+.channel-item:last-child { border-end-start-radius: var(--shape-xl); border-end-end-radius: var(--shape-xl); }
+.channel-main { flex: 1; min-inline-size: 0; display: flex; flex-direction: column; gap: 0.125rem; }
+.channel-name { font-weight: 600; overflow-wrap: anywhere; }
+.channel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; font-size: 0.875rem; color: var(--on-surface-variant); }
+.channel-meta .chip { margin: 0; }
+.channel-paused .channel-name { color: var(--on-surface-variant); }
+.channel-switch { flex: none; margin: 0; }
+.row-menu-wrap { flex: none; display: flex; align-items: center; }
+.row-menu-wrap > button { margin: 0; }
+body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel-list { box-shadow: 0 1px 2px rgb(76 79 105 / 0.14), 0 2px 8px rgb(76 79 105 / 0.1); }
+@media (prefers-color-scheme: dark) { body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .channel-list { box-shadow: none; } }

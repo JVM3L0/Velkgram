@@ -1,28 +1,9 @@
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
-from velkgram.ingestion.web.banner import ago, collector_banner
+from velkgram.ingestion.web.banner import collector_banner
 
 NOW = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
 STALE = timedelta(seconds=90)
-
-
-@pytest.mark.parametrize(
-    ("seconds", "text"),
-    [
-        (5, "há 5 s"),
-        (59, "há 59 s"),
-        (60, "há 1 min"),
-        (3599, "há 59 min"),
-        (3600, "há 1 h"),
-        (86399, "há 23 h"),
-        (86400, "há 1 d"),
-        (-3, "agora"),
-    ],
-)
-def test_ago_uses_the_largest_unit(seconds: int, text: str) -> None:
-    assert ago(timedelta(seconds=seconds)) == text
 
 
 def _banner(state: str, age_s: int) -> tuple[str, str]:

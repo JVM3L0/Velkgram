@@ -6,23 +6,22 @@
 {% if error %}<p class="error" role="alert"><i aria-hidden="true">error</i> {{ error }}</p>{% endif %}
 <form class="add-row" method="post" action="/channels">
   <div class="field label border round">
-    <input id="ref" type="text" name="ref" value="{{ ref }}" placeholder=" " required>
+    <input id="ref" type="text" name="ref" value="{{ ref }}" placeholder=" " aria-describedby="ref-hint" required>
     <label for="ref">Canal</label>
-    <span class="helper">@canal ou https://t.me/canal</span>
   </div>
   <button type="submit" aria-label="Adicionar canal"><i aria-hidden="true">add</i><span>Adicionar</span></button>
 </form>
-<div class="table-wrap">
-<table class="data">
-  <thead><tr><th>Canal</th><th>Status</th><th class="hide-compact">Silêncio após</th><th><span class="sr-only">Ações</span></th></tr></thead>
-  <tbody>
-  {% for channel in channels %}
-    {% include "_channel_row.html" %}
-  {% else %}
-    <tr><td colspan="4" class="muted">Nenhum canal cadastrado.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+<p id="ref-hint" class="add-hint muted">@canal ou https://t.me/canal</p>
+{% if rows %}
+<ul class="channel-list" aria-label="Canais">
+  {% for row in rows %}{% with channel = row.channel, last_ago = row.last_ago %}{% include "_channel_row.html" %}{% endwith %}{% endfor %}
+</ul>
+{% else %}
+<div class="empty empty-compact">
+  <i aria-hidden="true">campaign</i>
+  <p class="empty-title">Nenhum canal cadastrado</p>
+  <p class="muted">Adicione o @ ou o link de um canal de ofertas para o coletor começar a ler.</p>
 </div>
+{% endif %}
 </div>
 {% endblock %}

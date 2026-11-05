@@ -10,8 +10,9 @@ from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
 from velkgram.ingestion import ConnectionState, IngestionQueries
-from velkgram.ingestion.web.banner import ago, collector_banner
+from velkgram.ingestion.web.banner import collector_banner
 from velkgram.shared.ports import Clock
+from velkgram.shared.timeago import ago
 
 HEARTBEAT_STALE_AFTER = timedelta(seconds=90)
 _STATE_PT: dict[ConnectionState, str] = {

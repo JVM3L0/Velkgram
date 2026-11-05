@@ -1,20 +1,28 @@
 {% set paused = not channel.enabled %}
-<tr id="channel-{{ channel.id }}"{% if paused %} class="row-paused"{% endif %}>
-  <td><span class="channel-name">{{ channel.name or channel.ref }}</span>{% if channel.name %}<span class="channel-handle muted">{{ channel.ref }}</span>{% endif %}</td>
-  <td>
-    {% if channel.status.value == "error" %}<span class="chip small flag-error">erro{% if channel.error %}: {{ channel.error }}{% endif %}</span>
-    {% elif channel.status.value == "pending" %}<span class="chip small state-off">pendente</span>
-    {% elif channel.enabled %}<span class="chip small state-on">ativo</span>
-    {% else %}<span class="chip small state-off">pausado</span>{% endif %}
-  </td>
-  <td class="hide-compact">{{ channel.silent_after_hours }} h</td>
-  <td><div class="row-actions">
-    <button class="border" type="button" hx-post="/channels/{{ channel.id }}/toggle" hx-target="#channel-{{ channel.id }}" hx-swap="outerHTML" aria-label="{{ 'Retomar' if paused else 'Pausar' }}" title="{{ 'Retomar' if paused else 'Pausar' }}">
-      <i aria-hidden="true">{{ "play_arrow" if paused else "pause" }}</i><span class="hide-compact">{{ "Retomar" if paused else "Pausar" }}</span>
-    </button>
-    <form class="inline" method="post" action="/channels/{{ channel.id }}/delete"
-      hx-boost="true" hx-confirm="Remover o canal {{ channel.name or channel.ref }}? As ofertas já coletadas continuam no histórico." hx-target="body">
-      <button class="border" type="submit" aria-label="Remover canal" title="Remover canal"><i aria-hidden="true">delete</i><span class="hide-compact">Remover</span></button>
-    </form>
-  </div></td>
-</tr>
+<li id="channel-{{ channel.id }}" class="channel-item{% if paused %} channel-paused{% endif %}">
+  <div class="channel-main">
+    <span class="channel-name">{{ channel.name or channel.ref }}</span>
+    {% if channel.name %}<span class="channel-handle muted">{{ channel.ref }}</span>{% endif %}
+    <span class="channel-meta">
+      {% if channel.status.value == "error" %}<span class="chip small flag-error">erro{% if channel.error %}: {{ channel.error }}{% endif %}</span>
+      {% elif channel.status.value == "pending" %}<span class="chip small state-off">pendente</span>
+      {% elif channel.enabled %}<span class="chip small state-on">ativo</span>
+      {% else %}<span class="chip small state-off">pausado</span>{% endif %}
+      {% if channel.status.value == "active" %}<span class="muted">{% if last_ago %}última mensagem {{ last_ago }}{% else %}nenhuma mensagem ainda{% endif %}</span>{% endif %}
+    </span>
+  </div>
+  <label class="switch channel-switch">
+    <input type="checkbox" aria-label="Ativo"{% if channel.enabled %} checked{% endif %}
+      hx-post="/channels/{{ channel.id }}/toggle" hx-trigger="change" hx-target="#channel-{{ channel.id }}" hx-swap="outerHTML">
+    <span></span>
+  </label>
+  <div class="row-menu-wrap">
+    <button class="circle transparent" type="button" data-ui="#channel-menu-{{ channel.id }}" aria-label="Mais ações" title="Mais ações" aria-haspopup="menu"><i aria-hidden="true">more_vert</i></button>
+    <menu id="channel-menu-{{ channel.id }}" class="row-menu left no-wrap">
+      <form class="inline" method="post" action="/channels/{{ channel.id }}/delete"
+        hx-boost="true" hx-confirm="Remover o canal {{ channel.name or channel.ref }}? As ofertas já coletadas continuam no histórico." hx-target="body">
+        <button type="submit"><i aria-hidden="true">delete</i><span>Remover</span></button>
+      </form>
+    </menu>
+  </div>
+</li>

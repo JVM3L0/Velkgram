@@ -125,6 +125,10 @@ def _wish_card_stats(
     }
 
 
+def _last_messages(conn: sqlite3.Connection, channel_ids: Sequence[int]) -> Mapping[int, datetime]:
+    return SqliteIngestionQueries(conn).last_message_at(channel_ids)
+
+
 def _wish_deleted(conn: sqlite3.Connection, wish_id: int) -> None:
     SqliteOfferRepository(conn).delete_wish_data(wish_id)
 
@@ -230,6 +234,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             templates=templates,
             make_repo=SqliteChannelRepository,
             clock=clock,
+            last_messages=_last_messages,
         ),
         prefix="/channels",
         dependencies=[Depends(require_user)],

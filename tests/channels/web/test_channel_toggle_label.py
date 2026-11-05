@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -23,35 +24,31 @@ def _setup(tmp_path: Path) -> TestClient:
     return client
 
 
-def _button_label(html: str) -> str:
-    start = html.index("hx-post")
-    return html[start : html.index("</button>", start)]
+def _switch(html: str) -> str:
+    return re.search(r'<input[^>]*aria-label="Ativo"[^>]*>', html).group(0)  # type: ignore[union-attr]
 
 
-def test_channel_toggle_reads_pausar_when_enabled(tmp_path: Path) -> None:
+def test_channel_switch_is_on_when_enabled(tmp_path: Path) -> None:
     page = _setup(tmp_path).get("/channels").text
-    assert "Pausar" in _button_label(page)
-    assert "Retomar" not in _button_label(page)
+    assert "checked" in _switch(page) and 'aria-label="Ativo"' in _switch(page)
     assert "ativo" in page
 
 
-def test_channel_toggle_reads_retomar_when_paused(tmp_path: Path) -> None:
-    client = _setup(tmp_path)
-    row = client.post("/channels/1/toggle").text
-    assert "Retomar" in _button_label(row)
+def test_channel_switch_is_off_and_row_reads_pausado_when_paused(tmp_path: Path) -> None:
+    row = _setup(tmp_path).post("/channels/1/toggle").text
+    assert "checked" not in _switch(row)
     assert "pausado" in row
-    assert "Pausar" not in row
 
 
-def test_channel_pending_state_toggle_follows_enabled_only(tmp_path: Path) -> None:
+def test_channel_pending_state_switch_follows_enabled_only(tmp_path: Path) -> None:
     client = make_client(tmp_path, clock=CLOCK)
     client.post("/channels", data={"ref": "@promos_br"})
     page = client.get("/channels").text
     assert "pendente" in page
-    assert "Pausar" in _button_label(page)
+    assert "checked" in _switch(page)
 
 
-def test_channel_error_state_shows_reason_and_keeps_toggle(tmp_path: Path) -> None:
+def test_channel_error_state_shows_reason_and_keeps_switch(tmp_path: Path) -> None:
     client = make_client(tmp_path, clock=CLOCK)
     client.post("/channels", data={"ref": "@promos_br"})
     conn = connect(make_settings(tmp_path).db_path)
@@ -62,4 +59,4 @@ def test_channel_error_state_shows_reason_and_keeps_toggle(tmp_path: Path) -> No
     page = client.get("/channels").text
     assert "erro: " in page
     assert "Canal privado" in page
-    assert "Pausar" in _button_label(page)
+    assert "checked" in _switch(page)

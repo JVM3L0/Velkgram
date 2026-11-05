@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from velkgram.ingestion.domain.models import ConnectionState
+from velkgram.shared.timeago import ago
 
 BannerKind = Literal["ok", "warning", "error"]
 
@@ -15,20 +16,6 @@ class Banner:
     icon: str
     title: str
     detail: str
-
-
-def ago(delta: timedelta) -> str:
-    """ "há 5 s", "há 3 min", "há 2 h", "há 4 d"; "agora" for a clock-skewed future time."""
-    seconds = int(delta.total_seconds())
-    if seconds < 0:
-        return "agora"
-    if seconds < 60:
-        return f"há {seconds} s"
-    if seconds < 3600:
-        return f"há {seconds // 60} min"
-    if seconds < 86400:
-        return f"há {seconds // 3600} h"
-    return f"há {seconds // 86400} d"
 
 
 def collector_banner(
