@@ -69,7 +69,7 @@ uv run velkgram migrate    # creates/updates the SQLite database
 Then start the collector (next section) and, once it is up, build the offers from the messages already stored:
 
 ```bash
-uv run velkgram rebuild-offers   # idempotent; safe to re-run
+uv run velkgram rebuild-offers   # only when upgrading or after a crash; idempotent
 ```
 
 > ⚠️ `TG_SESSION` gives full access to the Telegram account. Never commit it, and never run the same session in two places at once, because Telegram may invalidate it.
@@ -104,6 +104,10 @@ Order matters:
 1. Pull the new code and run `uv run velkgram migrate`.
 2. Start the new collector (stop the old v1 one first; never run two).
 3. Run `uv run velkgram rebuild-offers`.
+
+After a crash or hard stop, run `velkgram rebuild-offers` once: messages stored just before the stop may not have become offers yet.
+
+Editing a wish recomputes its history only for the last `RETENTION_DAYS`; older matches are kept as they were, because their text has been purged.
 
 An old collector running during the rebuild would ingest messages that never become offers. The rebuild is idempotent, so running it with the new collector up is safe. With Docker: `docker compose up -d --build`, then `docker compose run --rm collector velkgram rebuild-offers`.
 
