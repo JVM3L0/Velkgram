@@ -193,13 +193,14 @@ def test_product_match_row_has_copy_button(tmp_path: Path) -> None:
 
 
 TIERS = (
-    CouponTier("R$ 90 OFF", 69900),
-    CouponTier("10% OFF", 7900),
-    CouponTier("10% OFF", 14900),
-    CouponTier("25% OFF", 100),
-    CouponTier("30% OFF", 100),
+    CouponTier("R$ 90 OFF", 69900, None, ("MOVEIS0511",)),
+    CouponTier("10% OFF", 7900, 4000, ("SEMPRESAUDE",)),
+    CouponTier("10% OFF", 14900, 20000, ("PROMOSML", "CLIENTESTOP")),
+    CouponTier("25% OFF", 100, 50000, ("GARANTAJA", "OFERTABOA")),
+    CouponTier("30% OFF", 100, 50000, ("ECONOMIZAML", "DESCONTONAHORA")),
 )
-CODES = ("SEMPRESAUDE", "PROMOSML", "CLIENTESTOP", "GARANTAJA", "OFERTABOA")
+LOOSE = "SOLTO99"  # a code the post does not tie to any tier
+CODES = (*(c for t in TIERS for c in t.codes), LOOSE)
 
 
 def _multi_tier(mid: int = 3) -> Offer:
@@ -218,14 +219,24 @@ def _card_html(page: str, marker: str) -> str:
     return page[start : page.index("</article>", start)]
 
 
-def test_multi_tier_card_leads_with_the_best_tier_and_lists_three(tmp_path: Path) -> None:
+def _rows(card: str) -> list[str]:
+    return re.findall(r"<li>.*?</li>", card, re.DOTALL)
+
+
+def test_multi_tier_card_has_one_row_per_tier_with_its_own_chips(tmp_path: Path) -> None:
     page = _client(tmp_path, _multi_tier()).get("/", params={"tipo": "cupons"}).text
     card = _card_html(page, 'class="offer offer-coupon')
     assert "Até R$ 90 OFF" in card
-    assert card.count("<li>") == 3
-    assert "R$ 90 OFF em R$ 699" in card and "10% OFF em R$ 79" in card
-    assert "+2 condições" in card
-    assert len(_copy_buttons(card)) == 5  # the full card keeps every code
+    rows = _rows(card)
+    assert len(rows) == 5
+    assert "10% OFF em R$ 79 · até R$ 40 OFF" in rows[1]
+    assert "R$ 90 OFF em R$ 699" in rows[0] and "até" not in rows[0]
+    assert [[b["data-copy"] for b in _copy_buttons(r)] for r in rows] == [
+        list(t.codes) for t in TIERS
+    ]
+    copied = [b["data-copy"] for b in _copy_buttons(card)]
+    assert sorted(map(str, copied)) == sorted(CODES) and len(copied) == len(set(copied))
+    assert copied[-1] == LOOSE  # codes tied to no tier follow the rows
     assert "Ver post completo" in card
 
 
@@ -239,11 +250,17 @@ def test_single_tier_card_is_unchanged(tmp_path: Path) -> None:
 def test_strip_card_is_compact(tmp_path: Path) -> None:
     page = _client(tmp_path, _multi_tier()).get("/").text
     strip = _section(page, "Cupons ativos")
+    assert "Até R$ 90 OFF" in strip
+    rows = _rows(strip)
+    assert len(rows) == 2
+    assert [[b["data-copy"] for b in _copy_buttons(r)] for r in rows] == [
+        ["MOVEIS0511"],
+        ["SEMPRESAUDE"],
+    ]
     assert len(_copy_buttons(strip)) == 2
-    assert 'class="coupon-more"' in strip and ">+3<" in strip
+    assert 'class="coupon-more"' in strip and ">+7<" in strip
     assert "/?tipo=cupons#cupom-1-3" in strip
     assert "Ver post completo" not in strip
-    assert strip.count("<li>") == 2 and "+3 condições" in strip
     assert 'id="cupom-1-3"' not in page  # anchors live on the full cards only
 
 

@@ -15,7 +15,13 @@ from markupsafe import Markup
 
 from velkgram.offers.domain.coupon import best_tier, coupon_title
 from velkgram.offers.domain.insight import PriceVerdict, price_insight
-from velkgram.offers.domain.models import MatchSource, OfferKind, ProductStats, RetroStatus
+from velkgram.offers.domain.models import (
+    CouponTier,
+    MatchSource,
+    OfferKind,
+    ProductStats,
+    RetroStatus,
+)
 from velkgram.offers.ports.queries import (
     FeedCursor,
     FeedFilter,
@@ -62,6 +68,14 @@ class WishInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class TierRow:
+    """One coupon tier: its condition line and the codes the post ties to it."""
+
+    text: str
+    codes: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class CardView:
     """One feed card, preformatted for the template."""
 
@@ -88,7 +102,9 @@ class CardView:
     redeem_href: str | None = None
     cart_href: str | None = None
     text: str | None = None
-    tier_lines: tuple[str, ...] = ()
+    tier_rows: tuple[TierRow, ...] = ()
+    loose_codes: tuple[str, ...] = ()
+    compact_more: int = 0
     anchor: str = ""
 
 
@@ -175,11 +191,38 @@ def _headline(card: OfferCard) -> str:
     return card.coupon_discount or "Cupom"
 
 
-def _tier_lines(card: OfferCard) -> tuple[str, ...]:
-    return tuple(
-        t.discount if t.min_cents is None else f"{t.discount} em {brl_short(t.min_cents)}"
-        for t in card.coupon_tiers
-    )
+def _tier_text(tier: CouponTier) -> str:
+    text = tier.discount
+    if tier.min_cents is not None:
+        text += f" em {brl_short(tier.min_cents)}"
+    if tier.cap_cents is not None:
+        text += f" · até {brl_short(tier.cap_cents)} OFF"
+    return text
+
+
+def _tier_rows(card: OfferCard) -> tuple[TierRow, ...]:
+    if len(card.coupon_tiers) < 2:
+        return ()
+    return tuple(TierRow(_tier_text(t), t.codes) for t in card.coupon_tiers)
+
+
+def _loose_codes(card: OfferCard) -> tuple[str, ...]:
+    """Codes of a multi-tier card that no tier line carries (all of them for single tiers)."""
+    if len(card.coupon_tiers) < 2:
+        return card.coupons
+    tied = {c for t in card.coupon_tiers for c in t.codes}
+    return tuple(c for c in card.coupons if c not in tied)
+
+
+_COMPACT_ROWS = 2
+
+
+def _compact_more(card: OfferCard) -> int:
+    """Codes a compact card leaves out: only the first code of its first rows is shown."""
+    if len(card.coupon_tiers) < 2:
+        return max(len(card.coupons) - _COMPACT_ROWS, 0)
+    shown = sum(1 for t in card.coupon_tiers[:_COMPACT_ROWS] if t.codes)
+    return len(card.coupons) - shown
 
 
 def _int_or_none(raw: str) -> int | None:
@@ -222,7 +265,9 @@ def build_router(
             coupons=card.coupons,
             discount=_headline(card),
             terms=_coupon_terms(card) if len(card.coupon_tiers) < 2 else (),
-            tier_lines=_tier_lines(card) if len(card.coupon_tiers) > 1 else (),
+            tier_rows=_tier_rows(card),
+            loose_codes=_loose_codes(card),
+            compact_more=_compact_more(card),
             anchor=f"cupom-{card.channel_id}-{card.message_id}",
             redeem_href=safe_href(card.redeem_link),
             cart_href=safe_href(card.cart_link),

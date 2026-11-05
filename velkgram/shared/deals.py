@@ -172,6 +172,11 @@ def _line_codes(line: str, *, coupon_post: bool) -> list[str]:
     return _codes_in(line[anchor:]) if keyword is not None else []
 
 
+def line_coupons(line: str) -> tuple[str, ...]:
+    """Codes on one line of a coupon post, which may name them without the word "cupom"."""
+    return tuple(dict.fromkeys(_line_codes(line, coupon_post=True)))
+
+
 def extract_coupons(text: str) -> tuple[str, ...]:
     """Coupon codes in order of appearance, without duplicates (pure)."""
     coupon_post = _starts_with_coupon_word(text)

@@ -1,12 +1,15 @@
 <article {% if not compact %}id="{{ row.anchor }}" {% endif %}class="offer offer-coupon{% if compact %} offer-coupon-compact{% endif %}{% if row.sold_out or row.deleted %} offer-gone{% endif %}"
   {%- if row.next_url %} hx-get="{{ row.next_url }}" hx-trigger="revealed" hx-swap="afterend"{% endif %}>
   <p class="coupon-discount">{{ row.discount }}</p>
-  {% if row.tier_lines %}
-  {% set tier_limit = 2 if compact else 3 %}
+  {% if row.tier_rows %}
   <ul class="coupon-tiers">
-    {% for line in row.tier_lines[:tier_limit] %}<li>{{ line }}</li>{% endfor %}
-    {% if row.tier_lines | length > tier_limit %}<li class="coupon-tiers-more">+{{ row.tier_lines | length - tier_limit }} condições</li>{% endif %}
+    {% for tier in (row.tier_rows[:2] if compact else row.tier_rows) %}
+    <li><span class="tier-text">{{ tier.text }}</span>
+      {% with codes = (tier.codes[:1] if compact else tier.codes) %}{% include "_coupon_codes.html" %}{% endwith %}
+    </li>
+    {% endfor %}
   </ul>
+  {% if compact and row.compact_more > 0 %}<p class="coupon-more-row"><a class="coupon-more" href="/?tipo=cupons#{{ row.anchor }}" aria-label="Ver mais {{ row.compact_more }} cupons desta oferta">+{{ row.compact_more }}</a></p>{% endif %}
   {% elif row.terms %}<p class="coupon-terms">{{ row.terms | join(" · ") }}</p>{% endif %}
   {% if row.title %}<h2 class="offer-title">{{ row.title }}</h2>{% endif %}
   <p class="offer-meta">
@@ -15,9 +18,11 @@
     <time datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
   </p>
   {% if compact %}
-  {% with codes = row.coupons[:2], more = row.coupons | length - 2, more_href = "/?tipo=cupons#" ~ row.anchor %}{% include "_coupon_codes.html" %}{% endwith %}
+  {% if not row.tier_rows %}
+  {% with codes = row.loose_codes[:2], more = row.compact_more, more_href = "/?tipo=cupons#" ~ row.anchor %}{% include "_coupon_codes.html" %}{% endwith %}
+  {% endif %}
   {% else %}
-  {% with codes = row.coupons %}{% include "_coupon_codes.html" %}{% endwith %}
+  {% with codes = row.loose_codes %}{% include "_coupon_codes.html" %}{% endwith %}
   {% endif %}
   <div class="offer-actions">
     {% if row.redeem_href %}<a class="button small" href="{{ row.redeem_href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">redeem</i><span>Resgatar</span></a>{% endif %}

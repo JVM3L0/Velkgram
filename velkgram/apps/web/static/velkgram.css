@@ -1143,7 +1143,7 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 .post-full:not([open]) > .post-text { display: none; }
 .offer-coupon .offer-actions { flex-wrap: wrap; gap: 0.5rem; }
 .offer-coupon-compact .offer-actions .button { padding-inline: 0.875rem 1rem; }
-.coupon-tiers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.125rem; font-size: 0.9375rem; font-weight: 500; line-height: 1.4; }
+.coupon-tiers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.625rem; font-size: 0.9375rem; font-weight: 500; line-height: 1.4; }
 .coupon-tiers-more { font-weight: 400; opacity: 0.85; }
 .coupon-more {
   display: inline-flex;
@@ -1160,3 +1160,8 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 .offer-coupon-compact { gap: 0.25rem; }
 .offer-coupon-compact .coupon-tiers { font-size: 0.875rem; }
 .offer.offer-coupon-compact { padding-block: 0.75rem; }
+.coupon-tiers > li { display: flex; flex-direction: column; gap: 0.375rem; }
+.tier-text { font-variant-numeric: tabular-nums; }
+.coupon-more-row { margin: 0; }
+.offer-coupon-compact .coupon-tiers { gap: 0.375rem; }
+.offer-coupon-compact .coupon-tiers > li { gap: 0.25rem; }

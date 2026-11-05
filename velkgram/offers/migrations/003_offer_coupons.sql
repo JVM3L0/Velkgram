@@ -7,7 +7,7 @@ ALTER TABLE offers ADD COLUMN coupon_min_cents INTEGER;
 ALTER TABLE offers ADD COLUMN coupon_scope TEXT;
 ALTER TABLE offers ADD COLUMN redeem_link TEXT;
 ALTER TABLE offers ADD COLUMN cart_link TEXT;
-ALTER TABLE offers ADD COLUMN coupon_tiers TEXT;  -- JSON [[discount, min_cents], ...]
+ALTER TABLE offers ADD COLUMN coupon_tiers TEXT;  -- JSON [[discount, min_cents, cap_cents, [codes]], ...]
 
 UPDATE offers SET kind = 'coupon', price_cents = NULL, comparable = 0
 WHERE title LIKE 'cupom%';

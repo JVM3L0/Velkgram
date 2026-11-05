@@ -7,11 +7,13 @@ from dataclasses import dataclass
 
 from velkgram.offers.domain.models import CouponTier
 from velkgram.offers.domain.title import STORE_TITLES
+from velkgram.shared.deals import line_coupons
 from velkgram.shared.text import URL_PATTERN
 
 _MONEY = r"R\$\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?"
 _DISCOUNT = re.compile(rf"(?:{_MONEY}|(\d+)\s*%)\s*OFF\b", re.IGNORECASE)
 _MIN_SPEND = re.compile(rf"\b(?:em|acima\s+de|a\s+partir\s+de)\s+{_MONEY}", re.IGNORECASE)
+_CAP = re.compile(rf"\bLimite\s+de\s+{_MONEY}\s*OFF", re.IGNORECASE)
 _SCOPE = re.compile(r"\bOFF\s+em\s+(?!R\$)([^:\n,;-]+)", re.IGNORECASE)
 
 
@@ -60,18 +62,20 @@ def _discount_text(match: re.Match[str]) -> str:
 
 
 def _tiers(text: str) -> tuple[CouponTier, ...]:
-    tiers: list[CouponTier] = []
+    tiers: dict[CouponTier, None] = {}  # identical lines collapse into one
     for line in text.splitlines():
         discount = _DISCOUNT.search(line)
         if discount is None:
             continue
         minimum = _MIN_SPEND.search(line)
-        tiers.append(
-            CouponTier(
-                _discount_text(discount),
-                _cents(minimum.group(1), minimum.group(2)) if minimum else None,
-            )
+        cap = _CAP.search(line)
+        tier = CouponTier(
+            _discount_text(discount),
+            _cents(minimum.group(1), minimum.group(2)) if minimum else None,
+            _cents(cap.group(1), cap.group(2)) if cap else None,
+            line_coupons(line),
         )
+        tiers[tier] = None
     return tuple(tiers)
 
 

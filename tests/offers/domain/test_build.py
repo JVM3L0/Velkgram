@@ -139,7 +139,7 @@ def test_coupon_post_has_no_price_and_carries_the_deal() -> None:
         4000,
         None,
     )
-    assert offer.coupon_tiers == (CouponTier("R$ 10 OFF", 4000),)
+    assert offer.coupon_tiers == (CouponTier("R$ 10 OFF", 4000, None, ("QIP98Q1ZXO",)),)
     assert offer.redeem_link == links[0]
     assert offer.cart_link == links[1]
 

@@ -23,10 +23,12 @@ class OfferKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class CouponTier:
-    """One "R$ 90 OFF em R$ 699" line of a coupon post."""
+    """One "10% OFF em R$ 79, Limite de R$ 40 OFF: CODE" line of a coupon post."""
 
     discount: str
     min_cents: int | None
+    cap_cents: int | None = None
+    codes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

@@ -33,11 +33,20 @@ def _opt_int(value: object) -> int | None:
 
 
 def encode_tiers(tiers: Sequence[CouponTier]) -> str | None:
-    return json.dumps([[t.discount, t.min_cents] for t in tiers]) if tiers else None
+    return (
+        json.dumps([[t.discount, t.min_cents, t.cap_cents, list(t.codes)] for t in tiers])
+        if tiers
+        else None
+    )
 
 
 def decode_tiers(raw: str | None) -> tuple[CouponTier, ...]:
-    return tuple(CouponTier(str(d), _opt_int(m)) for d, m in json.loads(raw)) if raw else ()
+    if not raw:
+        return ()
+    return tuple(
+        CouponTier(str(d), _opt_int(m), _opt_int(cap), tuple(codes))
+        for d, m, cap, codes in json.loads(raw)
+    )
 
 
 def _to_offer(row: sqlite3.Row) -> Offer:
