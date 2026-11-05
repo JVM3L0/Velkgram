@@ -127,7 +127,7 @@ def test_coupon_counts_group_recent_live_coupons_by_store(conn: sqlite3.Connecti
     assert SqliteOfferQueries(conn).coupon_counts(NOW, hours=48) == {"shopee": 2, "amazon": 2}
 
 
-def test_coupon_queries_use_the_kind_posted_at_index(conn: sqlite3.Connection) -> None:
+def test_coupon_queries_use_the_kind_feed_index(conn: sqlite3.Connection) -> None:
     put(conn, coupon(1))
     plan = " ".join(
         str(r[3])
@@ -138,4 +138,4 @@ def test_coupon_queries_use_the_kind_posted_at_index(conn: sqlite3.Connection) -
             ("2026-01-01",),
         )
     )
-    assert "idx_offers_kind_posted_at" in plan
+    assert "idx_offers_kind_feed" in plan

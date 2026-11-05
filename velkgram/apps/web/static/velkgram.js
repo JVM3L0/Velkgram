@@ -45,3 +45,31 @@
     }
   });
 })();
+
+// Paged lists: a failed "Carregar mais" request keeps the button clickable and says so.
+(() => {
+  const mark = (event, failed) => {
+    const button = event.target instanceof Element ? event.target.closest(".load-more") : null;
+    if (button) button.classList.toggle("is-error", failed);
+  };
+  document.addEventListener("htmx:beforeRequest", (event) => mark(event, false));
+  document.addEventListener("htmx:responseError", (event) => mark(event, true));
+  document.addEventListener("htmx:sendError", (event) => mark(event, true));
+})();
+
+// "Voltar ao topo": shown after about two screens of scrolling.
+(() => {
+  const SCREENS = 2;
+  const sync = () => {
+    const far = window.scrollY > window.innerHeight * SCREENS;
+    for (const button of document.querySelectorAll("[data-scroll-top]")) button.hidden = !far;
+  };
+  document.addEventListener("scroll", sync, { passive: true });
+  document.addEventListener("htmx:afterSwap", sync);
+  document.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("[data-scroll-top]") : null;
+    if (!button) return;
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: calm ? "auto" : "smooth" });
+  });
+})();

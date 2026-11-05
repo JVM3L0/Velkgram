@@ -61,6 +61,7 @@ def test_feed_htmx_next_page_returns_fragment_only(tmp_path: Path) -> None:
     assert "<html" not in page
     assert "Produto 5" in page
     assert "hx-trigger" not in page  # last page: no further trigger
+    assert "Fim da lista" in page
 
 
 def test_feed_empty_state(tmp_path: Path) -> None:
@@ -103,7 +104,7 @@ def test_next_page_link_preserves_filters(tmp_path: Path) -> None:
     url = match.group(1).replace("&amp;", "&")
     assert "store=amazon" in url and "priced=1" in url and "q=produto" in url
     assert "cursor=" in url
-    assert 'hx-trigger="revealed"' in html and 'hx-swap="afterend"' in html
+    assert 'hx-trigger="revealed, click"' in html and 'hx-swap="outerHTML"' in html
 
 
 def test_malformed_cursor_gives_first_page(tmp_path: Path) -> None:

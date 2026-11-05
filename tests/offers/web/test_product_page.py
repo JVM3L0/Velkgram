@@ -198,7 +198,7 @@ def test_matches_fragment_without_cursor_is_first_page(tmp_path: Path) -> None:
     frag = client.get("/wishes/1/matches", headers={"HX-Request": "true"}).text
     assert "<html" not in frag
     assert "SSD 35" in frag and "SSD 5" not in frag
-    assert 'hx-trigger="revealed"' in frag
+    assert 'hx-trigger="revealed, click"' in frag
     junk = client.get("/wishes/1/matches", params={"cursor": "lixo|x|y"})
     assert junk.status_code == 200 and "SSD 35" in junk.text
 

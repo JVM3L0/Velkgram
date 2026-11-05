@@ -96,7 +96,7 @@ def test_pagination_uses_cursor_and_revealed_trigger(tmp_path: Path) -> None:
     client = _client(tmp_path, *offers)
     page = client.get("/cupons", params={"loja": "shopee"}).text
     assert len(_cards(page)) == 30
-    nxt = re.search(r'hx-get="([^"]+)" hx-trigger="revealed"', page)
+    nxt = re.search(r'hx-get="([^"]+)" hx-trigger="revealed, click"', page)
     assert nxt is not None
     url = nxt.group(1).replace("&amp;", "&")
     assert "loja=shopee" in url and "cursor=" in url

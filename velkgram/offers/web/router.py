@@ -94,7 +94,6 @@ class CardView:
     deleted: bool
     reposts: int
     comparable: bool = True
-    next_url: str | None = None
     source: str | None = None
     historic: bool = False
     is_coupon: bool = False
@@ -352,6 +351,7 @@ def build_router(
                 "rows": _match_rows(
                     wish.id, history.matches, history.next_cursor, now, names, counts
                 ),
+                "next_url": _matches_next(wish.id, history.next_cursor),
                 "first_page": True,
                 "status": history.retro.status if history.retro else None,
                 "wish_id": wish.id,
@@ -368,11 +368,12 @@ def build_router(
         names: dict[int, str],
         counts: dict[str, int],
     ) -> list[CardView]:
-        rows = [match_view(m, now, names, counts) for m in matches]
-        if rows and next_cursor is not None:
-            url = f"/wishes/{wish_id}/matches?" + urlencode({"cursor": _cursor_text(next_cursor)})
-            rows[-1] = replace(rows[-1], next_url=url)
-        return rows
+        return [match_view(m, now, names, counts) for m in matches]
+
+    def _matches_next(wish_id: int, next_cursor: FeedCursor | None) -> str | None:
+        if next_cursor is None:
+            return None
+        return f"/wishes/{wish_id}/matches?" + urlencode({"cursor": _cursor_text(next_cursor)})
 
     @router.get("/wishes/{wish_id}/matches", response_class=HTMLResponse)
     def product_matches(
@@ -390,7 +391,13 @@ def build_router(
         counts = queries.coupon_counts(now, _ACTIVE_HOURS)
         rows = _match_rows(wish.id, history.matches, history.next_cursor, now, names, counts)
         return templates.TemplateResponse(
-            request, "_product_matches.html", {"rows": rows, "first_page": parsed is None}
+            request,
+            "_product_matches.html",
+            {
+                "rows": rows,
+                "first_page": parsed is None,
+                "next_url": _matches_next(wish.id, history.next_cursor),
+            },
         )
 
     @router.get("/wishes/{wish_id}/chart", response_class=HTMLResponse)
@@ -461,6 +468,7 @@ def build_router(
         now = clock.now()
         counts = queries.coupon_counts(now, _ACTIVE_HOURS)
         rows = [card_view(c, now, names, counts) for c in page.cards]
+        next_url: str | None = None
         if rows and page.next_cursor is not None:
             params: list[tuple[str, str]] = []
             if flt.q:
@@ -476,9 +484,9 @@ def build_router(
                 params.append(("channel", str(channel_id)))
             params.append(("view", view))
             params.append(("cursor", _cursor_text(page.next_cursor)))
-            rows[-1] = replace(rows[-1], next_url="/?" + urlencode(params))
+            next_url = "/?" + urlencode(params)
         is_fragment = request.headers.get("HX-Request") == "true" and bool(cursor)
-        context: dict[str, object] = {"rows": rows}
+        context: dict[str, object] = {"rows": rows, "next_url": next_url}
         if is_fragment:
             return templates.TemplateResponse(request, "_feed_page.html", context)
         unfiltered = flt == FeedFilter(None, None, None, (), False, None) and not cursor
@@ -530,20 +538,24 @@ def build_router(
         page = queries.coupons(flt, _parse_cursor(cursor), _PAGE_SIZE)
         names = channel_names(conn)
         rows = [card_view(c, now, names) for c in page.cards]
+        next_url: str | None = None
         if rows and page.next_cursor is not None:
             params = [("q", query)] if query else []
             if store:
                 params.append(("loja", store))
             params.append(("ativos", "1" if only_active else "0"))
             params.append(("cursor", _cursor_text(page.next_cursor)))
-            rows[-1] = replace(rows[-1], next_url="/cupons?" + urlencode(params))
+            next_url = "/cupons?" + urlencode(params)
         if request.headers.get("HX-Request") == "true" and cursor:
-            return templates.TemplateResponse(request, "_coupons_page.html", {"rows": rows})
+            return templates.TemplateResponse(
+                request, "_coupons_page.html", {"rows": rows, "next_url": next_url}
+            )
         return templates.TemplateResponse(
             request,
             "cupons.html",
             {
                 "rows": rows,
+                "next_url": next_url,
                 "q": query,
                 "store": store,
                 "only_active": only_active,

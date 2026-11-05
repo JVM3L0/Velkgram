@@ -1,5 +1,4 @@
-<article {% if not compact %}id="{{ row.anchor }}" {% endif %}class="offer offer-coupon{% if compact %} offer-coupon-compact{% endif %}{% if row.sold_out or row.deleted %} offer-gone{% endif %}"
-  {%- if row.next_url %} hx-get="{{ row.next_url }}" hx-trigger="revealed" hx-swap="afterend"{% endif %}>
+<article {% if not compact %}id="{{ row.anchor }}" {% endif %}class="offer offer-coupon{% if compact %} offer-coupon-compact{% endif %}{% if row.sold_out or row.deleted %} offer-gone{% endif %}">
   <p class="coupon-discount">{{ row.discount }}</p>
   {% if row.tier_rows %}
   <ul class="coupon-tiers">
