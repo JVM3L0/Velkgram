@@ -1,11 +1,13 @@
 """Collector assembly: wires repositories, services and Telegram work together (spec §4.1, §6.1)."""
 
 import asyncio
+import contextlib
 import logging
 import sqlite3
 from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from datetime import timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from velkgram.alerting import Alert, AlertMessage, Notifier
 from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
@@ -16,6 +18,7 @@ from velkgram.alerting.services.evaluate import Evaluator
 from velkgram.alerting.services.reprocess import reprocess_unprocessed
 from velkgram.alerting.services.retry_failed import retry_failed, warm_cache
 from velkgram.apps.cli import MIGRATION_PACKAGES
+from velkgram.apps.collector.retention import RetentionSchedule
 from velkgram.channels import ChannelCommands, ChannelStatus
 from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.ingestion import (
@@ -28,11 +31,16 @@ from velkgram.ingestion import (
     backfill_all,
     backfill_channel,
     gap_check,
+    purge_text_before,
     snapshot_cursors,
 )
 from velkgram.ingestion.adapters.sqlite.repository import SqliteMessageRepository
+from velkgram.offers import OfferBuilder, RetroMatcher, purge_offer_text_before
+from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
+from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
 from velkgram.shared.events import (
     ChannelsChanged,
+    MessageDeleted,
     MessageEdited,
     MessageReceived,
     WishlistChanged,
@@ -55,6 +63,8 @@ class Collector:
         clock: Clock,
         bus: EventBus,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        retention_days: int = 90,
+        app_timezone: ZoneInfo | None = None,
     ) -> None:
         self._conn = conn
         self._gateway = gateway
@@ -66,6 +76,8 @@ class Collector:
         self._enabled: frozenset[int] = frozenset()
         self._names: dict[int, str] = {}
         self._tasks: set[asyncio.Task[None]] = set()
+        self._offer_worker: asyncio.Task[None] | None = None
+        self._retention_days = retention_days
         self._resolve_lock = asyncio.Lock()
         # Cursors taken before live messages could advance them (startup, disconnect, new channel).
         self._snapshot: dict[int, int | None] = {}
@@ -97,6 +109,12 @@ class Collector:
             on_alert_sent=self.heartbeat.count_alert,
             sleep=sleep,
         )
+        self._offers = SqliteOfferRepository(conn)
+        offer_wishes = WishlistApiWishReader(self._wish_repo)
+        self.offer_builder = OfferBuilder(self._offers, offer_wishes, clock)
+        # Default asyncio.sleep on purpose: the injected `sleep` is for backoff and loops only.
+        self.retro = RetroMatcher(self._offers, offer_wishes, clock, retention_days)
+        self.retention = RetentionSchedule(app_timezone or ZoneInfo("America/Sao_Paulo"))
         self.watcher = ConnectionWatcher(
             gateway.is_connected, self.heartbeat, self.backfill_enabled, self._take_snapshot
         )
@@ -116,13 +134,34 @@ class Collector:
         await self.backfill_enabled()
         self.bus.subscribe(MessageReceived, self.evaluator.on_received)
         self.bus.subscribe(MessageEdited, self.evaluator.on_edited)
+        # Offer handlers only enqueue; the worker is its own task (ruling 7), after the evaluator.
+        self._offer_worker = asyncio.create_task(self._run_offer_worker())
+        self.bus.subscribe(MessageReceived, self.offer_builder.on_received)
+        self.bus.subscribe(MessageEdited, self.offer_builder.on_edited)
+        self.bus.subscribe(MessageDeleted, self.offer_builder.on_deleted)
         self.bus.subscribe(WishlistChanged, self._on_wishlist_changed)
         self.bus.subscribe(ChannelsChanged, self._on_channels_changed)
+        self._spawn_retro(WishlistChanged(0))  # existing wishes and stale runs
 
     async def wait_idle(self) -> None:
         while pending := [t for t in self._tasks if not t.done()]:
             await asyncio.gather(*pending, return_exceptions=True)
         await self.evaluator.wait_idle()
+        await self.offer_builder.drain()
+
+    async def _run_offer_worker(self) -> None:
+        try:
+            await self.offer_builder.run()
+        except Exception:
+            log.exception("offer_worker_failed")
+
+    async def stop_offer_worker(self) -> None:
+        worker, self._offer_worker = self._offer_worker, None
+        if worker is None:
+            return
+        worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await worker
 
     async def fatal(self, reason: str) -> None:
         if self.stopped:
@@ -170,6 +209,10 @@ class Collector:
 
     async def _on_wishlist_changed(self, _e: WishlistChanged) -> None:
         self.reload_wishes()
+        self._spawn_retro(_e)  # never skipped: a run in flight just makes this one wait on the lock
+
+    def _spawn_retro(self, e: WishlistChanged) -> None:
+        self._spawn(self._safe(self.retro.on_wishlist_changed(e), "retro_failed"))
 
     async def _on_channels_changed(self, _e: ChannelsChanged) -> None:
         self._load_channels()
@@ -274,6 +317,26 @@ class Collector:
             self._cache.prune(self._clock.now())
         except Exception:
             log.exception("housekeeping_failed")
+        now = self._clock.now()
+        if self.retention.due(now):
+            await self.run_retention()
+            self.retention.mark_ran(now)
+
+    async def run_retention(self) -> None:
+        cutoff = self._clock.now() - timedelta(days=self._retention_days)
+        counts: dict[str, int] = {}
+        try:
+            counts["messages"] = purge_text_before(self._messages, cutoff)
+        except Exception:
+            log.exception("retention_failed", extra={"source_module": "ingestion"})
+        try:
+            counts["offers"] = purge_offer_text_before(self._offers, cutoff)
+        except Exception:
+            log.exception("retention_failed", extra={"source_module": "offers"})
+        log.info(
+            "retention_done",
+            extra={"messages": counts.get("messages"), "offers": counts.get("offers")},
+        )
 
     def build_message(self, alert: Alert) -> AlertMessage | None:
         m = self._messages.get(alert.channel_id, alert.message_id)
