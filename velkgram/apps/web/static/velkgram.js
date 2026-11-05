@@ -66,10 +66,17 @@
   };
   document.addEventListener("scroll", sync, { passive: true });
   document.addEventListener("htmx:afterSwap", sync);
+  sync();
   document.addEventListener("click", (event) => {
     const button = event.target instanceof Element ? event.target.closest("[data-scroll-top]") : null;
     if (!button) return;
     const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({ top: 0, behavior: calm ? "auto" : "smooth" });
+    // The button hides itself at the top: hand focus to the page start so it is not lost.
+    const main = document.querySelector("main");
+    if (main instanceof HTMLElement) {
+      main.setAttribute("tabindex", "-1");
+      main.focus({ preventScroll: true });
+    }
   });
 })();

@@ -3,10 +3,12 @@
 Every timed read must finish under 150 ms and must not `SCAN offers` without an index; the
 plan check runs EXPLAIN QUERY PLAN on the statements the query port really executed.
 
-Measured on the dev machine (WSL2, median of 3 runs after a warm-up), migration 004 applied:
-feed first page 0.2 ms, 100th page 0.2 ms; filtered feed 0.3 ms / 0.3 ms; coupons first page
-0.3 ms, 100th page 0.3 ms, store+since 0.3 ms; FTS search
-"raro" 3.2 ms, "marca42" 0.5 ms, "produto" (matches nearly everything) 5.4 ms.
+Measured on the dev machine (WSL2, median of 3 runs after a warm-up), migrations 004 and 005
+applied: feed first page 0.2 ms, 100th page 0.3 ms; filtered feed 0.3 / 0.3 ms; coupons first
+page 0.3 ms, 100th page 0.3 ms, store+since 0.3 ms; FTS search "raro" 3.3 ms, "marca42" 0.5 ms,
+"produto" 5.5 ms; one channel 0.2 ms (50th page 0.2 ms), channel+store 0.2 ms, narrow price band
+2.3 ms; product matches page (one wish, ~21k matches) first 0.3 ms, 100th 0.3 ms. The first call on
+a fresh connection takes 0.3-0.4 ms (narrow price 3.1 ms).
 """
 
 import json
@@ -38,12 +40,17 @@ _FULL_SCAN = re.compile(r"^SCAN (offers|o|r|x)\b(?!.*\bINDEX\b)")
 
 
 @pytest.fixture(scope="module")
-def conn(tmp_path_factory: pytest.TempPathFactory) -> Iterator[sqlite3.Connection]:
-    path: Path = tmp_path_factory.mktemp("volume") / "t.db"
-    c = connect(path)
+def db_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("volume") / "t.db"
+
+
+@pytest.fixture(scope="module")
+def conn(db_path: Path) -> Iterator[sqlite3.Connection]:
+    c = connect(db_path)
     apply_migrations(c, MIGRATION_PACKAGES)
     offers = []
     messages = []
+    matches = []
     for i in range(ROWS):
         at = to_iso(T0 + timedelta(seconds=30 * (i // 3)))  # three offers share each instant
         coupon = i % 7 == 0
@@ -76,6 +83,8 @@ def conn(tmp_path_factory: pytest.TempPathFactory) -> Iterator[sqlite3.Connectio
             )
         )
         messages.append((channel, i, at, at, text, "[]", i % 2, "live"))
+        if i % 2 == 0 and not coupon:  # one wish with ~21k matches
+            matches.append((1, channel, i, offers[-1][4], at, "live", at))
     with c:
         c.executemany(
             "INSERT INTO offers (channel_id, message_id, posted_at, title, price_cents, store, "
@@ -89,19 +98,45 @@ def conn(tmp_path_factory: pytest.TempPathFactory) -> Iterator[sqlite3.Connectio
             "has_photo, source) VALUES (?,?,?,?,?,?,?,?)",
             messages,
         )
+        c.executemany(
+            "INSERT OR IGNORE INTO offer_matches (wish_id, channel_id, message_id, price_cents, "
+            "posted_at, source, matched_at) VALUES (?,?,?,?,?,?,?)",
+            matches,
+        )
     yield c
     c.close()
 
 
-def _deep(page_of: Callable[[FeedCursor | None], FeedPage]) -> FeedCursor | None:
+def _deep(
+    page_of: Callable[[FeedCursor | None], FeedPage], page: int = DEEP_PAGE
+) -> FeedCursor | None:
     cursor: FeedCursor | None = None
-    for _ in range(DEEP_PAGE - 1):
+    for _ in range(page - 1):
         cursor = page_of(cursor).next_cursor
         assert cursor is not None
     return cursor
 
 
-def _check(conn: sqlite3.Connection, run: Callable[[], FeedPage], name: str) -> float:
+def _cold(db_path: Path, run: Callable[[SqliteOfferQueries], object], name: str) -> None:
+    """First call on a fresh connection (cold page cache and statement cache)."""
+    fresh = connect(db_path)
+    try:
+        start = time.perf_counter()
+        run(SqliteOfferQueries(fresh))
+        elapsed = time.perf_counter() - start
+    finally:
+        fresh.close()
+    print(f"{name} (cold): {elapsed * 1000:.1f} ms")
+    assert elapsed < BOUND_S, f"{name} cold: {elapsed * 1000:.1f} ms"
+
+
+def _check(
+    conn: sqlite3.Connection,
+    run: Callable[[], FeedPage],
+    name: str,
+    *,
+    sorts_ok: bool = False,
+) -> float:
     statements: list[str] = []
     conn.set_trace_callback(statements.append)
     try:
@@ -112,7 +147,9 @@ def _check(conn: sqlite3.Connection, run: Callable[[], FeedPage], name: str) -> 
     for sql in (s for s in statements if s.lstrip().upper().startswith("SELECT")):
         for row in conn.execute("EXPLAIN QUERY PLAN " + sql):
             assert not _FULL_SCAN.match(row[3]), f"{name}: {row[3]}"
-            if not name.startswith("search"):  # the index already gives the page its order
+            if not (
+                name.startswith("search") or sorts_ok
+            ):  # the index already gives the page its order
                 assert "TEMP B-TREE" not in row[3] or "ORDER BY" not in row[3], f"{name}: {row[3]}"
     run()  # warm-up
     timings = []
@@ -160,3 +197,43 @@ def test_volume_fts_search(conn: sqlite3.Connection) -> None:
     for term in ("raro", "marca42", "produto"):
         flt = FeedFilter(term, None, None, (), False, None)
         _check(conn, lambda flt=flt: q.feed(flt, None), f"search '{term}'")
+
+
+@pytest.mark.slow
+def test_volume_feed_with_rare_channel_and_narrow_price_filters(
+    conn: sqlite3.Connection, db_path: Path
+) -> None:
+    q = SqliteOfferQueries(conn)
+    channel = FeedFilter(None, None, None, (), False, 7)
+    _check(conn, lambda: q.feed(channel, None), "channel feed first page")
+    cursor = _deep(lambda cur: q.feed(channel, cur), 50)  # one channel holds ~2,500 offers
+    _check(conn, lambda: q.feed(channel, cursor), "channel feed 50th page")
+    rare = FeedFilter(None, None, None, ("magalu",), False, 7)
+    _check(conn, lambda: q.feed(rare, None), "channel+store feed first page")
+    narrow = FeedFilter(None, 5000, 5400, (), True, None)  # a few hundred rows match
+    _check(conn, lambda: q.feed(narrow, None), "narrow price first page", sorts_ok=True)
+    _cold(db_path, lambda f: f.feed(channel, None), "channel feed first page")
+    _cold(db_path, lambda f: f.feed(narrow, None), "narrow price first page")
+
+
+@pytest.mark.slow
+def test_volume_cold_first_calls(db_path: Path, conn: sqlite3.Connection) -> None:
+    assert conn  # the fixture seeds the file
+    _cold(db_path, lambda f: f.feed(NOTHING, None), "feed first page")
+    _cold(db_path, lambda f: f.coupons(CouponFilter(), None), "coupons first page")
+    _cold(db_path, lambda f: f.matches_page(1, None), "matches first page")
+
+
+@pytest.mark.slow
+def test_volume_matches_page_with_20k_matches_on_one_wish(conn: sqlite3.Connection) -> None:
+    q = SqliteOfferQueries(conn)
+    count = conn.execute("SELECT COUNT(*) FROM offer_matches WHERE wish_id = 1").fetchone()[0]
+    assert count >= 20_000
+
+    def page_of(cursor: FeedCursor | None) -> FeedPage:
+        cards, nxt = q.matches_page(1, cursor)
+        return FeedPage(tuple(m.card for m in cards), nxt)
+
+    _check(conn, lambda: page_of(None), "matches first page")
+    cursor = _deep(page_of)
+    _check(conn, lambda: page_of(cursor), "matches 100th page")

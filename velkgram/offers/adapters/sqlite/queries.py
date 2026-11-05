@@ -192,7 +192,7 @@ class SqliteOfferQueries:
     ) -> ProductHistory:
         stats = product_stats(self._repo.priced_points(wish_id), now)
         since = None if range_days is None else to_iso(now - timedelta(days=range_days))
-        matches, next_cursor = self._matches_page(wish_id, cursor, limit)
+        matches, next_cursor = self.matches_page(wish_id, cursor, limit)
         return ProductHistory(
             stats=stats,
             points=self._points(wish_id, since),
@@ -235,8 +235,8 @@ class SqliteOfferQueries:
             days = [(b[-1][0], min(p for _, p in b)) for b in buckets]
         return tuple(PricePoint(d, p) for d, p in days)
 
-    def _matches_page(
-        self, wish_id: int, cursor: FeedCursor | None, limit: int
+    def matches_page(
+        self, wish_id: int, cursor: FeedCursor | None, limit: int = 30
     ) -> tuple[tuple[MatchCard, ...], FeedCursor | None]:
         where = "m.wish_id = ?"
         params: list[object] = [wish_id]

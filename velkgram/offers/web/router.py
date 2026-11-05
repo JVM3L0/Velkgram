@@ -377,17 +377,17 @@ def build_router(
         parsed = _parse_cursor(cursor)
         queries = make_queries(conn)
         now = clock.now()
-        history = queries.product(wish.id, now, None, parsed, _PAGE_SIZE)
+        matches, next_cursor = queries.matches_page(wish.id, parsed, _PAGE_SIZE)
         names = channel_names(conn)
         counts = queries.coupon_counts(now, _ACTIVE_HOURS)
-        rows = _match_rows(wish.id, history.matches, history.next_cursor, now, names, counts)
+        rows = _match_rows(wish.id, matches, next_cursor, now, names, counts)
         return templates.TemplateResponse(
             request,
             "_product_matches.html",
             {
                 "rows": rows,
                 "first_page": parsed is None,
-                "next_url": _matches_next(wish.id, history.next_cursor),
+                "next_url": _matches_next(wish.id, next_cursor),
             },
         )
 

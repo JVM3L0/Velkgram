@@ -1148,7 +1148,7 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 .tier-text { font-variant-numeric: tabular-nums; }
 
 /* ---- Paged lists: "Carregar mais", end of list and back to top ---- */
-.feed > .load-more, .feed > .load-end, .load-more, .load-end { grid-column: 1 / -1; }
+.load-more, .load-end { grid-column: 1 / -1; }
 .load-more {
   display: inline-flex;
   align-items: center;
@@ -1162,7 +1162,7 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 .load-more.is-error .load-more-label { display: none; }
 .load-more.is-error { background-color: var(--error-container); color: var(--on-error-container); }
 .load-more.is-error .load-more-error { display: inline; }
-.load-more .htmx-indicator { display: none; margin: 0; }
+.load-more .htmx-indicator { display: none; margin: 0; color: var(--on-primary-container); }
 .load-more.htmx-request .htmx-indicator { display: inline-block; }
 .load-more.htmx-request .load-more-label, .load-more.htmx-request .load-more-error { display: none; }
 .load-end { text-align: center; margin: 1rem 0; }
