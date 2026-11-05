@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Velkgram{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 52rem; margin: 0 auto; padding: 1rem; color: #1a1a1a; }
+    nav { display: flex; gap: 1rem; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: .5rem; margin-bottom: 1rem; }
+    nav form { margin-left: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: .4rem; border-bottom: 1px solid #eee; }
+    label { display: block; margin-top: .75rem; font-weight: 600; }
+    input[type=text], input[type=password], textarea { width: 100%; padding: .4rem; box-sizing: border-box; }
+    button, .button { padding: .35rem .8rem; cursor: pointer; }
+    .error { color: #b00020; margin: .5rem 0; }
+    .muted { color: #777; }
+    .inline { display: inline; }
+  </style>
+</head>
+<body>
+  {% if request.session.get("user") %}
+  <nav>
+    <a href="/wishes">Lista de desejos</a>
+    {% block nav %}{% endblock %}
+    <form method="post" action="/logout"><button type="submit">Sair</button></form>
+  </nav>
+  {% endif %}
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

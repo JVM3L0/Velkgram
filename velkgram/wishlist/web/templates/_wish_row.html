@@ -1,0 +1,14 @@
+<tr id="wish-{{ wish.id }}">
+  <td><a href="/wishes/{{ wish.id }}/edit">{{ wish.name }}</a></td>
+  <td>R$ {{ "%d,%02d"|format(wish.max_price_cents // 100, wish.max_price_cents % 100) }}</td>
+  <td>
+    <button hx-post="/wishes/{{ wish.id }}/toggle" hx-target="#wish-{{ wish.id }}" hx-swap="outerHTML">
+      {{ "Ativo" if wish.enabled else "Pausado" }}
+    </button>
+  </td>
+  <td>
+    <form class="inline" method="post" action="/wishes/{{ wish.id }}/delete">
+      <button type="submit">Excluir</button>
+    </form>
+  </td>
+</tr>

@@ -136,7 +136,7 @@ allow_indirect_imports = true
 [[tool.importlinter.contracts]]
 name = "only apps import adapters (rule 4)"
 type = "forbidden"
-source_modules = ["velkgram.*.web", "velkgram.*.ports", "velkgram.shared.events", "velkgram.shared.ports",
+source_modules = ["velkgram.wishlist.web", "velkgram.channels.web", "velkgram.ingestion.web", "velkgram.alerting.web", "velkgram.*.ports", "velkgram.shared.events", "velkgram.shared.ports",
   "velkgram.shared.text", "velkgram.shared.config", "velkgram.shared.db", "velkgram.shared.logging", "velkgram.shared.migrate"]
 forbidden_modules = ["velkgram.*.adapters", "velkgram.apps"]
 allow_indirect_imports = true
