@@ -17,8 +17,9 @@
 /* ---- Fonts, shape and motion tokens ---- */
 :root {
   --font: "Roboto Flex", system-ui, sans-serif;
-  --shape-xl: 28px;
-  --shape-pressed: 12px;
+  --shape-xl: 12px;      /* cards, sheets, panels */
+  --shape-control: 8px;  /* buttons, chips, fields, segmented controls */
+  --shape-pressed: 4px;
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --spring-time: 360ms;
 }
@@ -307,7 +308,7 @@ body {
   clip-path: none;
   z-index: 1000;
   inset: 0.5rem auto auto 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--shape-control);
   background-color: var(--primary);
   color: var(--on-primary);
 }
@@ -327,7 +328,7 @@ article, dialog, .sheet, .card {
 /* Pill buttons that morph to a rounded square while pressed. */
 button:not(.circle, .square, .chip),
 a.button {
-  border-radius: 999px;
+  border-radius: var(--shape-control);
   transition: border-radius var(--spring-time) var(--spring), background-color 150ms linear;
 }
 
@@ -337,7 +338,7 @@ a.button:active {
 }
 
 .chip {
-  border-radius: 999px;
+  border-radius: var(--shape-control);
   transition: background-color 150ms linear, border-radius var(--spring-time) var(--spring);
 }
 
@@ -621,7 +622,7 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
     display: inline-flex;
     flex: none;
     border: 1px solid var(--outline);
-    border-radius: 999px;
+    border-radius: var(--shape-control);
     overflow: hidden;
   }
   .view-option { position: relative; margin: 0; }
@@ -681,7 +682,7 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
   font-size: 1rem;
   font-weight: 500;
   letter-spacing: 0;
-  line-height: 1.4 !important;
+  line-height: 1.5 !important;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -690,9 +691,11 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
   overflow-wrap: anywhere;
   /* Breathing room inside the clamp box: overflow:hidden would clip ascenders, descenders
      and the first glyph; the negative margins keep the visual position unchanged. */
-  padding: 0.15em 0.3em 0;
+  /* line-height 1.5 leaves ~0.16em of room above and below each line; the 0.1em bottom
+     padding protects descenders without exposing the clamped third line. */
+  padding: 0.15em 0.3em 0.1em;
 }
-.offer > .offer-title { margin: -0.15em -0.3em 0 !important; }
+.offer > .offer-title { margin: -0.15em -0.3em -0.1em !important; }
 .offer-meta, .offer-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; color: var(--on-surface-variant); font-size: 0.875rem; }
 .offer-flags { gap: 0.5rem; }
 .offer .chip { margin: 0; }
@@ -706,7 +709,7 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .offer-gone .offer-price, .offer-gone .offer-title { text-decoration: line-through; color: var(--on-surface-variant); }
 .offer-actions { display: flex; gap: 0.5rem; margin-block-start: auto !important; padding-block-start: 0.5rem; }
 .offer-actions .button { min-block-size: 3rem; margin: 0; gap: 0.375rem; padding-inline: 1rem 1.25rem; }
-.offer-actions .button.circle { inline-size: 3rem; padding: 0; background-color: var(--secondary-container); color: var(--on-secondary-container); }
+.offer-actions .button.circle { inline-size: 3rem; padding: 0; border-radius: var(--shape-control); background-color: var(--secondary-container); color: var(--on-secondary-container); }
 
 @media (min-width: 840px) {
   .feed-list { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
@@ -791,7 +794,7 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
   .stats-mini { grid-column: auto; padding: 0 0 0 1.5rem; border-block-start: 0; border-inline-start: 1px solid color-mix(in oklab, var(--tint) 40%, var(--surface)); gap: 0.75rem 2rem; }
 }
 
-.range-switch { gap: 0; display: inline-flex; align-self: flex-start; border: 1px solid var(--outline); border-radius: 999px; overflow: hidden; }
+.range-switch { gap: 0; display: inline-flex; align-self: flex-start; border: 1px solid var(--outline); border-radius: var(--shape-control); overflow: hidden; }
 .range-switch a {
   display: inline-flex; align-items: center; justify-content: center; min-block-size: 3rem; min-inline-size: 4.5rem;
   padding-inline: 1rem; color: var(--on-surface); text-decoration: none; font-weight: 500;
@@ -1040,3 +1043,6 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 /* ---- Forms: helper text lines up with the field's text, textareas grow with their lines ---- */
 .stack .field > .helper { margin-inline: 1rem; }
 .stack .field.textarea > textarea { field-sizing: content; min-block-size: 6.5rem; padding-block-end: 1rem; }
+
+/* Squarer fields (Beer's default border fields), matching --shape-control. */
+.field.border > :is(input, select, textarea) { border-radius: var(--shape-control); }
