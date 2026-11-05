@@ -58,19 +58,18 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
 
     @app.post("/login")
     def login(request: Request, password: str = Form("")) -> Response:
-        if throttle.is_locked():
+        outcome = throttle.attempt(lambda: verify_password(password_hash, password))
+        if outcome == "locked":
             return templates.TemplateResponse(
                 request,
                 "login.html",
                 {"error": "Muitas tentativas. Tente novamente em alguns minutos."},
                 status_code=429,
             )
-        if not verify_password(password_hash, password):
-            throttle.record_failure()
+        if outcome == "fail":
             return templates.TemplateResponse(
                 request, "login.html", {"error": "Senha incorreta"}, status_code=401
             )
-        throttle.reset()
         request.session[SESSION_KEY] = SESSION_USER
         return RedirectResponse("/wishes", status_code=303)
 
