@@ -24,8 +24,15 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
     c.close()
 
 
-def _add(conn: sqlite3.Connection, wish_id: int, mid: int, at: datetime, price: int | None) -> None:
-    o = offer(mid, at=at, price=price)
+def _add(
+    conn: sqlite3.Connection,
+    wish_id: int,
+    mid: int,
+    at: datetime,
+    price: int | None,
+    comparable: bool = True,
+) -> None:
+    o = offer(mid, at=at, price=price, comparable=comparable)
     put(conn, o)
     SqliteOfferRepository(conn).add_match(match(wish_id, o))
 
@@ -34,9 +41,11 @@ def test_product_points_are_daily_minimum_and_capped_at_200(conn: sqlite3.Connec
     _add(conn, 1, 1, T0, 500)
     _add(conn, 1, 2, T0 + timedelta(hours=2), 300)
     _add(conn, 1, 3, T0 + timedelta(days=1), 400)
+    _add(conn, 1, 4, T0 + timedelta(days=1, hours=3), 450)
+    _add(conn, 1, 5, T0 + timedelta(days=2), 350)
     q = SqliteOfferQueries(conn)
     pts = q.product(1, NOW, None, None).points
-    assert [p.price_cents for p in pts] == [300, 400]
+    assert [p.price_cents for p in pts] == [300, 400, 350]
     assert pts[0].posted_at.date() == T0.date()
 
     for d in range(2, 260):
@@ -55,6 +64,29 @@ def test_product_points_respect_range_and_skip_unknown_prices(conn: sqlite3.Conn
     _add(conn, 1, 3, now - timedelta(days=4), None)
     pts = SqliteOfferQueries(conn).product(1, now, 30, None).points
     assert [p.price_cents for p in pts] == [200]
+
+
+def test_product_points_are_one_per_match_on_fewer_than_three_days(
+    conn: sqlite3.Connection,
+) -> None:
+    day = T0 + timedelta(days=10)
+    _add(conn, 1, 1, day, 8000)
+    _add(conn, 1, 2, day + timedelta(hours=1), 170900)
+    _add(conn, 1, 3, day + timedelta(hours=2), 116900)
+    _add(conn, 1, 4, day + timedelta(hours=3), None)
+    pts = SqliteOfferQueries(conn).product(1, NOW, None, None).points
+    assert [p.price_cents for p in pts] == [8000, 170900, 116900]
+    assert pts[1].posted_at - pts[0].posted_at == timedelta(hours=1)
+
+
+def test_product_points_downsample_to_daily_minimum_from_three_days(
+    conn: sqlite3.Connection,
+) -> None:
+    for i, price in enumerate((500, 300, 700)):
+        _add(conn, 1, 10 + i, T0 + timedelta(days=i), price)
+    _add(conn, 1, 20, T0 + timedelta(days=1, hours=2), 250)
+    pts = SqliteOfferQueries(conn).product(1, NOW, None, None).points
+    assert [p.price_cents for p in pts] == [500, 250, 700]
 
 
 def test_product_stats_use_all_matches(conn: sqlite3.Connection) -> None:
@@ -113,3 +145,28 @@ def test_stores_seen(conn: sqlite3.Connection) -> None:
     put(conn, offer(1, store="kabum"), offer(2, store="amazon"), offer(3, store=None))
     put(conn, offer(4, store="amazon"))
     assert SqliteOfferQueries(conn).stores_seen() == ["amazon", "kabum"]
+
+
+def test_non_comparable_matches_stay_listed_but_leave_points_and_stats(
+    conn: sqlite3.Connection,
+) -> None:
+    now = T0 + timedelta(days=10)
+    _add(conn, 1, 1, now - timedelta(days=3), 500)
+    _add(conn, 1, 2, now - timedelta(days=2), 50, comparable=False)
+    _add(conn, 1, 3, now - timedelta(days=1), 400)
+    h = SqliteOfferQueries(conn).product(1, now, None, None)
+    assert [p.price_cents for p in h.points] == [500, 400]
+    assert (h.stats.lowest_cents, h.stats.last_cents, h.stats.avg_30d_cents) == (400, 400, 450)
+    assert h.stats.match_count == 3
+    assert [(m.card.message_id, m.card.comparable) for m in h.matches] == [
+        (3, True),
+        (2, False),
+        (1, True),
+    ]
+
+
+def test_summaries_skip_non_comparable_prices(conn: sqlite3.Connection) -> None:
+    _add(conn, 1, 1, T0, 500)
+    _add(conn, 1, 2, T0 + timedelta(hours=1), 50, comparable=False)
+    s = SqliteOfferQueries(conn).summaries([1])[1]
+    assert (s.last_cents, s.recent_prices, s.match_count) == (500, (500,), 2)

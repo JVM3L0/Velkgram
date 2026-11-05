@@ -1,8 +1,10 @@
 {% extends "base.html" %}
+{% set page_title = "Alertas" %}
 {% block title %}Alertas - Velkgram{% endblock %}
 {% block content %}
 <div class="list-page">
 <h1>Alertas</h1>
+{% if rows %}
 <div class="table-wrap">
 <table class="data">
   <thead><tr>
@@ -22,16 +24,24 @@
       <td class="hide-compact">{{ r.channel }}</td>
       <td class="hide-compact"><a class="button small border" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
     </tr>
-  {% else %}
-    <tr><td colspan="8" class="muted">Nenhum alerta ainda.</td></tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
+{% else %}
+<div class="empty">
+  <i aria-hidden="true">notifications_off</i>
+  <p class="empty-title">Nenhum alerta ainda</p>
+  <p class="muted">Quando uma oferta combinar com um desejo, o alerta aparece aqui.</p>
+  <a class="button border" href="/wishes"><i aria-hidden="true">favorite</i><span>Ver desejos</span></a>
+</div>
+{% endif %}
+{% if rows or page > 1 %}
 <nav class="pager" aria-label="Páginas">
   {% if page > 1 %}<a class="button border" href="/alerts?page={{ page - 1 }}"><i aria-hidden="true">chevron_left</i><span>Anterior</span></a>{% endif %}
   <span class="muted">Página {{ page }}</span>
   {% if has_next %}<a class="button border" href="/alerts?page={{ page + 1 }}"><span>Próxima</span><i aria-hidden="true">chevron_right</i></a>{% endif %}
 </nav>
+{% endif %}
 </div>
 {% endblock %}

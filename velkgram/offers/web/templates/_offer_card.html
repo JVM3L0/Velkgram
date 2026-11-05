@@ -1,10 +1,13 @@
-<article class="offer{% if row.sold_out or row.deleted %} offer-gone{% endif %}"
-  {%- if row.next_url %} hx-get="{{ row.next_url }}" hx-trigger="revealed" hx-swap="afterend"{% endif %}>
-  <p class="offer-price{% if not row.priced %} offer-price-unknown{% endif %}">{{ row.price }}</p>
+{% if row.is_coupon %}{% include "_coupon_card.html" %}{% else %}
+<article class="offer{% if row.sold_out or row.deleted %} offer-gone{% endif %}{% if not row.priced or not row.comparable %} offer-quiet{% endif %}">
+  <p class="offer-price{% if not row.priced %} offer-price-unknown{% endif %}">{{ row.price }}{% if row.coupons %} <span class="offer-with-coupon">· com cupom</span>{% endif %}</p>
+  {% with codes = row.coupons %}{% include "_coupon_codes.html" %}{% endwith %}
   <h2 class="offer-title">{{ row.title }}</h2>
   <p class="offer-meta">
     {% if row.store %}<span class="chip small tonal-chip">{{ row.store }}</span>{% endif %}
-    {% if row.source %}<span class="chip small {{ 'source-retro' if row.historic else 'source-live' }}">{{ row.source }}</span>{% endif %}
+    {% if row.store_coupons %}<a class="chip small tonal-chip store-coupons" href="/cupons?loja={{ row.store_key | urlencode }}"><i aria-hidden="true">confirmation_number</i>{{ row.store_coupons }} {{ "cupom" if row.store_coupons == 1 else "cupons" }} da loja</a>{% endif %}
+    {% if row.source %}<span class="chip small {{ 'source-retro' if row.historic else 'source-live' }}" title="{{ 'Encontrada na busca retroativa ao criar ou editar o desejo' if row.historic else 'Recebida em tempo real' }}" aria-describedby="{{ 'source-retro-desc' if row.historic else 'source-live-desc' }}">{{ row.source }}</span>{% endif %}
+    {% if row.source and not row.comparable %}<span class="chip small" title="Cupom ou post com vários preços — fora do gráfico e das estatísticas">não comparável</span>{% endif %}
     {% if row.channel %}<span class="offer-channel">{{ row.channel }}</span>{% endif %}
     <time datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
   </p>
@@ -16,7 +19,9 @@
   </p>
   {% endif %}
   <div class="offer-actions">
-    {% if row.href %}<a class="button small border" href="{{ row.href }}" rel="noopener noreferrer" target="_blank">Abrir</a>{% endif %}
-    {% if not row.source %}<a class="button small tonal" href="{{ row.follow }}">Acompanhar</a>{% endif %}
+    {% if row.href %}<a class="button small" href="{{ row.href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">open_in_new</i><span>Abrir</span></a>{% endif %}
+    {% if not row.source %}<a class="button circle tonal" href="{{ row.follow }}" aria-label="Acompanhar" title="Acompanhar"><i aria-hidden="true">favorite</i></a>{% endif %}
   </div>
+  {% include "_post_details.html" %}
 </article>
+{% endif %}

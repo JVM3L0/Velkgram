@@ -1,24 +1,26 @@
 {% extends "base.html" %}
+{% set page_title = "Editar desejo" if wish_id else "Novo desejo" %}
 {% block title %}Desejo - Velkgram{% endblock %}
 {% block content %}
 <div class="form-page">
 <h1>{{ "Editar desejo" if wish_id else "Novo desejo" }}</h1>
 {% if error %}<p class="error" role="alert"><i aria-hidden="true">error</i> {{ error }}</p>{% endif %}
 <form class="stack" method="post" action="{{ '/wishes/%d/edit' % wish_id if wish_id else '/wishes/new' }}">
-  <div class="field label border round">
+  <div class="field label border">
     <input id="name" type="text" name="name" value="{{ values.name }}" placeholder=" " required>
     <label for="name">Nome</label>
   </div>
-  <div class="field label textarea border round">
+  <div class="field label textarea border">
     <textarea id="required_terms" name="required_terms" rows="4" placeholder=" " aria-describedby="required-help">{{ values.required_terms }}</textarea>
     <label for="required_terms">Termos obrigatórios</label>
     <span id="required-help" class="helper">Um por linha; use | para alternativas.</span>
   </div>
-  <div class="field label textarea border round">
+  <div class="field label textarea border">
     <textarea id="excluded_terms" name="excluded_terms" rows="3" placeholder=" ">{{ values.excluded_terms }}</textarea>
     <label for="excluded_terms">Termos proibidos</label>
+    <span class="helper">Ofertas com qualquer um destes termos são ignoradas.</span>
   </div>
-  <div class="field label border round">
+  <div class="field label border">
     <input id="max_price" type="text" name="max_price" value="{{ values.max_price }}" inputmode="decimal" placeholder=" " required>
     <label for="max_price">Preço máximo (R$)</label>
   </div>

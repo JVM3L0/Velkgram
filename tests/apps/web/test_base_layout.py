@@ -15,6 +15,7 @@ PINNED = (
     "https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js",
     "https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap",
     "/static/velkgram.css",
+    "/static/velkgram.js",
 )
 PAGES = ("/login", "/wishes", "/wishes/new", "/channels", "/alerts", "/status")
 
@@ -113,6 +114,9 @@ def test_nav_items_current_rules() -> None:
     assert current("/") == ["/"]
     assert current("/wishes") == ["/wishes"]
     assert current("/wishes/3") == ["/wishes"]
+    assert current("/cupons") == ["/"]
+    assert current("/cupons/") == ["/"]
+    assert current("/cuponsx") == []
     assert current("/wishesx") == []
     assert current("/channels/") == ["/channels"]
     assert [i.href for i in nav_items("/")] == ["/", "/wishes", "/alerts", "/channels", "/status"]
@@ -150,3 +154,61 @@ def test_login_page_uses_base_theme(tmp_path: Path) -> None:
     assert "Entrar" in page
     assert 'type="password"' in page
     assert "Navegação principal" not in page
+
+
+def test_theme_button_is_labelled_tema(tmp_path: Path) -> None:
+    page = make_client(tmp_path).get("/wishes").text
+    assert 'aria-label="Tema"' in page and 'title="Tema"' in page
+
+
+def test_stylesheet_url_changes_with_its_content(tmp_path: Path) -> None:
+    import hashlib
+    import re
+
+    css = Path(__file__).parents[3] / "velkgram" / "apps" / "web" / "static" / "velkgram.css"
+    digest = hashlib.sha256(css.read_bytes()).hexdigest()[:12]
+    page = _page(make_client(tmp_path))
+    match = re.search(r'href="/static/velkgram\.css\?v=([0-9a-f]+)"', page)
+    assert match is not None and match.group(1) == digest
+
+
+@pytest.mark.parametrize(
+    ("path", "title"),
+    [
+        ("/", "Ofertas"),
+        ("/wishes", "Desejos"),
+        ("/channels", "Canais"),
+        ("/alerts", "Alertas"),
+        ("/status", "Status"),
+        ("/wishes/new", "Novo desejo"),
+    ],
+)
+def test_app_bar_carries_the_page_title_for_compact_screens(
+    tmp_path: Path, path: str, title: str
+) -> None:
+    page = _page(make_client(tmp_path), path)
+    assert f'<span class="page-title">{title}</span>' in page
+    assert '<main id="conteudo" class="has-page-title">' in page
+    assert f"<h1>{title}</h1>" in page  # still there for screen readers and wide screens
+
+
+def test_pages_without_a_shared_title_keep_the_plain_app_bar(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    client.post(
+        "/wishes/new",
+        data={"name": "SSD", "required_terms": "ssd", "excluded_terms": "", "max_price": "300,00"},
+    )
+    page = _page(client, "/wishes/1")
+    assert "page-title" not in page and "has-page-title" not in page
+
+
+def test_script_is_loaded_deferred_with_content_hash(tmp_path: Path) -> None:
+    import hashlib
+
+    js = Path(__file__).parents[3] / "velkgram" / "apps" / "web" / "static" / "velkgram.js"
+    digest = hashlib.sha256(js.read_bytes()).hexdigest()[:12]
+    page = _page(make_client(tmp_path), "/")
+    assert f'<script src="/static/velkgram.js?v={digest}" defer></script>' in page
+    (tmp_path / "c").mkdir()
+    served = make_client(tmp_path / "c").get("/static/velkgram.js")
+    assert served.status_code == 200 and "data-copy" in served.text

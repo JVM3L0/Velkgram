@@ -2,12 +2,20 @@
 <article id="wish-{{ wish.id }}" class="wish-card{% if paused %} wish-paused{% endif %}">
   <div class="wish-head">
     <h2 class="wish-name"><a href="/wishes/{{ wish.id }}">{{ wish.name }}</a></h2>
-    <span class="chip small {{ 'state-on' if wish.enabled else 'state-off' }}">{{ "ativo" if wish.enabled else "pausado" }}</span>
+    {% if paused %}<span class="chip small state-off">pausado</span>{% endif %}
   </div>
   {% if stats and stats.match_count %}
   <p class="wish-price">{% if stats.last_price_cents is not none %}{{ stats.last_price_cents | brl }}{% else %}<span class="wish-price-unknown">preço não identificado</span>{% endif %}</p>
+  {% set delta = stats.delta_percent %}
+  {% set below = below_alert(stats.last_price_cents, wish.max_price_cents) %}
+  {% if delta or below %}
+  <p class="wish-signals">
+    {% if delta %}<span class="wish-delta {{ 'wish-delta-down' if delta < 0 else 'wish-delta-up' }}" title="Desde o preço anterior"><i aria-hidden="true">{{ "arrow_downward" if delta < 0 else "arrow_upward" }}</i><span>{{ delta | abs }}%</span></span>{% endif %}
+    {% if below %}<span class="chip small wish-below"><i aria-hidden="true">check_circle</i>abaixo do seu alerta</span>{% endif %}
+  </p>
+  {% endif %}
   <div class="wish-spark">{{ stats.sparkline_svg | safe }}</div>
-  <p class="wish-count">{{ stats.match_count }} {{ "oferta" if stats.match_count == 1 else "ofertas" }}</p>
+  <p class="wish-count"><a href="/wishes/{{ wish.id }}">{{ stats.match_count }} {{ "oferta" if stats.match_count == 1 else "ofertas" }}</a></p>
   {% else %}
   <p class="wish-price wish-price-unknown">sem ofertas ainda</p>
   {% endif %}
@@ -16,5 +24,6 @@
     <button class="border" type="button" hx-post="/wishes/{{ wish.id }}/toggle" hx-target="#wish-{{ wish.id }}" hx-swap="outerHTML">
       <i aria-hidden="true">{{ "play_arrow" if paused else "pause" }}</i><span>{{ "Retomar" if paused else "Pausar" }}</span>
     </button>
+    <a class="button tonal" href="/wishes/{{ wish.id }}"><i aria-hidden="true">list</i><span>Ver ofertas</span></a>
   </div>
 </article>

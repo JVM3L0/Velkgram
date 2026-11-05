@@ -7,14 +7,21 @@
       <h1>{{ wish.name }}</h1>
       <span class="chip small {{ 'state-on' if wish.enabled else 'state-off' }}">{{ "ativo" if wish.enabled else "pausado" }}</span>
     </div>
-    <p class="product-terms">
+    {% if wish.required_terms %}
+    <p class="product-terms"><span class="terms-label">Termos:</span>
       {% for term in wish.required_terms %}<span class="chip small tonal-chip">{{ term }}</span>{% endfor %}
+    </p>
+    {% endif %}
+    {% if wish.excluded_terms %}
+    <p class="product-terms"><span class="terms-label">Ignorar:</span>
       {% for term in wish.excluded_terms %}<span class="chip small flag-error"><s>{{ term }}</s></span>{% endfor %}
     </p>
+    {% endif %}
     <p class="muted product-limit">Alerta até {{ max_price }}</p>
     <div class="product-actions">
       <a class="button border" href="/wishes/{{ wish.id }}/edit"><i aria-hidden="true">edit</i><span>Editar</span></a>
-      <form class="inline" method="post" action="/wishes/{{ wish.id }}/delete">
+      <form class="inline" method="post" action="/wishes/{{ wish.id }}/delete"
+        hx-boost="true" hx-confirm="Remover este desejo e o histórico de ofertas dele?" hx-target="body">
         <button class="border" type="submit"><i aria-hidden="true">delete</i><span>Remover</span></button>
       </form>
     </div>
@@ -25,10 +32,13 @@
   <div class="retro-line">{% include "_retro_status.html" %}</div>
 
   <section aria-labelledby="matches-title">
-    <h2 id="matches-title" class="section-title">Ofertas encontradas</h2>
+    <h2 id="matches-title" class="section-title">Ofertas</h2>
+    <span id="source-retro-desc" class="sr-only">Encontrada na busca retroativa ao criar ou editar o desejo</span>
+    <span id="source-live-desc" class="sr-only">Recebida em tempo real</span>
     <div id="matches" class="feed feed-list" hx-get="/wishes/{{ wish.id }}/matches" hx-trigger="retro-done from:body" hx-swap="innerHTML">
       {% include "_product_matches.html" %}
     </div>
   </section>
 </div>
+{% include "_to_top.html" %}
 {% endblock %}

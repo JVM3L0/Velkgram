@@ -127,3 +127,14 @@ def test_ingest_many_handles_deleted_and_sold_out_items() -> None:
     assert repo.get(1, 2) is not None and repo.get(1, 2).sold_out  # type: ignore[union-attr]
     assert repo.get(1, 3) is None
     assert [m.message_id for m in repo._matches.values()] == [2]
+
+
+def test_rebuild_fills_coupon_fields_on_existing_offers() -> None:
+    text = "Cupom Shopee\n\nR$ 10 OFF em R$ 40: QIP98Q1ZXO\n\n-Resgate aqui:\nhttps://s.shopee.com.br/a"
+    source, repo, builder = _setup([SourceMessage(_msg(1, text), False, False)])
+    rebuild_offers(source, builder)
+    offer = repo.get(1, 1)
+    assert offer is not None
+    assert offer.coupons == ("QIP98Q1ZXO",)
+    assert offer.price_cents is None
+    assert offer.redeem_link == "https://s.shopee.com.br/a"

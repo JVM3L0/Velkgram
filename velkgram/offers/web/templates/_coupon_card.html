@@ -1,0 +1,25 @@
+<article id="{{ row.anchor }}" class="offer offer-coupon{% if row.sold_out or row.deleted %} offer-gone{% endif %}">
+  <p class="coupon-discount">{{ row.discount }}</p>
+  {% if row.tier_rows %}
+  <ul class="coupon-tiers">
+    {% for tier in row.tier_rows %}
+    <li><span class="tier-text">{{ tier.text }}</span>
+      {% with codes = tier.codes %}{% include "_coupon_codes.html" %}{% endwith %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif row.terms %}<p class="coupon-terms">{{ row.terms | join(" · ") }}</p>{% endif %}
+  {% if row.title %}<h2 class="offer-title">{{ row.title }}</h2>{% endif %}
+  <p class="offer-meta">
+    {% if row.store %}<span class="chip small tonal-chip">{{ row.store }}</span>{% endif %}
+    {% if row.channel %}<span class="offer-channel">{{ row.channel }}</span>{% endif %}
+    <time datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
+  </p>
+  {% with codes = row.loose_codes %}{% include "_coupon_codes.html" %}{% endwith %}
+  <div class="offer-actions">
+    {% if row.redeem_href %}<a class="button small" href="{{ row.redeem_href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">redeem</i><span>Resgatar</span></a>{% endif %}
+    {% if row.cart_href %}<a class="button small tonal" href="{{ row.cart_href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">shopping_cart</i><span>Carrinho</span></a>{% endif %}
+    {% if not row.redeem_href and not row.cart_href and row.href %}<a class="button small" href="{{ row.href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">open_in_new</i><span>Abrir</span></a>{% endif %}
+  </div>
+  {% include "_post_details.html" %}
+</article>

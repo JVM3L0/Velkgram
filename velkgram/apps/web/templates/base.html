@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.css" integrity="sha384-EqZ6IXmk+4jeYN6dm7SEK3B8T8AMiHLEujTTup/LU1rSEjt1Ce8Vz8uI6NQ8czHg" crossorigin="anonymous">
-  <link rel="stylesheet" href="/static/velkgram.css">
+  <link rel="stylesheet" href="/static/velkgram.css?v={{ css_version }}">
+  <script src="/static/velkgram.js?v={{ js_version }}" defer></script>
   <script src="https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js" integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq" crossorigin="anonymous"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js" integrity="sha384-7xZPd8qp8XUHrLKlKeZKr5yHcqeQ0Juz7GLT0AOsAIMhtHNqKJg5bfFCj782KnFh" crossorigin="anonymous"></script>
 </head>
@@ -19,9 +20,9 @@
   <a class="sr-only" href="#conteudo">Pular para o conteúdo</a>
   <div class="shell">
     <header class="appbar">
-      <p class="title">Velkgram</p>
+      <p class="title"><span class="brand">Velkgram</span>{% if page_title %}<span class="page-title">{{ page_title }}</span>{% endif %}</p>
       <div class="theme-menu-wrap">
-        <button class="circle transparent" type="button" data-ui="#theme-menu" aria-label="Escolher tema" aria-haspopup="menu">
+        <button class="circle transparent" type="button" data-ui="#theme-menu" aria-label="Tema" title="Tema" aria-haspopup="menu">
           <i>palette</i>
         </button>
         <menu id="theme-menu" class="theme-menu left no-wrap">
@@ -51,7 +52,7 @@
     </nav>
 
     {% endif %}
-    <main id="conteudo"{% if not request.session.get("user") %} class="auth"{% endif %}>{% block content %}{% endblock %}</main>
+    <main id="conteudo"{% if not request.session.get("user") %} class="auth"{% elif page_title %} class="has-page-title"{% endif %}>{% block content %}{% endblock %}</main>
     {% if request.session.get("user") %}
     <nav class="bottom" aria-label="Navegação principal">
       {% for item in nav_items(request.url.path) %}

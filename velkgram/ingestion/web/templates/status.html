@@ -1,19 +1,30 @@
 {% extends "base.html" %}
+{% set page_title = "Status" %}
 {% block title %}Status - Velkgram{% endblock %}
 {% block content %}
 {% set silent_count = channels | selectattr("silent") | list | length %}
 <div class="list-page">
 <h1>Status</h1>
+<section class="health health-{{ banner.kind }}" aria-label="Situação do coletor" role="status">
+  <i aria-hidden="true">{{ banner.icon }}</i>
+  <div>
+    <p class="health-title">{{ banner.title }}</p>
+    <p class="health-detail">{{ banner.detail }}</p>
+  </div>
+</section>
 <section class="status-card" aria-labelledby="collector-title">
   <h2 id="collector-title" class="section-title">Coletor</h2>
   {% if heartbeat %}
-  <p class="status-line">
-    <span class="chip small {{ 'flag-error' if heartbeat.state == 'erro fatal' else 'state-on' }}">{{ heartbeat.state }}</span>
-    {% if heartbeat.reason %}<span>{{ heartbeat.reason }}</span>{% endif %}
-    {% if heartbeat.stale %}<span class="chip small flag-error">desatualizado</span>{% endif %}
-  </p>
-  <p class="muted">Último sinal: {{ heartbeat.last_seen.strftime("%d/%m/%Y %H:%M:%S") }}
-  · {{ heartbeat.messages_seen }} mensagens · {{ heartbeat.alerts_sent }} alertas enviados</p>
+  <dl class="kv">
+    <div class="kv-row"><dt><i aria-hidden="true">sync_alt</i>Conexão</dt>
+      <dd><span class="chip small {{ 'flag-error' if heartbeat.state == 'erro fatal' else 'state-on' }}">{{ heartbeat.state }}</span>{% if heartbeat.reason %} <span>{{ heartbeat.reason }}</span>{% endif %}</dd></div>
+    <div class="kv-row"><dt><i aria-hidden="true">schedule</i>Último sinal</dt>
+      <dd>{{ heartbeat.last_seen.strftime("%d/%m/%Y %H:%M:%S") }} <span class="muted">({{ heartbeat.last_seen_ago }})</span>{% if heartbeat.stale %} <span class="chip small flag-error">desatualizado</span>{% endif %}</dd></div>
+    <div class="kv-row"><dt><i aria-hidden="true">mail</i>Mensagens lidas</dt>
+      <dd>{{ heartbeat.messages_seen }} {{ "mensagem" if heartbeat.messages_seen == 1 else "mensagens" }}</dd></div>
+    <div class="kv-row"><dt><i aria-hidden="true">notifications_active</i>Alertas</dt>
+      <dd>{{ heartbeat.alerts_sent }} {{ "alerta enviado" if heartbeat.alerts_sent == 1 else "alertas enviados" }}</dd></div>
+  </dl>
   {% else %}
   <p class="status-line"><span class="chip small flag-error">coletor nunca rodou</span></p>
   {% endif %}
@@ -21,9 +32,12 @@
 
 <section aria-labelledby="channels-title">
   <h2 id="channels-title" class="section-title">Canais</h2>
+  {% if channels %}
   <p class="status-card show-compact">
     <strong>{{ channels | length }} {{ "canal" if channels | length == 1 else "canais" }}, {{ silent_count }} {{ "silencioso" if silent_count == 1 else "silenciosos" }}</strong>
   </p>
+  {% endif %}
+  {% if channels %}
   <div class="table-wrap hide-compact">
   <table class="data">
     <thead><tr><th>Canal</th><th>Última mensagem</th><th><span class="sr-only">Situação</span></th></tr></thead>
@@ -31,31 +45,43 @@
     {% for c in channels %}
       <tr>
         <td>{{ c.name }}</td>
-        <td>{% if c.last_message_at %}{{ c.last_message_at.strftime("%d/%m/%Y %H:%M") }}{% else %}<span class="muted">nenhuma</span>{% endif %}</td>
+        <td>{% if c.last_message_at %}{{ c.last_message_at.strftime("%d/%m/%Y %H:%M") }} <span class="muted">({{ c.last_message_ago }})</span>{% else %}<span class="muted">nenhuma</span>{% endif %}</td>
         <td>{% if c.silent %}<span class="chip small flag-error">silencioso (&gt; {{ c.silent_after_hours }} h)</span>{% endif %}</td>
       </tr>
-    {% else %}
-      <tr><td colspan="3" class="muted">Nenhum canal ativo.</td></tr>
     {% endfor %}
     </tbody>
   </table>
   </div>
+  {% else %}
+  <div class="empty empty-compact">
+    <i aria-hidden="true">campaign</i>
+    <p class="empty-title">Nenhum canal ativo</p>
+    <p class="muted">Adicione um canal de ofertas para o coletor começar a ler.</p>
+    <a class="button border" href="/channels"><i aria-hidden="true">add</i><span>Adicionar canal</span></a>
+  </div>
+  {% endif %}
 </section>
 
 <section aria-labelledby="failures-title">
   <h2 id="failures-title" class="section-title">Falhas recentes</h2>
+  {% if failures %}
   <div class="table-wrap">
   <table class="data">
     <thead><tr><th>Quando</th><th>Desejo</th><th>Status</th></tr></thead>
     <tbody>
     {% for wish, state, when in failures %}
       <tr><td>{{ when.strftime("%d/%m/%Y %H:%M") }}</td><td>{{ wish }}</td><td><span class="chip small status-{{ state }}">{{ {"failed": "falhou", "expired": "expirado", "pending": "pendente", "sent": "enviado"}.get(state, state) }}</span></td></tr>
-    {% else %}
-      <tr><td colspan="3" class="muted">Nenhuma falha recente.</td></tr>
     {% endfor %}
     </tbody>
   </table>
   </div>
+  {% else %}
+  <div class="empty empty-compact">
+    <i aria-hidden="true">check_circle</i>
+    <p class="empty-title">Nenhuma falha recente</p>
+    <p class="muted">Alertas que falharem ao enviar aparecem aqui.</p>
+  </div>
+  {% endif %}
 </section>
 </div>
 {% endblock %}

@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -73,7 +74,7 @@ def test_wish_card_links_to_product_page(tmp_path: Path) -> None:
 def test_wish_toggle_shows_state_and_action(tmp_path: Path) -> None:
     client = _client(tmp_path)
     page = client.get("/wishes").text
-    assert "ativo" in page
+    assert ">ativo<" not in page  # only the paused state is worth a chip
     assert "Pausar" in page
     fragment = client.post("/wishes/1/toggle").text
     assert "pausado" in fragment
@@ -108,3 +109,40 @@ def test_edit_and_toggle_reach_wishlist_router_with_offers_mounted(tmp_path: Pat
     toggle = client.post("/wishes/1/toggle")
     assert toggle.status_code == 200
     assert 'id="wish-1"' in toggle.text
+
+
+def test_wish_card_offers_a_ver_ofertas_action_and_linked_count(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [25000, 20000])
+    page = client.get("/wishes").text
+    assert "Ver ofertas" in page
+    assert page.count('href="/wishes/1"') >= 3  # name, count and the button
+    assert 'href="/wishes/1">2 ofertas</a>' in page
+
+
+def test_product_page_labels_terms_and_lowest_price_window(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    page = client.get("/wishes/1").text
+    assert "Termos:" in page
+    assert "Menor preço (sempre)" in page
+
+
+def test_product_delete_asks_for_confirmation(tmp_path: Path) -> None:
+    assert "hx-confirm=" in _client(tmp_path).get("/wishes/1").text
+
+
+def test_wish_card_shows_price_delta_and_below_alert_badge(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [25000, 20000])
+    page = client.get("/wishes").text
+    assert re.search(r'class="wish-delta wish-delta-down"[^>]*>[^<]*<i[^>]*>arrow_downward', page)
+    assert "20%" in page
+    assert "abaixo do seu alerta" in page
+
+
+def test_wish_card_price_rise_has_no_badge_above_the_limit(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [25000, 35000])
+    page = client.get("/wishes").text
+    assert "wish-delta-up" in page and "40%" in page
+    assert "abaixo do seu alerta" not in page

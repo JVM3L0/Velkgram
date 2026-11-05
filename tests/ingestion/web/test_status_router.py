@@ -39,14 +39,20 @@ def _channel(tmp_path: Path, *, created_at: datetime, last_message: datetime | N
 
 
 def _heartbeat(
-    tmp_path: Path, *, age_s: int, state: str = "connected", reason: str | None = None
+    tmp_path: Path,
+    *,
+    age_s: int,
+    state: str = "connected",
+    reason: str | None = None,
+    messages: int = 10,
+    alerts: int = 2,
 ) -> None:
     conn = connect(make_settings(tmp_path).db_path)
     try:
         conn.execute(
             "INSERT INTO collector_heartbeat (id, last_seen, connection_state, fatal_reason, "
-            "messages_seen, alerts_sent) VALUES (1, ?, ?, ?, 10, 2)",
-            (_iso(NOW - timedelta(seconds=age_s)), state, reason),
+            "messages_seen, alerts_sent) VALUES (1, ?, ?, ?, ?, ?)",
+            (_iso(NOW - timedelta(seconds=age_s)), state, reason, messages, alerts),
         )
         conn.commit()
     finally:
@@ -138,3 +144,67 @@ def test_status_compact_summary_counts_channels(tmp_path: Path) -> None:
     _channel(tmp_path, created_at=NOW - timedelta(days=5), last_message=NOW - timedelta(hours=13))
     page = client.get("/status").text
     assert "1 canal, 1 silencioso" in page
+
+
+def test_status_pluralizes_message_and_alert_counts(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _heartbeat(tmp_path, age_s=5, messages=1, alerts=1)
+    page = client.get("/status").text
+    assert ">1 mensagem<" in page and "1 mensagens" not in page
+    assert "1 alerta enviado" in page and "1 alertas enviados" not in page
+
+
+def test_status_plural_counts_above_one(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _heartbeat(tmp_path, age_s=5, messages=10, alerts=2)
+    page = client.get("/status").text
+    assert "10 mensagens" in page and "2 alertas enviados" in page
+
+
+def test_status_explains_stale_heartbeat(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _heartbeat(tmp_path, age_s=91)
+    assert "90 segundos" in client.get("/status").text
+
+
+def test_status_empty_states_hide_table_heads(tmp_path: Path) -> None:
+    page = _client(tmp_path).get("/status").text
+    assert "Nenhum canal ativo" in page and "Nenhuma falha recente" in page
+    assert "<table" not in page
+    assert 'class="empty' in page
+    assert 'href="/channels"' in page
+
+
+def test_status_with_a_channel_still_renders_the_table(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _channel(tmp_path, created_at=NOW - timedelta(days=5), last_message=NOW - timedelta(hours=1))
+    assert "<table" in client.get("/status").text
+
+
+def test_status_banner_reflects_collector_health(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    assert "health-error" in client.get("/status").text  # never ran
+    _heartbeat(tmp_path, age_s=30)
+    page = client.get("/status").text
+    assert "health-ok" in page and "Coletor funcionando" in page
+    assert "(há 30 s)" in page  # relative time beside the absolute one
+
+
+def test_status_banner_is_amber_when_stale_and_red_when_fatal(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _heartbeat(tmp_path, age_s=600)
+    page = client.get("/status").text
+    assert "health-warning" in page and "Sem sinal há 10 min" in page
+    conn = connect(make_settings(tmp_path).db_path)
+    conn.execute(
+        "UPDATE collector_heartbeat SET connection_state='fatal', last_seen=?", (_iso(NOW),)
+    )
+    conn.commit()
+    conn.close()
+    assert "Sessão inválida" in client.get("/status").text
+
+
+def test_status_channel_rows_show_relative_last_message(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _channel(tmp_path, created_at=NOW - timedelta(days=5), last_message=NOW - timedelta(hours=2))
+    assert "(há 2 h)" in client.get("/status").text

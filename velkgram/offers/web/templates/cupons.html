@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set page_title = "Cupons" %}
+{% block title %}Cupons - Velkgram{% endblock %}
+{% block content %}
+<div class="feed-page coupons-page">
+<h1>Cupons</h1>
+{% with tab = "cupons" %}{% include "_feed_tabs.html" %}{% endwith %}
+<form id="coupon-filters" class="coupon-filters" method="get" action="/cupons"
+  hx-get="/cupons" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true"
+  hx-sync="this:replace" hx-trigger="submit, change, input changed delay:400ms from:#q">
+  <div class="field prefix border filters-search">
+    <i>search</i>
+    <input type="search" id="q" name="q" value="{{ q }}" placeholder="Buscar por código, título ou loja" aria-label="Buscar cupons" enterkeyhint="search">
+  </div>
+  {% if store_options %}
+  <div class="filter-group" role="group" aria-labelledby="stores-label">
+    <p id="stores-label" class="filter-label">Lojas</p>
+    <div class="chip-row">
+      {% for value, name in store_options %}
+      <label class="chip">
+        <input type="checkbox" name="loja" value="{{ value }}"{% if value in selected_stores %} checked{% endif %}>
+        <span>{{ name }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <input type="hidden" name="ativos" value="0">
+  <label class="switch filter-switch">
+    <input type="checkbox" name="ativos" value="1"{% if only_active %} checked{% endif %}>
+    <span>Só ativos</span>
+  </label>
+</form>
+
+<section id="results" class="results" aria-label="Cupons">
+  {% include "_live.html" %}
+  <div id="feed" class="feed feed-cards coupon-feed">
+    {% if rows %}{% include "_coupons_page.html" %}{% else %}
+    <div class="empty">
+      <i aria-hidden="true">confirmation_number</i>
+      <p class="empty-title">Nenhum cupom por aqui.</p>
+      {% if only_active and not has_filters %}
+      <p class="muted">Os cupons ativos são os postados nas últimas 24 horas.</p>
+      <a class="button border" href="/cupons?ativos=0">Ver cupons antigos</a>
+      {% else %}
+      <p class="muted">Ajuste a busca ou limpe os filtros para ver mais cupons.</p>
+      <a class="button border" href="/cupons">Limpar filtros</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+</div>
+{% include "_to_top.html" %}
+{% endblock %}

@@ -7,8 +7,10 @@ import pytest
 from velkgram.offers import OfferCard
 from velkgram.offers.web.format import (
     STORE_NAMES,
+    brl_short,
     follow_url,
     format_price,
+    linkify,
     parse_price_cents,
     relative_time,
     safe_href,
@@ -81,3 +83,40 @@ def test_safe_href_survives_malformed_url() -> None:
 
 def test_parse_price_rejects_values_beyond_sqlite_integer() -> None:
     assert parse_price_cents("99999999999999999999") is None
+
+
+def test_follow_url_truncates_long_names_on_a_word_boundary() -> None:
+    title = (
+        "Monitor Gamer Curvo Aoc Agon 34 Ultrawide Wqhd 180Hz 0.5ms Fast Va Adaptive-Sync Altura"
+    )
+    name = parse_qs(urlsplit(follow_url(_card(title))).query)["name"][0]
+    assert len(name) <= 60
+    assert title.startswith(name)
+    assert name == "Monitor Gamer Curvo Aoc Agon 34 Ultrawide Wqhd 180Hz 0.5ms"
+
+
+def test_follow_url_keeps_short_names_intact() -> None:
+    name = parse_qs(urlsplit(follow_url(_card("SSD 1TB"))).query)["name"][0]
+    assert name == "SSD 1TB"
+
+
+def test_follow_url_real_feed_title_is_cut_at_60_without_dangling_plus() -> None:
+    title = "Kit Upgrade Amd Ryzen 7 5700x + Placa-Mãe Msi B550m WiFi6E + Water Cooler 240mm"
+    name = parse_qs(urlsplit(follow_url(_card(title))).query)["name"][0]
+    assert name == "Kit Upgrade Amd Ryzen 7 5700x + Placa-Mãe Msi B550m WiFi6E"
+
+
+def test_linkify_escapes_first_and_links_only_safe_urls() -> None:
+    out = linkify('<b>x</b> https://a.test/p?x=1&y=2. e javascript:alert(1) "q"')
+    assert out.startswith("&lt;b&gt;x&lt;/b&gt; ")
+    assert (
+        '<a href="https://a.test/p?x=1&amp;y=2" rel="noopener noreferrer" target="_blank">'
+        "https://a.test/p?x=1&amp;y=2</a>. e javascript:alert(1) &#34;q&#34;"
+    ) in out
+    assert "<a " not in linkify("tg://resolve?domain=x e ftp://x.test")
+
+
+def test_brl_short_drops_zero_cents() -> None:
+    assert brl_short(4000) == "R$ 40"
+    assert brl_short(4050) == "R$ 40,50"
+    assert brl_short(123456) == "R$ 1.234,56"

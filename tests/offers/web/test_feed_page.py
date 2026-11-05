@@ -61,6 +61,7 @@ def test_feed_htmx_next_page_returns_fragment_only(tmp_path: Path) -> None:
     assert "<html" not in page
     assert "Produto 5" in page
     assert "hx-trigger" not in page  # last page: no further trigger
+    assert "Fim da lista" in page
 
 
 def test_feed_empty_state(tmp_path: Path) -> None:
@@ -103,7 +104,7 @@ def test_next_page_link_preserves_filters(tmp_path: Path) -> None:
     url = match.group(1).replace("&amp;", "&")
     assert "store=amazon" in url and "priced=1" in url and "q=produto" in url
     assert "cursor=" in url
-    assert 'hx-trigger="revealed"' in html and 'hx-swap="afterend"' in html
+    assert 'hx-trigger="revealed, click"' in html and 'hx-swap="outerHTML"' in html
 
 
 def test_malformed_cursor_gives_first_page(tmp_path: Path) -> None:
@@ -143,3 +144,33 @@ def test_price_filter_excludes_unknown_prices(tmp_path: Path) -> None:
 
 def test_old_root_redirect_is_gone(tmp_path: Path) -> None:
     assert _client(tmp_path).get("/").status_code == 200
+
+
+def test_feed_view_toggle_says_grade_not_cards(tmp_path: Path) -> None:
+    page = make_client(tmp_path).get("/").text
+    assert "Grade" in page and "Cards</span>" not in page
+
+
+def test_feed_card_has_one_filled_button_and_an_icon_only_follow_heart(tmp_path: Path) -> None:
+    html = _client(tmp_path, offer(1)).get("/").text
+    assert re.search(r'<a class="button small" href="https://x\.test/p"', html)
+    follow = re.search(r'<a class="button circle tonal"[^>]*href="/wishes/new\?[^>]*>', html)
+    assert follow is not None
+    assert 'aria-label="Acompanhar"' in follow.group(0)
+    assert 'title="Acompanhar"' in follow.group(0)
+    assert "<span>Acompanhar</span>" not in html
+
+
+def test_feed_card_without_comparable_price_uses_the_quiet_layout(tmp_path: Path) -> None:
+    html = (
+        _client(
+            tmp_path,
+            offer(1, title="Normal"),
+            offer(2, title="Cupom Kabum 10%", comparable=False),
+            offer(3, title="Sem preço", price=None),
+        )
+        .get("/")
+        .text
+    )
+    cards = re.findall(r'<article class="([^"]*)"', html)
+    assert sorted("offer-quiet" in c for c in cards) == [False, True, True]

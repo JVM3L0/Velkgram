@@ -1,0 +1,9 @@
+{% if next_url %}
+<button type="button" class="button tonal load-more" hx-get="{{ next_url }}" hx-trigger="revealed, click" hx-swap="outerHTML" hx-disabled-elt="this">
+  <span class="load-more-label">Carregar mais</span>
+  <span class="load-more-error">Falha ao carregar. Tentar de novo</span>
+  <progress class="circle small htmx-indicator" aria-label="Carregando"></progress>
+</button>
+{% elif rows %}
+<p class="load-end muted">Fim da lista</p>
+{% endif %}

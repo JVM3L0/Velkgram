@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% set page_title = "Desejos" %}
 {% block title %}Desejos - Velkgram{% endblock %}
 {% block content %}
 <div class="wishes-page">
-<h1>Desejos</h1>
+<div class="page-head">
+  <h1>Desejos</h1>
+  <a class="button page-action" href="/wishes/new"><i aria-hidden="true">add</i><span>Novo desejo</span></a>
+</div>
 <section id="wishes" class="feed wish-grid" aria-label="Desejos">
   {% for card in cards %}
     {% with wish = card.wish, stats = card.stats %}{% include "_wish_row.html" %}{% endwith %}

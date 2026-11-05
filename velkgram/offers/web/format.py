@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from urllib.parse import urlencode, urlsplit
 from zoneinfo import ZoneInfo
 
+from markupsafe import Markup, escape
+
 from velkgram.offers.domain.suggest import suggest_terms
 from velkgram.offers.domain.title import STORE_TITLES
 from velkgram.offers.ports.queries import OfferCard
@@ -19,6 +21,36 @@ def brl(cents: int | None) -> str:
         return "preço não identificado"
     reais, rest = divmod(cents, 100)
     return f"R$ {reais:,}".replace(",", ".") + f",{rest:02d}"
+
+
+def brl_short(cents: int) -> str:
+    """Like `brl` but whole reais without cents: "R$ 40" (coupon thresholds)."""
+    return brl(cents).removesuffix(",00")
+
+
+_URL = re.compile(r"https?://[^\s<>\"']+")
+_URL_TAIL = ".,;:!?)]}"
+
+
+def linkify(text: str) -> Markup:
+    """Escape `text`, then turn http(s) URLs into links (only `safe_href`-valid ones)."""
+    out: list[str] = []
+    last = 0
+    for match in _URL.finditer(text):
+        url = match.group(0).rstrip(_URL_TAIL)
+        end = match.start() + len(url)
+        out.append(str(escape(text[last : match.start()])))
+        href = safe_href(url)
+        if href is None:
+            out.append(str(escape(url)))
+        else:
+            shown = escape(url)
+            out.append(
+                f'<a href="{escape(href)}" rel="noopener noreferrer" target="_blank">{shown}</a>'
+            )
+        last = end
+    out.append(str(escape(text[last:])))
+    return Markup("".join(out))
 
 
 SQLITE_MAX_INT = 2**63 - 1  # larger ints overflow SQLite bindings
@@ -64,10 +96,23 @@ def safe_href(url: str | None) -> str | None:
     return url if scheme in ("http", "https") else None
 
 
+_NAME_MAX = 60
+
+
+def short_name(title: str, limit: int = _NAME_MAX) -> str:
+    """The title cut to `limit` characters on a word boundary, for a prefilled wish name."""
+    if len(title) <= limit:
+        return title
+    cut = title[:limit]
+    if title[limit] != " " and " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:+-")
+
+
 def follow_url(card: OfferCard) -> str:
     """The new-wish form prefilled from an offer: name, suggested terms and price."""
     params: dict[str, object] = {
-        "name": card.title,
+        "name": short_name(card.title),
         "required": list(suggest_terms(card.title)),
     }
     if card.price_cents is not None:

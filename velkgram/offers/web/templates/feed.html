@@ -1,13 +1,15 @@
 {% extends "base.html" %}
+{% set page_title = "Ofertas" %}
 {% block title %}Feed - Velkgram{% endblock %}
 {% block content %}
 <div class="feed-page">
 <h1>Ofertas</h1>
+{% with tab = "ofertas" %}{% include "_feed_tabs.html" %}{% endwith %}
 <form id="feed-filters" class="filters" method="get" action="/"
   hx-get="/" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true"
   hx-sync="this:replace" hx-trigger="submit, change, input changed delay:400ms from:#q">
   <div class="filters-bar">
-    <div class="field prefix round border filters-search">
+    <div class="field prefix border filters-search">
       <i>search</i>
       <input type="search" id="q" name="q" value="{{ q }}" placeholder="Buscar ofertas" aria-label="Buscar ofertas" enterkeyhint="search">
     </div>
@@ -21,7 +23,7 @@
       </label>
       <label class="view-option">
         <input type="radio" name="view" value="cards"{% if view != "list" %} checked{% endif %}>
-        <span><i>grid_view</i>Cards</span>
+        <span><i>grid_view</i>Grade</span>
       </label>
     </div>
   </div>
@@ -48,7 +50,7 @@
       <input type="checkbox" name="priced" value="1"{% if priced_only %} checked{% endif %}>
       <span>Só com preço</span>
     </label>
-    <div class="field label suffix border round filter-channel">
+    <div class="field label suffix border filter-channel">
       <select id="channel" name="channel">
         <option value="">Todos os canais</option>
         {% for cid, cname in channels %}
@@ -59,11 +61,11 @@
       <i>arrow_drop_down</i>
     </div>
     <div class="filter-prices">
-      <div class="field label border round">
+      <div class="field label border">
         <input type="search" id="min" name="min" value="{{ min_value }}" inputmode="decimal" autocomplete="off" placeholder=" ">
         <label for="min">Mínimo (R$)</label>
       </div>
-      <div class="field label border round">
+      <div class="field label border">
         <input type="search" id="max" name="max" value="{{ max_value }}" inputmode="decimal" autocomplete="off" placeholder=" ">
         <label for="max">Máximo (R$)</label>
       </div>
@@ -73,6 +75,7 @@
 </form>
 
 <section id="results" class="results" aria-label="Resultados">
+  {% include "_live.html" %}
   {% if q %}<p class="note"><i aria-hidden="true">info</i>A busca cobre os últimos {{ retention_days }} dias.</p>{% endif %}
   <div id="feed" class="feed feed-{{ view }}">
     {% if rows %}{% include "_feed_page.html" %}{% else %}
@@ -86,4 +89,5 @@
   </div>
 </section>
 </div>
+{% include "_to_top.html" %}
 {% endblock %}

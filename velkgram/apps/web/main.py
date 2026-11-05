@@ -1,5 +1,6 @@
 """Web app factory: `uvicorn --factory velkgram.apps.web.main:create_app`."""
 
+import hashlib
 import os
 import sqlite3
 from collections.abc import Mapping, Sequence
@@ -38,6 +39,7 @@ from velkgram.ingestion.web.router import build_router as build_status_router
 from velkgram.offers import sparkline_svg
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
+from velkgram.offers.web.format import linkify
 from velkgram.offers.web.router import WishInfo
 from velkgram.offers.web.router import build_router as build_offers_router
 from velkgram.shared.adapters.clock_system import SystemClock
@@ -46,7 +48,7 @@ from velkgram.shared.db import bump_version, transaction
 from velkgram.shared.ports import Clock
 from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 from velkgram.wishlist.web.router import build_router as build_wishlist_router
-from velkgram.wishlist.web.view import WishCardStats, format_brl
+from velkgram.wishlist.web.view import WishCardStats, format_brl, is_below_alert
 
 _APP_TEMPLATES = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -68,7 +70,16 @@ def _build_templates() -> Jinja2Templates:
     env.globals["theme_classes"] = theme_classes
     env.globals["nav_items"] = nav_items
     env.globals["theme_modes"] = THEME_MODES
+    # Content hash in the URL: a new stylesheet is never served from a stale browser cache.
+    env.globals["css_version"] = hashlib.sha256(
+        (_STATIC_DIR / "velkgram.css").read_bytes()
+    ).hexdigest()[:12]
+    env.globals["js_version"] = hashlib.sha256(
+        (_STATIC_DIR / "velkgram.js").read_bytes()
+    ).hexdigest()[:12]
     env.filters["brl"] = format_brl
+    env.filters["linkify"] = linkify
+    env.globals["below_alert"] = is_below_alert
     return Jinja2Templates(env=env)
 
 
@@ -113,9 +124,14 @@ def _wish_card_stats(
             last_price_cents=s.last_cents,
             match_count=s.match_count,
             sparkline_svg=sparkline_svg(s.recent_prices) if s.recent_prices else "",
+            previous_price_cents=s.recent_prices[-2] if len(s.recent_prices) > 1 else None,
         )
         for wid, s in SqliteOfferQueries(conn).summaries(wish_ids).items()
     }
+
+
+def _last_messages(conn: sqlite3.Connection, channel_ids: Sequence[int]) -> Mapping[int, datetime]:
+    return SqliteIngestionQueries(conn).last_message_at(channel_ids)
 
 
 def _wish_deleted(conn: sqlite3.Connection, wish_id: int) -> None:
@@ -223,6 +239,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             templates=templates,
             make_repo=SqliteChannelRepository,
             clock=clock,
+            last_messages=_last_messages,
         ),
         prefix="/channels",
         dependencies=[Depends(require_user)],

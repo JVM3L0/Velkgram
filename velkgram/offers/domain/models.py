@@ -16,6 +16,21 @@ class RetroStatus(StrEnum):
     failed = "failed"
 
 
+class OfferKind(StrEnum):
+    product = "product"
+    coupon = "coupon"
+
+
+@dataclass(frozen=True, slots=True)
+class CouponTier:
+    """One "10% OFF em R$ 79, Limite de R$ 40 OFF: CODE" line of a coupon post."""
+
+    discount: str
+    min_cents: int | None
+    cap_cents: int | None = None
+    codes: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class Offer:
     channel_id: int
@@ -33,6 +48,15 @@ class Offer:
     sold_out: bool
     deleted: bool
     updated_at: datetime
+    comparable: bool = True
+    kind: OfferKind = OfferKind.product
+    coupons: tuple[str, ...] = ()
+    coupon_discount: str | None = None
+    coupon_min_cents: int | None = None
+    coupon_scope: str | None = None
+    redeem_link: str | None = None
+    cart_link: str | None = None
+    coupon_tiers: tuple[CouponTier, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
