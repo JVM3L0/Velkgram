@@ -98,6 +98,7 @@ Spec §3, §4.1.2–3.
       min_cents: int | None
       codes: tuple[str, ...]
 
+
   @dataclass(frozen=True, slots=True)
   class CouponMatchedWish:
       coupon_channel_id: int
