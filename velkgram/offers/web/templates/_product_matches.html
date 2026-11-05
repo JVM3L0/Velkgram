@@ -1,0 +1,8 @@
+{% for row in rows %}{% include "_offer_card.html" %}{% endfor %}
+{% if first_page and not rows %}
+<div class="empty">
+  <i aria-hidden="true">manage_search</i>
+  <p class="empty-title">Nenhuma oferta ainda</p>
+  <p class="muted">Quando uma oferta combinar com este desejo, ela aparece aqui.</p>
+</div>
+{% endif %}

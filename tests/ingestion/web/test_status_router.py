@@ -65,7 +65,7 @@ def test_status_flags_silent_channel(tmp_path: Path) -> None:
 def test_status_recent_message_not_silent(tmp_path: Path) -> None:
     client = _client(tmp_path)
     _channel(tmp_path, created_at=NOW - timedelta(days=5), last_message=NOW - timedelta(hours=1))
-    assert "silencioso" not in client.get("/status").text
+    assert "silencioso (&gt;" not in client.get("/status").text
 
 
 def test_status_new_channel_without_messages_not_silent_before_threshold(
@@ -75,7 +75,7 @@ def test_status_new_channel_without_messages_not_silent_before_threshold(
     _channel(tmp_path, created_at=NOW - timedelta(hours=2), last_message=None)
     page = client.get("/status")
     assert "Promos BR" in page.text
-    assert "silencioso" not in page.text
+    assert "silencioso (&gt;" not in page.text
 
 
 def test_status_new_channel_without_messages_silent_after_threshold(tmp_path: Path) -> None:
@@ -131,3 +131,10 @@ def test_status_lists_recent_failures_with_wish_name(tmp_path: Path) -> None:
     page = client.get("/status")
     assert "Tênis" in page.text
     assert "failed" in page.text or "falhou" in page.text
+
+
+def test_status_compact_summary_counts_channels(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _channel(tmp_path, created_at=NOW - timedelta(days=5), last_message=NOW - timedelta(hours=13))
+    page = client.get("/status").text
+    assert "1 canal, 1 silencioso" in page

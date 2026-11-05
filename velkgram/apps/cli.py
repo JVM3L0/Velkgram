@@ -15,13 +15,19 @@ from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.apps.web.auth import hash_password
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.adapters.telethon.client import build_client
+from velkgram.offers import OfferBuilder, rebuild_offers
+from velkgram.offers.adapters.ingestion_api import IngestionApiMessageSource
+from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
+from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
 from velkgram.reporting.adapters.alerting_api import AlertingAlertStats, price_extractor
 from velkgram.reporting.adapters.ingestion_api import IngestionMessageStats
 from velkgram.reporting.services.metrics import build_report
 from velkgram.reporting.services.render import render_report
+from velkgram.shared.adapters.clock_system import SystemClock
 from velkgram.shared.config import load_settings
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
+from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 
 MIGRATION_PACKAGES = (
     "velkgram.shared",
@@ -29,6 +35,7 @@ MIGRATION_PACKAGES = (
     "velkgram.wishlist",
     "velkgram.ingestion",
     "velkgram.alerting",
+    "velkgram.offers",
 )
 
 
@@ -101,6 +108,23 @@ def _report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rebuild_offers(_args: argparse.Namespace) -> int:
+    settings = load_settings(os.environ)
+    conn = connect(settings.db_path)
+    try:
+        apply_migrations(conn, MIGRATION_PACKAGES)
+        builder = OfferBuilder(
+            SqliteOfferRepository(conn),
+            WishlistApiWishReader(SqliteWishRepository(conn)),
+            SystemClock(),
+        )
+        built = rebuild_offers(IngestionApiMessageSource(SqliteIngestionQueries(conn)), builder)
+    finally:
+        conn.close()
+    print(f"rebuilt {built} offers")
+    return 0
+
+
 def _date(value: str) -> date:
     try:
         return date.fromisoformat(value)
@@ -114,6 +138,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "hash-password": _hash_password,
     "collector": _collector,
     "report": _report,
+    "rebuild-offers": cmd_rebuild_offers,
 }
 
 
@@ -124,6 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("login", help="interactive Telegram login; prints a StringSession")
     sub.add_parser("hash-password", help="hash a web password for WEB_PASSWORD_HASH")
     sub.add_parser("collector", help="run the Telegram collector")
+    sub.add_parser("rebuild-offers", help="rebuild offers and wish matches from stored messages")
     report = sub.add_parser("report", help="usage report: volume, alerts, latency, token cost")
     report.add_argument("--since", type=_date, required=True, help="YYYY-MM-DD (UTC)")
     report.add_argument("--until", type=_date, default=None, help="YYYY-MM-DD (UTC), inclusive")

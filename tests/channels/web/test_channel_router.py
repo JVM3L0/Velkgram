@@ -62,7 +62,8 @@ def test_active_channel_shows_name_and_toggle_returns_row(tmp_path: Path) -> Non
     row = client.post("/channels/1/toggle")
     assert row.status_code == 200
     assert "<html" not in row.text
-    assert "Pausado" in row.text
+    assert "pausado" in row.text
+    assert "Retomar" in row.text
 
 
 def test_duplicate_add_shows_message(tmp_path: Path) -> None:

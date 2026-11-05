@@ -1,16 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Lista de desejos - Velkgram{% endblock %}
+{% block title %}Desejos - Velkgram{% endblock %}
 {% block content %}
-<h1>Lista de desejos</h1>
-<p><a class="button" href="/wishes/new">Novo desejo</a></p>
-<table>
-  <thead><tr><th>Nome</th><th>Preço máximo</th><th>Ativo</th><th></th></tr></thead>
-  <tbody>
-  {% for wish in wishes %}
-    {% include "_wish_row.html" %}
+<div class="wishes-page">
+<h1>Desejos</h1>
+<section id="wishes" class="feed wish-grid" aria-label="Desejos">
+  {% for card in cards %}
+    {% with wish = card.wish, stats = card.stats %}{% include "_wish_row.html" %}{% endwith %}
   {% else %}
-    <tr><td colspan="4" class="muted">Nenhum desejo cadastrado.</td></tr>
+    <div class="empty">
+      <i aria-hidden="true">favorite</i>
+      <p class="empty-title">Nenhum desejo ainda</p>
+      <p class="muted">Cadastre o que você procura e o Velkgram avisa quando aparecer uma oferta abaixo do seu limite.</p>
+    </div>
   {% endfor %}
-  </tbody>
-</table>
+</section>
+<a class="button fab" href="/wishes/new"><i aria-hidden="true">add</i><span>Novo desejo</span></a>
+</div>
 {% endblock %}

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from velkgram.shared.deals import WishView
 from velkgram.shared.text import normalize_text
 
 
@@ -34,3 +35,12 @@ def validate_wish(w: Wish) -> None:
         raise InvalidWish("Informe ao menos um termo obrigatório")
     if w.max_price_cents <= 0:
         raise InvalidWish("Preço máximo deve ser maior que zero")
+
+
+def match_view(w: Wish) -> WishView | None:
+    """Matching view of a wish, or None for an unsaved one."""
+    if w.id is None:
+        return None
+    required = tuple(g for g in (split_alternatives(t) for t in w.required_terms) if g)
+    excluded = tuple(alt for t in w.excluded_terms for alt in split_alternatives(t))
+    return WishView(w.id, w.name, required, excluded, w.max_price_cents)

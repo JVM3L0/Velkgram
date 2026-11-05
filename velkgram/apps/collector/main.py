@@ -109,7 +109,16 @@ async def run(
     apply_migrations(conn, MIGRATION_PACKAGES)  # fatal() writes a heartbeat row
     gateway = TelethonGateway(client, clock)
     notifier_ = notifier or LogNotifier()
-    collector = Collector(conn, gateway, notifier_, clock, MemoryBus(), sleep)
+    collector = Collector(
+        conn,
+        gateway,
+        notifier_,
+        clock,
+        MemoryBus(),
+        sleep,
+        retention_days=settings.retention_days,
+        app_timezone=settings.app_timezone,
+    )
     tasks: list[asyncio.Task[None]] = []
     try:
         await client.connect()  # type: ignore[misc]
@@ -138,6 +147,7 @@ async def run(
     finally:
         for t in tasks:
             t.cancel()
+        await collector.stop_offer_worker()
     await _idle_forever()
 
 

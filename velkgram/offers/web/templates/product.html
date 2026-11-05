@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ wish.name }} - Velkgram{% endblock %}
+{% block content %}
+<div class="product-page">
+  <header class="product-head">
+    <div class="product-title">
+      <h1>{{ wish.name }}</h1>
+      <span class="chip small {{ 'state-on' if wish.enabled else 'state-off' }}">{{ "ativo" if wish.enabled else "pausado" }}</span>
+    </div>
+    <p class="product-terms">
+      {% for term in wish.required_terms %}<span class="chip small tonal-chip">{{ term }}</span>{% endfor %}
+      {% for term in wish.excluded_terms %}<span class="chip small flag-error"><s>{{ term }}</s></span>{% endfor %}
+    </p>
+    <p class="muted product-limit">Alerta até {{ max_price }}</p>
+    <div class="product-actions">
+      <a class="button border" href="/wishes/{{ wish.id }}/edit"><i aria-hidden="true">edit</i><span>Editar</span></a>
+      <form class="inline" method="post" action="/wishes/{{ wish.id }}/delete">
+        <button class="border" type="submit"><i aria-hidden="true">delete</i><span>Remover</span></button>
+      </form>
+    </div>
+  </header>
+
+  {% include "_product_chart.html" %}
+
+  <div class="retro-line">{% include "_retro_status.html" %}</div>
+
+  <section aria-labelledby="matches-title">
+    <h2 id="matches-title" class="section-title">Ofertas encontradas</h2>
+    <div id="matches" class="feed feed-list" hx-get="/wishes/{{ wish.id }}/matches" hx-trigger="retro-done from:body" hx-swap="innerHTML">
+      {% include "_product_matches.html" %}
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,5 +1,4 @@
-from velkgram.alerting.domain.matching import matches_terms
-from velkgram.alerting.domain.models import WishView
+from velkgram.shared.deals import WishView, matches, matches_terms
 
 
 def _wish(required: tuple[tuple[str, ...], ...], excluded: tuple[str, ...] = ()) -> WishView:
@@ -22,3 +21,11 @@ def test_excluded_blocks() -> None:
     wish = _wish((("ssd",),), ("usado",))
     assert not matches_terms(wish, "ssd usado")
     assert matches_terms(wish, "ssd novo")
+
+
+def test_matches_rejects_price_above_max() -> None:
+    assert not matches(_wish((("ssd",),)), "ssd 2tb", 60001)
+
+
+def test_matches_accepts_unknown_price() -> None:
+    assert matches(_wish((("ssd",),)), "ssd 2tb", None)

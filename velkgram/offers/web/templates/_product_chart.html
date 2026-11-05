@@ -1,0 +1,17 @@
+<section id="chart-block" class="chart-block" aria-label="Preços"
+  hx-get="/wishes/{{ wish.id }}/chart?range={{ range_key }}" hx-trigger="retro-done from:body" hx-swap="outerHTML">
+  <dl class="stats">
+    <div class="stat stat-main"><dt>Último preço</dt><dd>{{ stats.last }}</dd></div>
+    <div class="stat"><dt>Menor preço</dt><dd>{{ stats.lowest }}</dd></div>
+    <div class="stat"><dt>Média 30 dias</dt><dd>{{ stats.average }}</dd></div>
+    <div class="stat"><dt>Ofertas</dt><dd>{{ stats.count }}</dd></div>
+  </dl>
+  <nav class="range-switch" aria-label="Período do gráfico">
+    {% for key, label in ranges %}
+    <a href="/wishes/{{ wish.id }}?range={{ key }}" hx-get="/wishes/{{ wish.id }}/chart?range={{ key }}"
+      hx-target="#chart-block" hx-swap="outerHTML"{% if key == range_key %} aria-current="true"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <div class="chart-frame">{{ chart_svg }}</div>
+  <p class="chart-key muted"><span class="key-line" aria-hidden="true"></span>menor preço do dia<span class="key-dash" aria-hidden="true"></span>seu preço máximo</p>
+</section>

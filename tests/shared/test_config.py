@@ -1,4 +1,5 @@
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -39,3 +40,35 @@ def test_blank_values_use_defaults(blank: str) -> None:
     assert s.notifier == "log"
     assert s.db_path == Path("./data/velkgram.db")
     assert s.log_level == "INFO"
+
+
+def test_retention_days_default_is_90() -> None:
+    assert load_settings({}).retention_days == 90
+    assert load_settings({"RETENTION_DAYS": "30"}).retention_days == 30
+
+
+def test_retention_days_below_30_is_rejected() -> None:
+    with pytest.raises(ValueError, match="RETENTION_DAYS"):
+        load_settings({"RETENTION_DAYS": "29"})
+
+
+def test_retention_days_not_a_number_is_rejected() -> None:
+    with pytest.raises(ValueError, match="RETENTION_DAYS"):
+        load_settings({"RETENTION_DAYS": "abc"})
+
+
+def test_app_timezone_default_is_sao_paulo() -> None:
+    assert load_settings({}).app_timezone == ZoneInfo("America/Sao_Paulo")
+    assert load_settings({"APP_TIMEZONE": "UTC"}).app_timezone == ZoneInfo("UTC")
+
+
+def test_unknown_app_timezone_is_rejected() -> None:
+    with pytest.raises(ValueError, match="APP_TIMEZONE"):
+        load_settings({"APP_TIMEZONE": "Mars/Base"})
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_blank_retention_and_timezone_mean_default(blank: str) -> None:
+    s = load_settings({"RETENTION_DAYS": blank, "APP_TIMEZONE": blank})
+    assert s.retention_days == 90
+    assert s.app_timezone == ZoneInfo("America/Sao_Paulo")

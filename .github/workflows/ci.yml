@@ -16,5 +16,6 @@ jobs:
       - run: uv run pyright
       - run: uv run lint-imports
       - run: uv run pytest -q
+      - run: uv run pytest -q -m slow
       - run: uv run ty check
         continue-on-error: true

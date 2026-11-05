@@ -1,19 +1,19 @@
-<tr id="channel-{{ channel.id }}">
+{% set paused = not channel.enabled %}
+<tr id="channel-{{ channel.id }}"{% if paused %} class="row-paused"{% endif %}>
   <td>{{ channel.name or channel.ref }}{% if channel.name %} <span class="muted">{{ channel.ref }}</span>{% endif %}</td>
   <td>
-    {% if channel.status.value == "active" %}ativo
-    {% elif channel.status.value == "error" %}erro{% if channel.error %}: <span class="error">{{ channel.error }}</span>{% endif %}
-    {% else %}pendente{% endif %}
+    {% if channel.status.value == "error" %}<span class="chip small flag-error">erro{% if channel.error %}: {{ channel.error }}{% endif %}</span>
+    {% elif channel.status.value == "pending" %}<span class="chip small state-off">pendente</span>
+    {% elif channel.enabled %}<span class="chip small state-on">ativo</span>
+    {% else %}<span class="chip small state-off">pausado</span>{% endif %}
   </td>
-  <td>{{ channel.silent_after_hours }} h</td>
-  <td>
-    <button hx-post="/channels/{{ channel.id }}/toggle" hx-target="#channel-{{ channel.id }}" hx-swap="outerHTML">
-      {{ "Ativo" if channel.enabled else "Pausado" }}
+  <td class="hide-compact">{{ channel.silent_after_hours }} h</td>
+  <td><div class="row-actions">
+    <button class="border" type="button" hx-post="/channels/{{ channel.id }}/toggle" hx-target="#channel-{{ channel.id }}" hx-swap="outerHTML">
+      <i aria-hidden="true">{{ "play_arrow" if paused else "pause" }}</i><span>{{ "Retomar" if paused else "Pausar" }}</span>
     </button>
-  </td>
-  <td>
     <form class="inline" method="post" action="/channels/{{ channel.id }}/delete">
-      <button type="submit">Remover</button>
+      <button class="border" type="submit" aria-label="Remover canal"><i aria-hidden="true">delete</i><span class="hide-compact">Remover</span></button>
     </form>
-  </td>
+  </div></td>
 </tr>

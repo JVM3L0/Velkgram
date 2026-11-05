@@ -1,6 +1,6 @@
 import pytest
 
-from velkgram.alerting.domain.pricing import extract_price
+from velkgram.shared.deals import extract_price
 
 CASES = [
     ("🔥 SSD Kingston NV2 2TB R$ 589", 58900),

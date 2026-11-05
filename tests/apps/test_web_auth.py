@@ -20,9 +20,9 @@ def test_login_correct_password_sets_session(tmp_path: Path) -> None:
     client = make_client(tmp_path, login=False)
     response = client.post("/login", data={"password": "secret"})
     assert response.status_code == 303
-    assert response.headers["location"] == "/wishes"
+    assert response.headers["location"] == "/"
     assert client.get("/wishes").status_code == 200
-    assert client.get("/").headers["location"] == "/wishes"
+    assert client.get("/").status_code == 200
 
 
 def test_login_wrong_password_shows_error(tmp_path: Path) -> None:

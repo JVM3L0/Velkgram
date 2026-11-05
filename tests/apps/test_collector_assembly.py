@@ -30,6 +30,9 @@ async def _nosleep(_s: float) -> None:
     return None
 
 
+LIVE_COLLECTORS: list[Collector] = []  # stopped by tests/apps/conftest.py at teardown
+
+
 class Env:
     def __init__(self, tmp_path: Path, gateway: FakeTelegramGateway | None = None) -> None:
         self.path = tmp_path / "v.db"
@@ -45,6 +48,7 @@ class Env:
         self.bus = MemoryBus()
         c = Collector(self.conn, self.gateway, self.notifier, self.clock, self.bus, _nosleep)
         self.collector = c
+        LIVE_COLLECTORS.append(c)
         return c
 
     def channel(self, ref: str = "@loja") -> int:

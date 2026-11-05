@@ -31,6 +31,13 @@ class MessageRepository(Protocol):
         """Advance the cursor; a lower value is ignored."""
         ...
 
+    def purge_text_before(self, cutoff: datetime) -> int:
+        """Blank the text of messages dated before `cutoff` and drop their versions.
+
+        Returns the number of messages changed.
+        """
+        ...
+
     def write_heartbeat(self, h: Heartbeat) -> None: ...
 
     def read_heartbeat(self) -> Heartbeat | None: ...

@@ -75,7 +75,7 @@ def test_list_shows_wishes_and_escapes(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     _create(client, name="<script>x</script>")
     page = client.get("/wishes").text
-    assert "Lista de desejos" in page
+    assert "Desejos" in page
     assert "&lt;script&gt;" in page
     assert "<script>x" not in page
     assert "htmx.org@2.0.3" in page

@@ -2,7 +2,6 @@
 
 from velkgram.alerting.domain.format import format_alert, format_brl, telegram_link
 from velkgram.alerting.domain.models import Alert, AlertMessage, AlertStatus, SuppressionRule
-from velkgram.alerting.domain.pricing import extract_price
 from velkgram.alerting.ports.notifier import Notifier, NotifierError
 from velkgram.alerting.ports.queries import (
     AlertQueries,
@@ -12,6 +11,7 @@ from velkgram.alerting.ports.queries import (
 )
 from velkgram.alerting.ports.repository import AlertRepository
 from velkgram.alerting.services.notify import send_with_retry
+from velkgram.shared.deals import extract_price
 
 __all__ = [
     "Alert",
