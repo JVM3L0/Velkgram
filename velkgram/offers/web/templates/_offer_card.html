@@ -4,6 +4,7 @@
   <h2 class="offer-title">{{ row.title }}</h2>
   <p class="offer-meta">
     {% if row.store %}<span class="chip small tonal-chip">{{ row.store }}</span>{% endif %}
+    {% if row.source %}<span class="chip small {{ 'source-retro' if row.historic else 'source-live' }}">{{ row.source }}</span>{% endif %}
     {% if row.channel %}<span class="offer-channel">{{ row.channel }}</span>{% endif %}
     <time datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
   </p>
@@ -16,6 +17,6 @@
   {% endif %}
   <div class="offer-actions">
     {% if row.href %}<a class="button small border" href="{{ row.href }}" rel="noopener noreferrer" target="_blank">Abrir</a>{% endif %}
-    <a class="button small tonal" href="{{ row.follow }}">Acompanhar</a>
+    {% if not row.source %}<a class="button small tonal" href="{{ row.follow }}">Acompanhar</a>{% endif %}
   </div>
 </article>

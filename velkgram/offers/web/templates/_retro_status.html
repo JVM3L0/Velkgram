@@ -1,0 +1,14 @@
+{% if status is none or status.value == "running" %}
+<p id="retro-status" class="retro retro-running" role="status"
+  hx-get="/wishes/{{ wish_id }}/history" hx-trigger="every 2s" hx-swap="outerHTML">
+  <i aria-hidden="true">progress_activity</i>Buscando no histórico…
+</p>
+{% elif status.value == "done" %}
+<p id="retro-status" class="retro retro-done" role="status"><i aria-hidden="true">check_circle</i>Histórico atualizado</p>
+{% else %}
+<p id="retro-status" class="retro retro-failed" role="status">
+  <i aria-hidden="true">error</i>Não foi possível buscar o histórico
+  <button class="small border" type="button" hx-post="/wishes/{{ wish_id }}/history/retry"
+    hx-target="#retro-status" hx-swap="outerHTML">Tentar de novo</button>
+</p>
+{% endif %}
