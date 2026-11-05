@@ -22,4 +22,7 @@ def get_conn(request: Request) -> Iterator[sqlite3.Connection]:
 def require_user(request: Request) -> None:
     """Router dependency: redirect (303) to /login when there is no session."""
     if request.session.get(SESSION_KEY) != SESSION_USER:
+        if request.headers.get("HX-Request") == "true":
+            # HTMX would swap a redirected login page into the target; navigate instead.
+            raise HTTPException(status_code=401, headers={"HX-Redirect": "/login"})
         raise HTTPException(status_code=303, headers={"Location": "/login"})

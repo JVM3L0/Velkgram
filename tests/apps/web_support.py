@@ -10,6 +10,7 @@ from velkgram.apps.web.main import create_app
 from velkgram.shared.config import Settings
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
+from velkgram.shared.ports import Clock
 
 PASSWORD = "secret"
 
@@ -22,14 +23,14 @@ def make_settings(tmp_path: Path) -> Settings:
     )
 
 
-def make_client(tmp_path: Path, *, login: bool = True) -> TestClient:
+def make_client(tmp_path: Path, *, login: bool = True, clock: Clock | None = None) -> TestClient:
     settings = make_settings(tmp_path)
     conn = connect(settings.db_path)
     try:
         apply_migrations(conn, MIGRATION_PACKAGES)
     finally:
         conn.close()
-    client = TestClient(create_app(settings), follow_redirects=False)
+    client = TestClient(create_app(settings, clock=clock), follow_redirects=False)
     if login:
         client.post("/login", data={"password": PASSWORD})
     return client

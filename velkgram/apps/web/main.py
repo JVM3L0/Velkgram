@@ -12,7 +12,10 @@ from starlette.middleware.sessions import SessionMiddleware
 import velkgram.wishlist.web as wishlist_web
 from velkgram.apps.web.auth import verify_password
 from velkgram.apps.web.deps import SESSION_KEY, SESSION_USER, get_conn, require_user
+from velkgram.apps.web.throttle import LoginThrottle
+from velkgram.shared.adapters.clock_system import SystemClock
 from velkgram.shared.config import Settings, load_settings
+from velkgram.shared.ports import Clock
 from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 from velkgram.wishlist.web.router import build_router as build_wishlist_router
 
@@ -26,7 +29,7 @@ def _build_templates() -> Jinja2Templates:
     return Jinja2Templates(env=env)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
     settings = settings or load_settings(os.environ)
     if not settings.web_secret_key:
         raise ValueError("WEB_SECRET_KEY is required to run the web app")
@@ -34,7 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raise ValueError("WEB_PASSWORD_HASH is required to run the web app")
     password_hash = settings.web_password_hash
 
-    app = FastAPI(title="Velkgram")
+    app = FastAPI(title="Velkgram", docs_url=None, redoc_url=None, openapi_url=None)
     # same_site="strict" is the CSRF protection for POST forms: the browser never
     # sends the session cookie on cross-site requests.
     app.add_middleware(
@@ -46,6 +49,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     templates = _build_templates()
     app.state.settings = settings
     app.state.templates = templates
+    throttle = LoginThrottle(clock or SystemClock())
+    app.state.login_throttle = throttle
 
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request) -> Response:
@@ -53,10 +58,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/login")
     def login(request: Request, password: str = Form("")) -> Response:
+        if throttle.is_locked():
+            return templates.TemplateResponse(
+                request,
+                "login.html",
+                {"error": "Muitas tentativas. Tente novamente em alguns minutos."},
+                status_code=429,
+            )
         if not verify_password(password_hash, password):
+            throttle.record_failure()
             return templates.TemplateResponse(
                 request, "login.html", {"error": "Senha incorreta"}, status_code=401
             )
+        throttle.reset()
         request.session[SESSION_KEY] = SESSION_USER
         return RedirectResponse("/wishes", status_code=303)
 
