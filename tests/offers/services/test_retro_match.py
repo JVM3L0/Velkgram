@@ -285,3 +285,16 @@ async def test_retro_180k_offers_under_10s(tmp_path: Path) -> None:
     assert total < 10 * factor
     assert worst < 0.05 * factor
     conn.close()
+
+
+async def test_failed_run_is_rerun_after_wish_edit(env: Env) -> None:
+    env.repo.upsert(_offer(1))
+    env.wishes.views = [_wish(term="kingston")]
+    env.repo.save_retro_run(
+        RetroRun(1, wish_fingerprint(_wish()), RetroStatus.failed, NOW, NOW, "OSError")
+    )
+    await env.matcher.on_wishlist_changed(CHANGED)
+    run = env.repo.get_retro_run(1)
+    assert run is not None
+    assert run.status is RetroStatus.done
+    assert env.matched_ids() == {1}

@@ -74,7 +74,12 @@ class OfferBuilder:
             existing = self._repo.get(m.channel_id, m.message_id)
             if existing is not None:
                 self._repo.upsert(
-                    replace(existing, sold_out=sold_out, deleted=deleted, updated_at=now)
+                    replace(
+                        existing,
+                        sold_out=existing.sold_out or sold_out,
+                        deleted=existing.deleted or deleted,
+                        updated_at=now,
+                    )
                 )
                 return True
         offer = offer_from_message(m, sold_out=sold_out, deleted=deleted, now=now)

@@ -53,7 +53,8 @@ class RetroMatcher:
     def _needs_run(wish: WishView, run: RetroRun | None) -> bool:
         if run is None or run.status is RetroStatus.running:
             return True
-        return run.status is RetroStatus.done and run.fingerprint != wish_fingerprint(wish)
+        # An edit always reruns, even after a failure; an unchanged failed run waits for retry.
+        return run.fingerprint != wish_fingerprint(wish)
 
     async def run(self, wish: WishView) -> None:
         fingerprint = wish_fingerprint(wish)

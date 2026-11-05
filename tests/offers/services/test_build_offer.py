@@ -233,3 +233,14 @@ async def test_blank_text_on_existing_offer_only_updates_flags(
     assert after.text == before.text
     assert after.title == before.title
     assert len(repo._matches) == 1
+
+
+async def test_blank_redelivery_never_clears_flags(
+    builder: OfferBuilder, repo: InMemoryOfferRepository
+) -> None:
+    builder.ingest(_msg(), sold_out=True, deleted=True)
+    builder.ingest(_msg(""))
+    after = repo.get(1, 2)
+    assert after is not None
+    assert after.sold_out is True
+    assert after.deleted is True
