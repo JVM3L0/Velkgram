@@ -82,7 +82,7 @@ Coupon posts usually apply to many products. Example: "Cupom KaBuM! 10% OFF acim
    - If a coupon applies, every term-matched wish whose price satisfies `max < price ≤ max × 1.5` gets an alert, through the normal `_decide` and the v1 dedup keys. The alert is stored with `over_max = 1`.
    - Coupon posts themselves (title starting with "cupom") never take this path.
 3. **Coupon line.** This step runs off the persist and dedup path.
-   - In `_notify_and_finalize`, the background task that builds the text, the notifier side calls the port without a price, then filters in the domain to coupons that apply to the alert's price.
+   - In `_notify_and_finalize`, the background task that builds the text, the notifier side calls the port with the alert's price, so only coupons that apply come back. An alert with an unknown price gets no lines.
    - It adds at most 2 lines, newest first.
    - The port excludes the message being alerted.
 4. **Alert first.** A port error, at either call site, is logged as `active_coupons_failed`.

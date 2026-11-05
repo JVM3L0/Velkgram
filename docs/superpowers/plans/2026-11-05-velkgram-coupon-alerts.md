@@ -41,6 +41,58 @@
 4. **`rebuild-offers` on the real DB** must emit zero events and zero alerts. Test owner: Task 2.
 5. **A multi-tier coupon** (the real Mercado Livre post, 9 tiers) picks the applicable tier per offer price. The alert shows that tier's codes, and the `wcc:` key uses those codes. Test owner: Task 1 (rule), and Task 4 (key and text).
 
+## Amendments from plan review 1 (binding, override the task text below)
+- **A1 (Tasks 1, 2, 5). Message classification.** Replace `store_for_message` with a public offers function, `classify_message(m: MessageData) -> MessageClass`.
+  - `MessageClass` is a frozen dataclass with `store: str | None` and `is_coupon_post: bool`.
+  - It uses the same title, link and `coupon_deal` logic as `offer_from_message`. Refactor `offer_from_message` to call it, so the two can't drift.
+  - Export it from `offers/__init__.py`.
+  - In Task 5, the Evaluator takes `classify: Callable[[MessageData], tuple[str | None, bool]]`, which the apps wire. Its default returns `(None, False)`.
+- **A2 (Task 1). The over-max ceiling lives in shared.**
+  - Put `OVER_MAX_CEILING_NUM = 3` and `OVER_MAX_CEILING_DEN = 2` in `velkgram/shared/deals.py`, with `within_over_max(price_cents: int, max_cents: int) -> bool`, which returns `max_cents < price_cents and price_cents * 2 <= max_cents * 3`.
+  - Use integer math only. Offers and alerting both use this helper.
+  - The ≤-max case is checked separately, as `price <= max`.
+- **A3 (Task 1). `applicable_tier` signature.** It takes primitives: `applicable_tier(tiers: Sequence[CouponTier], min_cents: int | None, discount: str, codes: tuple[str, ...], price_cents: int) -> AppliedTier | None`.
+  - `AppliedTier` is a frozen dataclass with `discount`, `min_cents` and `codes`.
+  - A tier with empty `codes` falls back to the coupon's `codes`.
+  - A coupon with no codes at all is not a coupon offer (spec §3).
+- **A4 (Task 1). Domain filtering.** `coupon_targets(coupon, wishes, offers, now)` keeps `now` and filters defensively:
+  - same store;
+  - posted within `[coupon.posted_at − 3 days, now]`;
+  - priced, not deleted, not sold out;
+  - `norm_text` not None.
+
+  Task 1 tests every spec §8 domain case.
+- **A5 (Task 2). Which offers can emit.**
+  - Targets use `self._wishes.enabled()`, never `.all`. Add a test: a disabled wish gives no target.
+  - **Repost:** an offer with `origin_channel_id` and `origin_message_id` both set is a repost (forwarded) and emits nothing. Add a test.
+  - **Event fields:**
+    - `coupon_posted_at = offer.posted_at` and `coupon_received_at = m.received_at`;
+    - `store = offer.store` and `scope = offer.coupon_scope`;
+    - `link = offer.redeem_link or offer.main_link`.
+  - The outbox is cleared when `_handle` raises.
+  - `active_coupons` applies the price filter in Python while iterating newest first, and stops at `limit`. The SQL has no LIMIT before the filter.
+  - Add `recent_store_offers` to `tests/fakes/repositories.py`, and run the contract test on both the fake and SQLite.
+- **A6 (Task 3). Restoring the dedup cache.** `warm_cache` calls `repo.list_since(now − 3 days)` once and remembers every key. `DedupCache.find` applies each rule's window. Keep retry's 30-min age as its own constant. Add no `list_coupon_since`.
+  - The migration file must not contain BEGIN or COMMIT, because the migrator wraps it.
+- **A7 (Tasks 3, 4). Pre-rendered text.**
+  - Add `rendered: str | None = None` to `AlertMessage`. `format_alert` returns it verbatim when it is set.
+  - `CouponAlerter` sends `AlertMessage(..., rendered=payload)`.
+  - For retries, `Collector.build_message` returns that shape from `alert.payload` when `alert.kind == coupon`, without needing the stored message or the channel. `retry_failed.py` itself needs no change.
+  - Add a test: a coupon alert is retried with the original message purged and is not expired.
+- **A8 (Task 4). Collector drain.** `Collector.wait_idle` drains in this order: `offer_builder.drain()`, then `bus.drain()`, then `coupon_alerter.drain()`. Add a collector-assembly test that goes from a live coupon message to a sent coupon alert.
+- **A9 (Task 5). Coupon lines.**
+  - **Port call:** `_notify_and_finalize` calls the port with `price_cents=alert.price_cents`, `since = now − 24 h` and `exclude` set. No alerting-side re-filter. When the alert's price is None, there are no lines. Spec §4.2.3 is updated to match.
+  - **Wish limits:** the Evaluator keeps `_wish_max: dict[int, int]` next to `_wish_names`, for the over-max suffix.
+  - **Retries:** a retried over-max alert keeps its suffix. `build_message` reads the wish max from the wishlist.
+  - **Port memo:** the once-per-message port memo lives outside the per-wish try block. A port error doesn't set `complete = False`.
+  - **Tests:** replace the "slow port does not delay persisting" test with two tests: the notifier is called after a slow port returns, and `active_coupons_slow` is logged. Add a `FakeActiveCoupons` in `tests/fakes/`.
+- **A10 (Task 6). Codes chip and latency stats.**
+  - Codes for the chip come from the dedup key that starts with `wcc:`: take the text after its third `:`, then split on `,`.
+  - `latency_samples` and the v1 latency p95 filter on `kind = 'offer'`. Add a test.
+  - `daily_alert_counts` counts both kinds.
+- **A11 (Task 4). Coupon with no discount text.** The first line omits ` — {discount}`. Add a format test.
+- **A12 (Task 2). Review Focus 4 test.** Also cover `ingest_many` with a `source="live"` message younger than 30 min: it emits nothing.
+
 ---
 
 ### Task 1: Offers domain rule and the shared event
@@ -253,6 +305,7 @@ Spec §4.6.
 - [ ] Run the full checks and commit `feat(web): coupon and above-limit chips on the alerts page`.
 
 ## Execution (controller notes)
+- Every task brief includes the Global Constraints and the Amendments relevant to that task.
 - **Order:** Tasks 1 → 2 → 3 → 4 → 5 → 6, sequential.
 - **Review batches:** each batch gets one context-free reviewer.
   - Tasks 1–2 (offers side);
