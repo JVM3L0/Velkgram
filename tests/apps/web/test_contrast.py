@@ -55,6 +55,9 @@ def _pairs() -> list[tuple[str, str, float]]:
     # The teal "Abrir" link and price text sit on cards and containers.
     pairs += [("primary", bg, 4.5) for bg in SURFACES[:3]]  # cards use surface..low
     pairs += [(role, "surface", 4.5) for role in ("primary", "success", "warning")]
+    pairs.append(
+        ("amber", "surface", 4.5)
+    )  # the stale-collector banner icon (3:1 needed on its tint)
     pairs.append(("outline", "surface", 3.0))
     return pairs
 

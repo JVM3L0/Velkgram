@@ -84,6 +84,8 @@ def test_product_page_empty_stats_show_dash(tmp_path: Path) -> None:
     assert html.count("—") >= 2
     assert "Sem preços ainda" in html
     assert "Poucos dados para comparar" in html
+    banner = _banner(html)
+    assert "insight-price" not in banner and "Preço atual" not in banner  # nothing to price
 
 
 def test_product_range_switch_limits_points(tmp_path: Path) -> None:

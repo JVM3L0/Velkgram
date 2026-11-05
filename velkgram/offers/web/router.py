@@ -114,7 +114,7 @@ class InsightView:
 
     kind: str
     icon: str
-    price: str
+    price: str | None
     verdict: str
     average: str | None
 
@@ -140,7 +140,7 @@ def _insight_view(stats: ProductStats, points: tuple[PricePoint, ...]) -> Insigh
     return InsightView(
         kind=kind,
         icon=icon,
-        price=_DASH if stats.last_cents is None else brl(stats.last_cents),
+        price=None if stats.last_cents is None else brl(stats.last_cents),
         verdict=verdict,
         average=None if insight.average_cents is None else brl(insight.average_cents),
     )

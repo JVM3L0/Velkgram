@@ -3,8 +3,12 @@
   <div class="insight insight-{{ insight.kind }}" role="status">
     <i aria-hidden="true">{{ insight.icon }}</i>
     <div class="insight-body">
+      {% if insight.price %}
       <p class="insight-label">Preço atual</p>
       <p class="insight-main"><strong class="insight-price">{{ insight.price }}</strong><span class="insight-verdict">{{ insight.verdict }}</span></p>
+      {% else %}
+      <p class="insight-main"><span class="insight-verdict">{{ insight.verdict }}</span></p>
+      {% endif %}
       {% if insight.average %}<p class="insight-sub">Média do período: {{ insight.average }}</p>{% endif %}
     </div>
     <dl class="stats-mini">
