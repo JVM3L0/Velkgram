@@ -5,8 +5,9 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from starlette.middleware.sessions import SessionMiddleware
@@ -19,6 +20,14 @@ from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.alerting.web.router import build_router as build_alerts_router
 from velkgram.apps.web.auth import verify_password
 from velkgram.apps.web.deps import SESSION_KEY, SESSION_USER, get_conn, require_user
+from velkgram.apps.web.nav import nav_items
+from velkgram.apps.web.theme import (
+    THEME_COOKIE,
+    THEME_MAX_AGE,
+    THEME_MODES,
+    safe_next,
+    theme_classes,
+)
 from velkgram.apps.web.throttle import LoginThrottle
 from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.channels.web.router import build_router as build_channels_router
@@ -31,6 +40,7 @@ from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 from velkgram.wishlist.web.router import build_router as build_wishlist_router
 
 _APP_TEMPLATES = Path(__file__).parent / "templates"
+_STATIC_DIR = Path(__file__).parent / "static"
 _MODULE_TEMPLATE_DIRS = (
     Path(wishlist_web.__file__).parent / "templates",
     Path(channels_web.__file__).parent / "templates",
@@ -45,6 +55,9 @@ _RECENT_FAILURES = 10
 def _build_templates() -> Jinja2Templates:
     loaders = [FileSystemLoader(d) for d in (_APP_TEMPLATES, *_MODULE_TEMPLATE_DIRS)]
     env = Environment(loader=ChoiceLoader(loaders), autoescape=True)
+    env.globals["theme_classes"] = theme_classes
+    env.globals["nav_items"] = nav_items
+    env.globals["theme_modes"] = THEME_MODES
     return Jinja2Templates(env=env)
 
 
@@ -120,7 +133,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
                 request, "login.html", {"error": "Senha incorreta"}, status_code=401
             )
         request.session[SESSION_KEY] = SESSION_USER
-        return RedirectResponse("/wishes", status_code=303)
+        return RedirectResponse("/", status_code=303)
 
     @app.post("/logout")
     def logout(request: Request) -> Response:
@@ -130,6 +143,23 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     @app.get("/", dependencies=[Depends(require_user)])
     def index() -> Response:
         return RedirectResponse("/wishes", status_code=303)
+
+    @app.post("/theme", dependencies=[Depends(require_user)])
+    def set_theme(mode: str = Form(""), next: str = Form("/")) -> Response:
+        if mode not in THEME_MODES:
+            raise HTTPException(status_code=400, detail="Tema inválido")
+        response = RedirectResponse(safe_next(next), status_code=303)
+        response.set_cookie(
+            THEME_COOKIE,
+            mode,
+            max_age=THEME_MAX_AGE,
+            path="/",
+            samesite="lax",
+            httponly=True,
+        )
+        return response
+
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
     app.include_router(
         build_wishlist_router(

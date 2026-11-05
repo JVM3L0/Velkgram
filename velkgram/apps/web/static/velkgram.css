@@ -1,0 +1,488 @@
+/*
+ * Velkgram stylesheet: theme tokens and the Material 3 Expressive layer on top of Beer CSS 5.0.3.
+ *
+ * Colours come from Catppuccin (https://catppuccin.com/palette, MIT License,
+ * Copyright (c) 2021 Catppuccin). Each flavour maps the palette onto Beer CSS's M3 roles:
+ * primary sapphire, secondary lavender, tertiary mauve, error red, success green,
+ * warning peach, surfaces base/mantle/crust and surface0..2, on-surface text/subtext1,
+ * outline overlay1/overlay0. Containers are the role colour mixed with the surface in OKLab
+ * (30% on dark flavours, 20% on Latte), precomputed as hex.
+ *
+ * A value that failed WCAG AA keeps its hue and chroma and moves only in OKLCH lightness
+ * (steps of 0.01): roles darker on Latte and lighter on the dark flavours, containers and
+ * neutral surfaces toward the page surface. Each such value carries a comment naming the
+ * original colour. tests/apps/web/test_contrast.py checks every pair.
+ */
+
+/* ---- Fonts, shape and motion tokens ---- */
+:root {
+  --font: "Roboto Flex", system-ui, sans-serif;
+  --shape-xl: 28px;
+  --shape-pressed: 12px;
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring-time: 360ms;
+}
+
+/* ---- Latte (light). Also the default when no flavour class is set. ---- */
+body.latte,
+body:not(.frappe):not(.macchiato):not(.mocha) {
+  color-scheme: light;
+  /* Latte sapphire #209fb5, darker for AA */
+  --primary: #00778d;
+  --on-primary: #eff1f5;
+  --primary-container: #c6d8e0;
+  --on-primary-container: #4c4f69;
+  /* Latte lavender #7287fd, darker for AA */
+  --secondary: #5161d4;
+  --on-secondary: #eff1f5;
+  --secondary-container: #ccd5f1;
+  --on-secondary-container: #4c4f69;
+  --tertiary: #8839ef;
+  --on-tertiary: #eff1f5;
+  --tertiary-container: #d8d0f7;
+  --on-tertiary-container: #4c4f69;
+  --error: #d20f39;
+  --on-error: #eff1f5;
+  --error-container: #f0ccce;
+  --on-error-container: #4c4f69;
+  /* Latte green #40a02b, darker for AA */
+  --success: #157e00;
+  /* Latte peach #fe640b, darker for AA */
+  --warning: #cc3200;
+  --background: #eff1f5;
+  --on-background: #4c4f69;
+  --surface: #eff1f5;
+  --on-surface: #4c4f69;
+  --surface-variant: #d9dde9;
+  --on-surface-variant: #5c5f77;
+  /* Latte overlay1 #8c8fa1, darker for AA */
+  --outline: #86899b;
+  --outline-variant: #9ca0b0;
+  --shadow: #000000;
+  --scrim: #000000;
+  --inverse-surface: #4c4f69;
+  --inverse-on-surface: #eff1f5;
+  /* Latte inverse-primary #74c7ec, moved toward surface for AA */
+  --inverse-primary: #7acef3;
+  --surface-dim: #e6e9ef;
+  --surface-bright: #bfc3d1;
+  --surface-container-lowest: #dce0e8;
+  /* Latte surface-container-low #ccd0da, moved toward surface for AA */
+  --surface-container-low: #d9dde7;
+  /* Latte surface-container #bcc0cc, moved toward surface for AA */
+  --surface-container: #d9dde9;
+  /* Latte surface-container-high #acb0be, moved toward surface for AA */
+  --surface-container-high: #bfc3d1;
+  /* Latte surface-container-highest #a4a8b7, moved toward surface for AA */
+  --surface-container-highest: #c0c4d4;
+}
+
+/* ---- Frappé (dark) ---- */
+body.frappe {
+  color-scheme: dark;
+  --primary: #85c1dc;
+  --on-primary: #232634;
+  --primary-container: #495b70;
+  --on-primary-container: #c6d0f5;
+  --secondary: #babbf1;
+  --on-secondary: #232634;
+  /* Frappé secondary-container #565975, moved toward surface for AA */
+  --secondary-container: #535672;
+  --on-secondary-container: #c6d0f5;
+  --tertiary: #ca9ee6;
+  --on-tertiary: #232634;
+  --tertiary-container: #5b5272;
+  --on-tertiary-container: #c6d0f5;
+  --error: #e78284;
+  --on-error: #232634;
+  --error-container: #644c59;
+  --on-error-container: #c6d0f5;
+  --success: #a6d189;
+  --warning: #ef9f76;
+  --background: #303446;
+  --on-background: #c6d0f5;
+  --surface: #303446;
+  --on-surface: #c6d0f5;
+  --surface-variant: #464c62;
+  --on-surface-variant: #b5bfe2;
+  --outline: #838ba7;
+  --outline-variant: #737994;
+  --shadow: #000000;
+  --scrim: #000000;
+  --inverse-surface: #c6d0f5;
+  --inverse-on-surface: #232634;
+  /* Frappé inverse-primary #209fb5, moved toward surface for AA */
+  --inverse-primary: #006377;
+  --surface-dim: #292c3c;
+  --surface-bright: #51576e;
+  --surface-container-lowest: #232634;
+  --surface-container-low: #414559;
+  /* Frappé surface-container #51576d, moved toward surface for AA */
+  --surface-container: #464c62;
+  /* Frappé surface-container-high #626880, moved toward surface for AA */
+  --surface-container-high: #51576e;
+  /* Frappé surface-container-highest #6a708a, moved toward surface for AA */
+  --surface-container-highest: #545972;
+}
+
+/* ---- Macchiato (dark) ---- */
+body.macchiato {
+  color-scheme: dark;
+  --primary: #7dc4e4;
+  --on-primary: #181926;
+  --primary-container: #3e5269;
+  --on-primary-container: #cad3f5;
+  --secondary: #b7bdf8;
+  --on-secondary: #181926;
+  --secondary-container: #4c506e;
+  --on-secondary-container: #cad3f5;
+  --tertiary: #c6a0f6;
+  --on-tertiary: #181926;
+  --tertiary-container: #50486d;
+  --on-tertiary-container: #cad3f5;
+  --error: #ed8796;
+  --on-error: #181926;
+  --error-container: #5c4355;
+  --on-error-container: #cad3f5;
+  --success: #a6da95;
+  --warning: #f5a97f;
+  --background: #24273a;
+  --on-background: #cad3f5;
+  --surface: #24273a;
+  --on-surface: #cad3f5;
+  --surface-variant: #494d64;
+  --on-surface-variant: #b8c0e0;
+  --outline: #8087a2;
+  --outline-variant: #6e738d;
+  --shadow: #000000;
+  --scrim: #000000;
+  --inverse-surface: #cad3f5;
+  --inverse-on-surface: #181926;
+  /* Macchiato inverse-primary #209fb5, moved toward surface for AA */
+  --inverse-primary: #00657a;
+  --surface-dim: #1e2030;
+  --surface-bright: #555a72;
+  --surface-container-lowest: #181926;
+  --surface-container-low: #363a4f;
+  --surface-container: #494d64;
+  /* Macchiato surface-container-high #5b6078, moved toward surface for AA */
+  --surface-container-high: #555a72;
+  /* Macchiato surface-container-highest #646982, moved toward surface for AA */
+  --surface-container-highest: #565b73;
+}
+
+/* ---- Mocha (dark) ---- */
+body.mocha {
+  color-scheme: dark;
+  --primary: #74c7ec;
+  --on-primary: #11111b;
+  --primary-container: #384b61;
+  --on-primary-container: #cdd6f4;
+  --secondary: #b4befe;
+  --on-secondary: #11111b;
+  --secondary-container: #464966;
+  --on-secondary-container: #cdd6f4;
+  --tertiary: #cba6f7;
+  --on-tertiary: #11111b;
+  --tertiary-container: #4c4364;
+  --on-tertiary-container: #cdd6f4;
+  --error: #f38ba8;
+  --on-error: #11111b;
+  --error-container: #583d50;
+  --on-error-container: #cdd6f4;
+  --success: #a6e3a1;
+  --warning: #fab387;
+  --background: #1e1e2e;
+  --on-background: #cdd6f4;
+  --surface: #1e1e2e;
+  --on-surface: #cdd6f4;
+  --surface-variant: #45475a;
+  --on-surface-variant: #bac2de;
+  --outline: #7f849c;
+  --outline-variant: #6c7086;
+  --shadow: #000000;
+  --scrim: #000000;
+  --inverse-surface: #cdd6f4;
+  --inverse-on-surface: #11111b;
+  /* Mocha inverse-primary #209fb5, moved toward surface for AA */
+  --inverse-primary: #00657a;
+  --surface-dim: #181825;
+  --surface-bright: #585b70;
+  --surface-container-lowest: #11111b;
+  --surface-container-low: #313244;
+  --surface-container: #45475a;
+  --surface-container-high: #585b70;
+  /* Mocha surface-container-highest #62657b, moved toward surface for AA */
+  --surface-container-highest: #575a6f;
+}
+
+/* ---- System mode in a dark OS: Mocha ---- */
+@media (prefers-color-scheme: dark) {
+  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) {
+    color-scheme: dark;
+    --primary: #74c7ec;
+    --on-primary: #11111b;
+    --primary-container: #384b61;
+    --on-primary-container: #cdd6f4;
+    --secondary: #b4befe;
+    --on-secondary: #11111b;
+    --secondary-container: #464966;
+    --on-secondary-container: #cdd6f4;
+    --tertiary: #cba6f7;
+    --on-tertiary: #11111b;
+    --tertiary-container: #4c4364;
+    --on-tertiary-container: #cdd6f4;
+    --error: #f38ba8;
+    --on-error: #11111b;
+    --error-container: #583d50;
+    --on-error-container: #cdd6f4;
+    --success: #a6e3a1;
+    --warning: #fab387;
+    --background: #1e1e2e;
+    --on-background: #cdd6f4;
+    --surface: #1e1e2e;
+    --on-surface: #cdd6f4;
+    --surface-variant: #45475a;
+    --on-surface-variant: #bac2de;
+    --outline: #7f849c;
+    --outline-variant: #6c7086;
+    --shadow: #000000;
+    --scrim: #000000;
+    --inverse-surface: #cdd6f4;
+    --inverse-on-surface: #11111b;
+    /* Mocha inverse-primary #209fb5, moved toward surface for AA */
+    --inverse-primary: #00657a;
+    --surface-dim: #181825;
+    --surface-bright: #585b70;
+    --surface-container-lowest: #11111b;
+    --surface-container-low: #313244;
+    --surface-container: #45475a;
+    --surface-container-high: #585b70;
+    /* Mocha surface-container-highest #62657b, moved toward surface for AA */
+    --surface-container-highest: #575a6f;
+  }
+}
+
+/* ---- Base ---- */
+body {
+  font-family: var(--font);
+  font-optical-sizing: auto;
+  background-color: var(--surface);
+  color: var(--on-surface);
+}
+
+:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sr-only:focus-visible {
+  inline-size: auto;
+  block-size: auto;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  clip-path: none;
+  z-index: 1000;
+  inset: 0.5rem auto auto 0.5rem;
+  border-radius: 999px;
+  background-color: var(--primary);
+  color: var(--on-primary);
+}
+
+/* ---- Expressive layer (spec 8.3) ---- */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: clamp(1.75rem, 1.2rem + 2vw, 2.5rem); line-height: 1.15; }
+
+article, dialog, .sheet, .card {
+  border-radius: var(--shape-xl);
+}
+
+/* Pill buttons that morph to a rounded square while pressed. */
+button:not(.circle, .square, .chip),
+a.button {
+  border-radius: 999px;
+  transition: border-radius var(--spring-time) var(--spring), background-color 150ms linear;
+}
+
+button:not(.circle, .square, .chip):active,
+a.button:active {
+  border-radius: var(--shape-pressed);
+}
+
+.chip {
+  border-radius: 999px;
+  transition: background-color 150ms linear, border-radius var(--spring-time) var(--spring);
+}
+
+/* The navigation indicator springs in when a destination becomes current. */
+nav a > i {
+  transition: background-color 150ms linear, padding var(--spring-time) var(--spring);
+}
+
+/* ---- Layout shell (spec 8.4): compact bottom bar, rail from 600 px ---- */
+.shell {
+  display: grid;
+  min-block-size: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "bar" "main";
+  grid-template-rows: auto 1fr;
+}
+
+.shell > .appbar { grid-area: bar; }
+.shell > main { grid-area: main; }
+.shell > nav.left { grid-area: rail; }
+
+.appbar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 4rem;
+  padding-inline: 1rem 0.5rem;
+  background-color: var(--surface);
+}
+
+.appbar .title {
+  flex: 1;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.shell > main {
+  inline-size: 100%;
+  max-inline-size: 72rem;
+  margin-inline: auto;
+  padding: 1rem 1rem 6.5rem;
+}
+
+nav.bottom {
+  position: fixed;
+  inset: auto 0 0 0;
+  grid-area: auto;
+  block-size: 4.5rem;
+  background-color: var(--surface-container);
+}
+
+nav.left {
+  position: sticky;
+  inset-block-start: 0;
+  block-size: 100dvh;
+  gap: 0.5rem;
+  background-color: var(--surface);
+}
+
+nav.left { display: none; }
+
+@media (min-width: 600px) {
+  .shell {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "rail bar" "rail main";
+  }
+  nav.bottom { display: none; }
+  nav.left { display: flex; justify-content: flex-start; padding-block-start: 1rem; }
+  .shell > main { padding: 1.5rem 1.5rem 3rem; }
+  .appbar { padding-inline: 1.5rem 1rem; }
+}
+
+nav.bottom a, nav.left a {
+  min-block-size: 3rem;
+}
+
+/* Signed-out pages (login): one centered column, no bars. */
+.auth {
+  inline-size: 100%;
+  max-inline-size: 24rem;
+  margin: 0 auto;
+  padding: 3rem 1rem;
+}
+
+/* ---- Theme menu ---- */
+.theme-menu-wrap { position: relative; }
+.theme-menu { min-inline-size: 13rem; padding: 0.5rem; }
+.theme-menu form { display: contents; }
+.theme-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  inline-size: 100%;
+  min-block-size: 3rem;
+  justify-content: flex-start;
+  background: transparent;
+  color: var(--on-surface);
+  border: 0;
+  box-shadow: none;
+  padding-inline: 0.75rem;
+}
+.theme-menu button[aria-current="true"] {
+  background-color: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+
+/* Swatches show each flavour's base with its sapphire; "system" is split Latte | Mocha. */
+.swatch {
+  flex: none;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: 50%;
+  border: 2px solid var(--outline);
+}
+.swatch-system { background: linear-gradient(90deg, #eff1f5 50%, #1e1e2e 50%); }
+.swatch-latte { background: linear-gradient(135deg, #eff1f5 50%, #209fb5 50%); }
+.swatch-frappe { background: linear-gradient(135deg, #303446 50%, #85c1dc 50%); }
+.swatch-macchiato { background: linear-gradient(135deg, #24273a 50%, #7dc4e4 50%); }
+.swatch-mocha { background: linear-gradient(135deg, #1e1e2e 50%, #74c7ec 50%); }
+
+/* ---- Legacy pages (channels, alerts, status, forms), until they are restyled ---- */
+.error { color: var(--error); margin: 0.5rem 0; }
+.muted { color: var(--on-surface-variant); }
+.inline { display: inline; }
+
+main table { inline-size: 100%; border-collapse: collapse; }
+main th, main td {
+  text-align: start;
+  padding: 0.5rem 0.4rem;
+  border-block-end: 1px solid var(--outline-variant);
+}
+
+main label { display: block; margin-block-start: 0.75rem; font-weight: 600; }
+main input[type="text"], main input[type="password"], main textarea {
+  inline-size: 100%;
+  box-sizing: border-box;
+  min-block-size: 3rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background-color: var(--surface-container-low);
+  color: var(--on-surface);
+  font: inherit;
+}
+
+/* ---- Reduced motion (NFR5) ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
