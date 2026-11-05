@@ -15,13 +15,12 @@ from velkgram.alerting.domain.dedup import (
     text_key,
 )
 from velkgram.alerting.domain.format import message_link
-from velkgram.alerting.domain.matching import matches_terms
-from velkgram.alerting.domain.models import Alert, AlertMessage, AlertStatus, WishView
-from velkgram.alerting.domain.pricing import extract_price
+from velkgram.alerting.domain.models import Alert, AlertMessage, AlertStatus
 from velkgram.alerting.ports.notifier import Notifier
 from velkgram.alerting.ports.repository import AlertRepository
 from velkgram.alerting.ports.wishlist_reader import WishlistReader
 from velkgram.alerting.services.notify import send_with_retry
+from velkgram.shared.deals import WishView, extract_price, matches_terms
 from velkgram.shared.events import AlertTriggered, MessageData, MessageEdited, MessageReceived
 from velkgram.shared.ports import Clock, EventBus
 from velkgram.shared.text import normalize_text

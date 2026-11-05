@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from velkgram.shared.deals import WishView as WishView
+
 
 class AlertStatus(StrEnum):
     pending = "pending"
@@ -16,15 +18,6 @@ class SuppressionRule(StrEnum):
     origin = "origin"
     wish_price = "wish_price"
     wish_text = "wish_text"
-
-
-@dataclass(frozen=True, slots=True)
-class WishView:
-    id: int
-    name: str
-    required: tuple[tuple[str, ...], ...]  # AND of ORs, already normalized
-    excluded: tuple[str, ...]  # already normalized
-    max_price_cents: int
 
 
 @dataclass(frozen=True, slots=True)
