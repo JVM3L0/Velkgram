@@ -1,5 +1,6 @@
 """Offers module public API (the SQLite adapters are wired by the apps)."""
 
+from velkgram.offers.domain.build import MessageClass, classify_message
 from velkgram.offers.domain.models import MatchSource
 from velkgram.offers.ports.messages import MessageSource, SourceMessage
 from velkgram.offers.ports.queries import (
@@ -29,6 +30,7 @@ __all__ = [
     "FeedPage",
     "MatchCard",
     "MatchSource",
+    "MessageClass",
     "MessageSource",
     "OfferBuilder",
     "OfferCard",
@@ -40,6 +42,7 @@ __all__ = [
     "SourceMessage",
     "WishReader",
     "WishSummary",
+    "classify_message",
     "purge_offer_text_before",
     "rebuild_offers",
     "sparkline_svg",
