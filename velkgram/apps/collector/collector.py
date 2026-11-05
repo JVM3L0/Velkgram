@@ -9,11 +9,12 @@ from datetime import timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from velkgram.alerting import Alert, AlertMessage, Notifier, SuppressionRule
+from velkgram.alerting import Alert, AlertKind, AlertMessage, Notifier, SuppressionRule
 from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
 from velkgram.alerting.adapters.wishlist_api import WishlistApiReader
 from velkgram.alerting.domain.dedup import DedupCache
 from velkgram.alerting.domain.format import message_link
+from velkgram.alerting.services.coupon_alerts import CouponAlerter
 from velkgram.alerting.services.evaluate import Evaluator
 from velkgram.alerting.services.reprocess import reprocess_unprocessed
 from velkgram.alerting.services.retry_failed import retry_failed, warm_cache
@@ -40,6 +41,7 @@ from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
 from velkgram.shared.events import (
     ChannelsChanged,
+    CouponMatchedWish,
     MessageDeleted,
     MessageEdited,
     MessageReceived,
@@ -78,6 +80,7 @@ class Collector:
         self._names: dict[int, str] = {}
         self._tasks: set[asyncio.Task[None]] = set()
         self._offer_worker: asyncio.Task[None] | None = None
+        self._coupon_worker: asyncio.Task[None] | None = None
         self._retention_days = retention_days
         self._resolve_lock = asyncio.Lock()
         # Cursors taken before live messages could advance them (startup, disconnect, new channel).
@@ -110,6 +113,15 @@ class Collector:
             on_alert_sent=self.heartbeat.count_alert,
             sleep=sleep,
         )
+        self.coupon_alerter = CouponAlerter(
+            WishlistApiReader(self._wish_repo),
+            self._alerts,
+            self._cache,
+            notifier,
+            clock,
+            sleep=sleep,
+            on_alert_sent=self.heartbeat.count_alert,
+        )
         self._offers = SqliteOfferRepository(conn)
         offer_wishes = WishlistApiWishReader(self._wish_repo)
         self.offer_builder = OfferBuilder(self._offers, offer_wishes, clock, publish=bus.publish)
@@ -140,15 +152,29 @@ class Collector:
         self.bus.subscribe(MessageReceived, self.offer_builder.on_received)
         self.bus.subscribe(MessageEdited, self.offer_builder.on_edited)
         self.bus.subscribe(MessageDeleted, self.offer_builder.on_deleted)
+        # Same shape for coupon alerts: the handler only enqueues, a separate task sends.
+        self._coupon_worker = asyncio.create_task(self._run_coupon_worker())
+        self.bus.subscribe(CouponMatchedWish, self.coupon_alerter.on_coupon)
         self.bus.subscribe(WishlistChanged, self._on_wishlist_changed)
         self.bus.subscribe(ChannelsChanged, self._on_channels_changed)
         self._spawn_retro(WishlistChanged(0))  # existing wishes and stale runs
 
     async def wait_idle(self) -> None:
-        while pending := [t for t in self._tasks if not t.done()]:
-            await asyncio.gather(*pending, return_exceptions=True)
-        await self.evaluator.wait_idle()
-        await self.offer_builder.drain()
+        while True:
+            while pending := [t for t in self._tasks if not t.done()]:
+                await asyncio.gather(*pending, return_exceptions=True)
+            await self.bus.drain()
+            await self.offer_builder.drain()
+            await self.bus.drain()
+            await self.coupon_alerter.drain()
+            await self.evaluator.wait_idle()
+            await self.bus.drain()
+            if self._queues_empty():
+                return
+
+    def _queues_empty(self) -> bool:
+        # Retro tasks can publish after the passes above, so they count as work too.
+        return self.coupon_alerter.idle() and all(t.done() for t in self._tasks)
 
     async def _run_offer_worker(self) -> None:
         try:
@@ -156,13 +182,22 @@ class Collector:
         except Exception:
             log.exception("offer_worker_failed")
 
+    async def _run_coupon_worker(self) -> None:
+        try:
+            await self.coupon_alerter.run()
+        except Exception:
+            log.exception("coupon_worker_failed")
+
     async def stop_offer_worker(self) -> None:
-        worker, self._offer_worker = self._offer_worker, None
-        if worker is None:
-            return
-        worker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await worker
+        """Stop the offer builder and the coupon alerter tasks."""
+        workers = (self._offer_worker, self._coupon_worker)
+        self._offer_worker = self._coupon_worker = None
+        for worker in workers:
+            if worker is None:
+                continue
+            worker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await worker
 
     async def fatal(self, reason: str) -> None:
         if self.stopped:
@@ -340,6 +375,20 @@ class Collector:
         )
 
     def build_message(self, alert: Alert) -> AlertMessage | None:
+        if (
+            alert.kind is AlertKind.coupon
+        ):  # the text was rendered at alert time; no message to read
+            if alert.payload is None:
+                return None
+            return AlertMessage(
+                wish_name="",
+                text="",
+                price_cents=alert.price_cents,
+                channel_name="",
+                link=None,
+                delayed_minutes=None,
+                rendered=alert.payload,
+            )
         m = self._messages.get(alert.channel_id, alert.message_id)
         wish = self._wish_repo.get(alert.wish_id)
         channel_name = self._names.get(alert.channel_id)

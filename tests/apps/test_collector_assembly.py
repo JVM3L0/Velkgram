@@ -1,6 +1,8 @@
 import asyncio
 import sqlite3
 from collections.abc import AsyncIterator
+from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -350,3 +352,46 @@ async def test_gap_check_uses_pending_snapshot(tmp_path: Path) -> None:
     await env.collector.start()  # startup backfill consumes the snapshot
     assert env.count("messages", f"channel_id={CH}") == 2
     assert gw.iter_calls[0][1] == 5
+
+
+_SHOPEE_COUPON = (
+    "Cupom Shopee\n\nR$ 10 OFF em R$ 40: QIP98Q1ZXO\n\n-Resgate aqui: \n"
+    "https://s.shopee.com.br/70GSVaUJxC\n\n-Anúncio"
+)
+
+
+async def test_live_coupon_after_a_matching_offer_produces_one_coupon_alert(env: Env) -> None:
+    env.channel()
+    env.wish()
+    await env.collector.start()
+    product = replace(
+        msg(1, CH, "Teclado mecanico por R$ 99"),
+        date=NOW - timedelta(hours=2),
+        links=("https://s.shopee.com.br/prod",),
+        source="backfill",
+    )
+    await env.collector.ingestor.on_new(product)
+    await env.bus.drain()
+    await env.collector.wait_idle()
+    coupon = replace(
+        msg(2, CH, _SHOPEE_COUPON),
+        date=NOW - timedelta(minutes=1),
+        links=("https://s.shopee.com.br/70GSVaUJxC",),
+    )
+    await env.collector.ingestor.on_new(coupon)
+    await env.bus.drain()
+    await env.collector.wait_idle()
+    assert env.count("alerts", "kind='coupon' AND status='sent'") == 1
+    [sent] = [m for m in env.notifier.sent if m.rendered is not None]
+    assert sent.rendered is not None
+    assert sent.rendered.startswith("🎟️ Cupom shopee: QIP98Q1ZXO")
+    assert 'Para "Teclado": oferta de R$ 99,00' in sent.rendered
+
+
+async def test_stopping_the_collector_leaves_no_pending_workers(env: Env) -> None:
+    env.channel()
+    await env.collector.start()
+    workers = [env.collector._offer_worker, env.collector._coupon_worker]
+    assert all(w is not None and not w.done() for w in workers)
+    await env.collector.stop_offer_worker()
+    assert all(w is not None and w.done() for w in workers)

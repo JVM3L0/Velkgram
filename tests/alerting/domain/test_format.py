@@ -1,6 +1,11 @@
 from datetime import UTC, datetime
 
-from velkgram.alerting.domain.format import format_alert, message_link, telegram_link
+from velkgram.alerting.domain.format import (
+    format_alert,
+    format_coupon_alert,
+    message_link,
+    telegram_link,
+)
 from velkgram.alerting.domain.models import AlertMessage
 from velkgram.shared.events import MessageData
 
@@ -74,3 +79,56 @@ def test_alert_lists_several_coupons() -> None:
 
 def test_alert_without_a_coupon_keeps_the_plain_price_line() -> None:
     assert format_alert(_msg()).splitlines()[1] == "R$ 1.299,90"
+
+
+def _coupon(**kw: object) -> str:
+    args: dict[str, object] = {
+        "store": "Shopee",
+        "codes": ("QIP98Q1ZXO",),
+        "discount": "R$ 10 OFF",
+        "min_cents": 4000,
+        "scope": None,
+        "wish_name": "SSD",
+        "offer_price_cents": 9900,
+        "max_price_cents": 20000,
+        "over_max": False,
+        "link": "https://s.shopee.com.br/x",
+    }
+    args.update(kw)
+    return format_coupon_alert(**args)  # type: ignore[arg-type]
+
+
+def test_coupon_alert_plain() -> None:
+    assert _coupon().splitlines() == [
+        "🎟️ Cupom Shopee: QIP98Q1ZXO — R$ 10 OFF a partir de R$ 40,00",
+        'Para "SSD": oferta de R$ 99,00',
+        "https://s.shopee.com.br/x",
+    ]
+
+
+def test_coupon_alert_over_max() -> None:
+    line = _coupon(over_max=True, offer_price_cents=25000).splitlines()[1]
+    assert line == 'Para "SSD": oferta de R$ 250,00 (acima do seu limite de R$ 200,00)'
+
+
+def test_coupon_alert_with_scope_adds_caveat_line() -> None:
+    lines = _coupon(scope="eletrônicos").splitlines()
+    assert lines[0].endswith("a partir de R$ 40,00 em eletrônicos")
+    assert lines[2] == "• pode não valer para todos os produtos"
+    assert lines[3] == "https://s.shopee.com.br/x"
+
+
+def test_coupon_alert_without_discount_or_minimum() -> None:
+    first = _coupon(discount="", min_cents=None).splitlines()[0]
+    assert first == "🎟️ Cupom Shopee: QIP98Q1ZXO"
+
+
+def test_coupon_alert_lists_mercado_livre_tier_codes() -> None:
+    first = _coupon(
+        store="Mercado Livre", codes=("ML10", "ML10B"), discount="10% OFF", min_cents=None
+    ).splitlines()[0]
+    assert first == "🎟️ Cupom Mercado Livre: ML10, ML10B — 10% OFF"
+
+
+def test_rendered_text_is_returned_verbatim() -> None:
+    assert format_alert(_msg(rendered="texto pronto")) == "texto pronto"

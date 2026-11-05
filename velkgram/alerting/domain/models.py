@@ -58,3 +58,4 @@ class AlertMessage:
     channel_name: str
     link: str | None
     delayed_minutes: int | None
+    rendered: str | None = None  # final text (coupon alerts); format_alert returns it verbatim
