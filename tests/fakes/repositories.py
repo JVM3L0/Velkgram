@@ -132,6 +132,14 @@ class InMemoryMessageRepository:
     def set_cursor(self, channel_id: int, last_message_id: int) -> None:
         self._cursors[channel_id] = max(last_message_id, self._cursors.get(channel_id, 0))
 
+    def purge_text_before(self, cutoff: datetime) -> int:
+        n = 0
+        for key, m in list(self._messages.items()):
+            if m.date < cutoff and m.text != "":
+                self._messages[key] = replace(m, text="")
+                n += 1
+        return n
+
     def write_heartbeat(self, h: Heartbeat) -> None:
         self._heartbeat = h
 

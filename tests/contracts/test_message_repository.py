@@ -159,3 +159,37 @@ def test_cursor_updated_at_uses_clock(tmp_path: Path) -> None:
     SqliteMessageRepository(conn, clock).set_cursor(100, 1)
     row = conn.execute("SELECT updated_at FROM ingestion_cursors").fetchone()
     assert row[0] == "2030-01-02T03:04:05.000000Z"
+
+
+def test_purge_clears_old_text(handle: RepoHandle) -> None:
+    old = _msg(1, date=T0 - timedelta(days=100))
+    new = _msg(2)
+    handle.repo.add(old)
+    handle.repo.add(new)
+    assert handle.repo.purge_text_before(T0 - timedelta(days=90)) == 1
+    assert handle.repo.get(100, 1) == replace(old, text="")
+    assert handle.repo.get(100, 2) == new
+
+
+def test_purge_is_idempotent(handle: RepoHandle) -> None:
+    handle.repo.add(_msg(1, date=T0 - timedelta(days=100)))
+    cutoff = T0 - timedelta(days=90)
+    assert handle.repo.purge_text_before(cutoff) == 1
+    assert handle.repo.purge_text_before(cutoff) == 0
+
+
+def test_purge_deletes_versions_by_message_date(tmp_path: Path) -> None:
+    conn = connect(tmp_path / "t.db")
+    apply_migrations(conn, ["velkgram.shared", "velkgram.ingestion"])
+    repo = SqliteMessageRepository(conn, FakeClock(T0))
+    old = _msg(1, date=T0 - timedelta(days=100))
+    new = _msg(2)
+    repo.add(old)
+    repo.add(new)
+    repo.add_version(old, T0 - timedelta(days=99), False)
+    repo.add_version(old, T0, False)  # late edit, after the cutoff
+    repo.add_version(new, T0, False)
+    repo.purge_text_before(T0 - timedelta(days=90))
+    rows = conn.execute("SELECT channel_id, message_id FROM message_versions").fetchall()
+    assert [(r[0], r[1]) for r in rows] == [(100, 2)]
+    conn.close()

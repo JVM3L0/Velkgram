@@ -29,7 +29,7 @@ def _opt_int(value: object) -> int | None:
     return None if value is None else int(cast(int, value))
 
 
-def _to_message(row: sqlite3.Row) -> MessageData:
+def to_message(row: sqlite3.Row) -> MessageData:
     return MessageData(
         channel_id=int(row["channel_id"]),
         message_id=int(row["message_id"]),
@@ -111,14 +111,14 @@ class SqliteMessageRepository:
             "ORDER BY received_at, channel_id, message_id",
             (to_iso(since),),
         ).fetchall()
-        return [_to_message(r) for r in rows]
+        return [to_message(r) for r in rows]
 
     def get(self, channel_id: int, message_id: int) -> MessageData | None:
         row = self._conn.execute(
             f"SELECT {_COLUMNS} FROM messages WHERE channel_id = ? AND message_id = ?",
             (channel_id, message_id),
         ).fetchone()
-        return _to_message(row) if row else None
+        return to_message(row) if row else None
 
     def get_cursor(self, channel_id: int) -> int | None:
         row = self._conn.execute(
@@ -135,6 +135,20 @@ class SqliteMessageRepository:
                 "updated_at = excluded.updated_at",
                 (channel_id, last_message_id, to_iso(self._clock.now())),
             )
+
+    def purge_text_before(self, cutoff: datetime) -> int:
+        bound = to_iso(cutoff)
+        with transaction(self._conn):
+            cursor = self._conn.execute(
+                "UPDATE messages SET text = '' WHERE date < ? AND text != ''", (bound,)
+            )
+            self._conn.execute(
+                "DELETE FROM message_versions WHERE EXISTS (SELECT 1 FROM messages m "
+                "WHERE m.channel_id = message_versions.channel_id "
+                "AND m.message_id = message_versions.message_id AND m.date < ?)",
+                (bound,),
+            )
+        return cursor.rowcount
 
     def write_heartbeat(self, h: Heartbeat) -> None:
         with transaction(self._conn):
