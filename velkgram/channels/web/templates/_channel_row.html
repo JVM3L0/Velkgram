@@ -1,0 +1,19 @@
+<tr id="channel-{{ channel.id }}">
+  <td>{{ channel.name or channel.ref }}{% if channel.name %} <span class="muted">{{ channel.ref }}</span>{% endif %}</td>
+  <td>
+    {% if channel.status.value == "active" %}ativo
+    {% elif channel.status.value == "error" %}erro{% if channel.error %}: <span class="error">{{ channel.error }}</span>{% endif %}
+    {% else %}pendente{% endif %}
+  </td>
+  <td>{{ channel.silent_after_hours }} h</td>
+  <td>
+    <button hx-post="/channels/{{ channel.id }}/toggle" hx-target="#channel-{{ channel.id }}" hx-swap="outerHTML">
+      {{ "Ativo" if channel.enabled else "Pausado" }}
+    </button>
+  </td>
+  <td>
+    <form class="inline" method="post" action="/channels/{{ channel.id }}/delete">
+      <button type="submit">Remover</button>
+    </form>
+  </td>
+</tr>

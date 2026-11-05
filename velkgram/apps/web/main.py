@@ -9,10 +9,13 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from starlette.middleware.sessions import SessionMiddleware
 
+import velkgram.channels.web as channels_web
 import velkgram.wishlist.web as wishlist_web
 from velkgram.apps.web.auth import verify_password
 from velkgram.apps.web.deps import SESSION_KEY, SESSION_USER, get_conn, require_user
 from velkgram.apps.web.throttle import LoginThrottle
+from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
+from velkgram.channels.web.router import build_router as build_channels_router
 from velkgram.shared.adapters.clock_system import SystemClock
 from velkgram.shared.config import Settings, load_settings
 from velkgram.shared.ports import Clock
@@ -20,7 +23,10 @@ from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 from velkgram.wishlist.web.router import build_router as build_wishlist_router
 
 _APP_TEMPLATES = Path(__file__).parent / "templates"
-_MODULE_TEMPLATE_DIRS = (Path(wishlist_web.__file__).parent / "templates",)
+_MODULE_TEMPLATE_DIRS = (
+    Path(wishlist_web.__file__).parent / "templates",
+    Path(channels_web.__file__).parent / "templates",
+)
 
 
 def _build_templates() -> Jinja2Templates:
@@ -49,7 +55,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     templates = _build_templates()
     app.state.settings = settings
     app.state.templates = templates
-    throttle = LoginThrottle(clock or SystemClock())
+    clock = clock or SystemClock()
+    app.state.clock = clock
+    throttle = LoginThrottle(clock)
     app.state.login_throttle = throttle
 
     @app.get("/login", response_class=HTMLResponse)
@@ -87,6 +95,16 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             get_conn=get_conn, templates=templates, make_repo=SqliteWishRepository
         ),
         prefix="/wishes",
+        dependencies=[Depends(require_user)],
+    )
+    app.include_router(
+        build_channels_router(
+            get_conn=get_conn,
+            templates=templates,
+            make_repo=SqliteChannelRepository,
+            clock=clock,
+        ),
+        prefix="/channels",
         dependencies=[Depends(require_user)],
     )
     return app
