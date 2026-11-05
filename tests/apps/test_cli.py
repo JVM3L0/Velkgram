@@ -62,3 +62,20 @@ def test_login_assumptions_hold_without_network() -> None:
     client = build_client(replace(settings, tg_session=None))
     assert isinstance(client.session, StringSession)
     assert StringSession.save(client.session) == ""
+
+
+def test_report_runs_on_empty_db(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "v.db"))
+    assert main(["migrate"]) == 0
+    capsys.readouterr()
+    assert main(["report", "--since", "2026-11-01", "--until", "2026-11-02"]) == 0
+    assert "latency_telegram_ms" in capsys.readouterr().out
+
+
+def test_report_rejects_invalid_date(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["report", "--since", "11/01/2026"])
+    assert exc.value.code == 2
+    assert "invalid date" in capsys.readouterr().err

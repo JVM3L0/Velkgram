@@ -7,11 +7,18 @@ import os
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import replace
+from datetime import UTC, date, datetime
 
 from telethon.sessions import StringSession
 
+from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.apps.web.auth import hash_password
+from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.adapters.telethon.client import build_client
+from velkgram.reporting.adapters.alerting_api import AlertingAlertStats, price_extractor
+from velkgram.reporting.adapters.ingestion_api import IngestionMessageStats
+from velkgram.reporting.services.metrics import build_report
+from velkgram.reporting.services.render import render_report
 from velkgram.shared.config import load_settings
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
@@ -74,11 +81,39 @@ def _collector(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _report(args: argparse.Namespace) -> int:
+    since: date = args.since
+    until: date = args.until or datetime.now(UTC).date()
+    settings = load_settings(os.environ)
+    conn = connect(settings.db_path)
+    try:
+        report = build_report(
+            IngestionMessageStats(SqliteIngestionQueries(conn)),
+            AlertingAlertStats(SqliteAlertQueries(conn)),
+            price_extractor(),
+            since,
+            until,
+            args.price_per_mtok,
+        )
+    finally:
+        conn.close()
+    print(render_report(report), end="")
+    return 0
+
+
+def _date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid date {value!r} (expected YYYY-MM-DD)") from None
+
+
 COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "migrate": _migrate,
     "login": _login_cmd,
     "hash-password": _hash_password,
     "collector": _collector,
+    "report": _report,
 }
 
 
@@ -89,6 +124,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("login", help="interactive Telegram login; prints a StringSession")
     sub.add_parser("hash-password", help="hash a web password for WEB_PASSWORD_HASH")
     sub.add_parser("collector", help="run the Telegram collector")
+    report = sub.add_parser("report", help="usage report: volume, alerts, latency, token cost")
+    report.add_argument("--since", type=_date, required=True, help="YYYY-MM-DD (UTC)")
+    report.add_argument("--until", type=_date, default=None, help="YYYY-MM-DD (UTC), inclusive")
+    report.add_argument("--price-per-mtok", type=float, default=None, help="USD per 1M tokens")
     return parser
 
 
