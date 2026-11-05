@@ -29,6 +29,7 @@ MIGRATION_PACKAGES = (
     "velkgram.wishlist",
     "velkgram.ingestion",
     "velkgram.alerting",
+    "velkgram.offers",
 )
 
 

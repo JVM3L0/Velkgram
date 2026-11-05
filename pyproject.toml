@@ -28,7 +28,8 @@ packages = ["velkgram"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib -m 'not slow'"
+markers = ["slow: long-running performance tests"]
 pythonpath = ["."]
 
 [tool.ruff]
@@ -57,6 +58,7 @@ forbidden_modules = [
   "velkgram.wishlist.domain", "velkgram.wishlist.ports", "velkgram.wishlist.services", "velkgram.wishlist.adapters", "velkgram.wishlist.web",
   "velkgram.ingestion.domain", "velkgram.ingestion.ports", "velkgram.ingestion.services", "velkgram.ingestion.adapters", "velkgram.ingestion.web",
   "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
+  "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
   "velkgram.reporting",
 ]
 allow_indirect_imports = true
@@ -69,6 +71,7 @@ forbidden_modules = [
   "velkgram.channels.domain", "velkgram.channels.ports", "velkgram.channels.services", "velkgram.channels.adapters", "velkgram.channels.web",
   "velkgram.ingestion.domain", "velkgram.ingestion.ports", "velkgram.ingestion.services", "velkgram.ingestion.adapters", "velkgram.ingestion.web",
   "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
+  "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
   "velkgram.reporting",
 ]
 allow_indirect_imports = true
@@ -81,6 +84,7 @@ forbidden_modules = [
   "velkgram.channels.domain", "velkgram.channels.ports", "velkgram.channels.services", "velkgram.channels.adapters", "velkgram.channels.web",
   "velkgram.wishlist.domain", "velkgram.wishlist.ports", "velkgram.wishlist.services", "velkgram.wishlist.adapters", "velkgram.wishlist.web",
   "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
+  "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
   "velkgram.reporting",
 ]
 allow_indirect_imports = true
@@ -93,6 +97,7 @@ forbidden_modules = [
   "velkgram.channels.domain", "velkgram.channels.ports", "velkgram.channels.services", "velkgram.channels.adapters", "velkgram.channels.web",
   "velkgram.wishlist.domain", "velkgram.wishlist.ports", "velkgram.wishlist.services", "velkgram.wishlist.adapters", "velkgram.wishlist.web",
   "velkgram.ingestion.domain", "velkgram.ingestion.ports", "velkgram.ingestion.services", "velkgram.ingestion.adapters", "velkgram.ingestion.web",
+  "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
   "velkgram.reporting",
 ]
 allow_indirect_imports = true
@@ -106,6 +111,20 @@ forbidden_modules = [
   "velkgram.wishlist.domain", "velkgram.wishlist.ports", "velkgram.wishlist.services", "velkgram.wishlist.adapters", "velkgram.wishlist.web",
   "velkgram.ingestion.domain", "velkgram.ingestion.ports", "velkgram.ingestion.services", "velkgram.ingestion.adapters", "velkgram.ingestion.web",
   "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
+  "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "offers boundary"
+type = "forbidden"
+source_modules = ["velkgram.offers"]
+forbidden_modules = [
+  "velkgram.channels.domain", "velkgram.channels.ports", "velkgram.channels.services", "velkgram.channels.adapters", "velkgram.channels.web",
+  "velkgram.wishlist.domain", "velkgram.wishlist.ports", "velkgram.wishlist.services", "velkgram.wishlist.adapters", "velkgram.wishlist.web",
+  "velkgram.ingestion.domain", "velkgram.ingestion.ports", "velkgram.ingestion.services", "velkgram.ingestion.adapters", "velkgram.ingestion.web",
+  "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
+  "velkgram.reporting",
 ]
 allow_indirect_imports = true
 
@@ -113,7 +132,7 @@ allow_indirect_imports = true
 name = "shared depends on no business module"
 type = "forbidden"
 source_modules = ["velkgram.shared"]
-forbidden_modules = ["velkgram.channels", "velkgram.wishlist", "velkgram.ingestion", "velkgram.alerting", "velkgram.reporting", "velkgram.apps"]
+forbidden_modules = ["velkgram.channels", "velkgram.wishlist", "velkgram.ingestion", "velkgram.alerting", "velkgram.offers", "velkgram.reporting", "velkgram.apps"]
 
 [[tool.importlinter.contracts]]
 name = "domain is pure (rule 1)"
@@ -136,7 +155,7 @@ allow_indirect_imports = true
 [[tool.importlinter.contracts]]
 name = "only apps import adapters (rule 4)"
 type = "forbidden"
-source_modules = ["velkgram.wishlist.web", "velkgram.channels.web", "velkgram.ingestion.web", "velkgram.alerting.web", "velkgram.*.ports", "velkgram.shared.events", "velkgram.shared.ports",
+source_modules = ["velkgram.wishlist.web", "velkgram.channels.web", "velkgram.ingestion.web", "velkgram.alerting.web", "velkgram.offers.web", "velkgram.*.ports", "velkgram.shared.events", "velkgram.shared.ports",
   "velkgram.shared.text", "velkgram.shared.deals", "velkgram.shared.config", "velkgram.shared.db", "velkgram.shared.logging", "velkgram.shared.migrate"]
 forbidden_modules = ["velkgram.*.adapters", "velkgram.apps"]
 allow_indirect_imports = true
