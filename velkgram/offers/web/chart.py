@@ -15,10 +15,10 @@ _MAX_LINE = "var(--tertiary)"
 _ON_SURFACE = "var(--on-surface)"
 _HALO = "var(--surface-container-low)"  # the chart frame colour: a halo keeps labels legible
 
-_LEFT, _RIGHT, _TOP, _BOTTOM = 78, 12, 14, 28
+_LEFT, _RIGHT, _TOP, _BOTTOM = 96, 12, 14, 28
 _LABEL_GAP = 14  # minimum vertical distance between y labels, in px
 _MAX_LINE_REACH = 0.25  # the max-price line joins the y-range only within this share of the span
-_CHAR_W = 6.6  # glyph width of the 12 px semibold label font (slightly generous), for collisions
+_CHAR_W = 7.44  # 0.62 em of the 12 px label: DejaVu/Segoe fallbacks are wider than Roboto Flex
 Box = tuple[float, float, float, float]
 Spot = tuple[float, float, str]
 _HEIGHT = 220  # fixed: text keeps its pixel size because the viewBox is rendered at ~1:1

@@ -238,10 +238,9 @@ def test_chart_labels_stay_inside_the_viewbox() -> None:
 
 
 def test_chart_labels_do_not_sit_on_the_step_line() -> None:
-    for width in (340, 800):
-        for n, pts in enumerate(_SYNTHETIC):
-            if n == 0 and width == 340:
-                continue  # six swings in 250 px leave no room for a 120 px label: halo only
+    # At 340 px the plot is 232 px wide: a ~115 px label has no free spot, only its halo.
+    for width in (520, 800):
+        for pts in _SYNTHETIC:
             out = price_chart_svg(pts, 110000, width=width)
             for x, y, anchor, text in _labels(out):
                 left, top, right, bottom = _box(x, y, anchor, text)
@@ -255,3 +254,31 @@ def test_chart_draws_a_leader_when_a_label_had_to_move_away_from_its_dot() -> No
     assert 'class="chart-leader"' in crowded
     calm = price_chart_svg(_pts(100000, 90000, 95000), 99000)
     assert "chart-leader" not in calm
+
+
+FALLBACK_CHAR_W = 0.62 * 12  # DejaVu / Segoe digits are wider than Roboto Flex
+
+
+def _all_text_boxes(out: str) -> list[tuple[float, float, str]]:
+    boxes = []
+    for attrs, text in re.findall(r"<text ([^>]*)>([^<]+)<", out):
+        x = float(re.search(r'x="([\d.]+)"', attrs)[1])  # type: ignore[index]
+        end = 'text-anchor="end"' in attrs
+        width = len(text) * FALLBACK_CHAR_W
+        boxes.append((x - width if end else x, width, text))
+    return boxes
+
+
+def test_four_digit_labels_fit_the_viewbox_with_wide_fallback_fonts() -> None:
+    series = (
+        _pts(199000, 150000, 202200),  # the highest price is also the newest, at the right edge
+        _pts(120000, 202200),
+        _pts(202200),
+        _pts(1234500, 202200),  # a five-digit-reais axis label
+    )
+    for width in (340, 520, 800):
+        for pts in series:
+            boxes = _all_text_boxes(price_chart_svg(pts, 250000, width=width))
+            assert boxes
+            for left, w, text in boxes:
+                assert left >= 0 and left + w <= width, (width, text, left)
