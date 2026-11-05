@@ -499,6 +499,25 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .status-failed { background-color: var(--error-container); color: var(--on-error-container); font-weight: 600; }
 .status-pending, .status-expired { background-color: var(--surface-container-highest); color: var(--on-surface); }
 
+/* ---- Collector health banner ---- */
+.health {
+  --tint: var(--success);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--shape-xl);
+  color: var(--on-surface);
+  background-color: color-mix(in oklab, var(--tint) 20%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--tint) 45%, var(--surface));
+}
+.health-warning { --tint: var(--warning); }
+.health-error { --tint: var(--error); }
+.health > i { flex: none; font-size: 2.5rem; line-height: 1; color: var(--tint); }
+.health > div > * { margin: 0; }
+.health-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
+.health-detail { color: var(--on-surface-variant); line-height: 1.4; margin-block-start: 0.25rem !important; }
+
 /* ---- Login ---- */
 .login-card {
   display: flex;

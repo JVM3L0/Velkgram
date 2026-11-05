@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
 from velkgram.ingestion import ConnectionState, IngestionQueries
+from velkgram.ingestion.web.banner import ago, collector_banner
 from velkgram.shared.ports import Clock
 
 HEARTBEAT_STALE_AFTER = timedelta(seconds=90)
@@ -39,8 +40,15 @@ def build_router(
         queries = make_queries(conn)
         beat = queries.heartbeat()
         heartbeat = None
+        banner = collector_banner(
+            beat.connection_state if beat else None,
+            beat.last_seen if beat else None,
+            now,
+            HEARTBEAT_STALE_AFTER,
+        )
         if beat is not None:
             heartbeat = {
+                "last_seen_ago": ago(now - beat.last_seen),
                 "state": _STATE_PT[beat.connection_state],
                 "reason": beat.fatal_reason,
                 "last_seen": beat.last_seen,
@@ -58,6 +66,7 @@ def build_router(
                 {
                     "name": name,
                     "last_message_at": last_message,
+                    "last_message_ago": ago(now - last_message) if last_message else None,
                     "silent": now - reference > timedelta(hours=silent_after_hours),
                     "silent_after_hours": silent_after_hours,
                 }
@@ -66,6 +75,7 @@ def build_router(
             request,
             "status.html",
             {
+                "banner": banner,
                 "heartbeat": heartbeat,
                 "channels": rows,
                 "failures": recent_failures(conn),

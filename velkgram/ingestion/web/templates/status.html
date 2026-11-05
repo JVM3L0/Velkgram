@@ -4,6 +4,13 @@
 {% set silent_count = channels | selectattr("silent") | list | length %}
 <div class="list-page">
 <h1>Status</h1>
+<section class="health health-{{ banner.kind }}" aria-label="Situação do coletor" role="status">
+  <i aria-hidden="true">{{ banner.icon }}</i>
+  <div>
+    <p class="health-title">{{ banner.title }}</p>
+    <p class="health-detail">{{ banner.detail }}</p>
+  </div>
+</section>
 <section class="status-card" aria-labelledby="collector-title">
   <h2 id="collector-title" class="section-title">Coletor</h2>
   {% if heartbeat %}
@@ -11,18 +18,14 @@
     <div class="kv-row"><dt><i aria-hidden="true">sync_alt</i>Conexão</dt>
       <dd><span class="chip small {{ 'flag-error' if heartbeat.state == 'erro fatal' else 'state-on' }}">{{ heartbeat.state }}</span>{% if heartbeat.reason %} <span>{{ heartbeat.reason }}</span>{% endif %}</dd></div>
     <div class="kv-row"><dt><i aria-hidden="true">schedule</i>Último sinal</dt>
-      <dd>{{ heartbeat.last_seen.strftime("%d/%m/%Y %H:%M:%S") }}{% if heartbeat.stale %} <span class="chip small flag-error">desatualizado</span>{% endif %}</dd></div>
+      <dd>{{ heartbeat.last_seen.strftime("%d/%m/%Y %H:%M:%S") }} <span class="muted">({{ heartbeat.last_seen_ago }})</span>{% if heartbeat.stale %} <span class="chip small flag-error">desatualizado</span>{% endif %}</dd></div>
     <div class="kv-row"><dt><i aria-hidden="true">mail</i>Mensagens lidas</dt>
       <dd>{{ heartbeat.messages_seen }} {{ "mensagem" if heartbeat.messages_seen == 1 else "mensagens" }}</dd></div>
     <div class="kv-row"><dt><i aria-hidden="true">notifications_active</i>Alertas</dt>
       <dd>{{ heartbeat.alerts_sent }} {{ "alerta enviado" if heartbeat.alerts_sent == 1 else "alertas enviados" }}</dd></div>
   </dl>
-  {% if heartbeat.stale %}
-  <p class="muted">Desatualizado: o coletor não envia sinal há mais de {{ stale_after_seconds }} segundos. Confira se ele está rodando.</p>
-  {% endif %}
   {% else %}
   <p class="status-line"><span class="chip small flag-error">coletor nunca rodou</span></p>
-  <p class="muted">Inicie o coletor para começar a receber ofertas.</p>
   {% endif %}
 </section>
 
@@ -41,7 +44,7 @@
     {% for c in channels %}
       <tr>
         <td>{{ c.name }}</td>
-        <td>{% if c.last_message_at %}{{ c.last_message_at.strftime("%d/%m/%Y %H:%M") }}{% else %}<span class="muted">nenhuma</span>{% endif %}</td>
+        <td>{% if c.last_message_at %}{{ c.last_message_at.strftime("%d/%m/%Y %H:%M") }} <span class="muted">({{ c.last_message_ago }})</span>{% else %}<span class="muted">nenhuma</span>{% endif %}</td>
         <td>{% if c.silent %}<span class="chip small flag-error">silencioso (&gt; {{ c.silent_after_hours }} h)</span>{% endif %}</td>
       </tr>
     {% endfor %}

@@ -179,3 +179,32 @@ def test_status_with_a_channel_still_renders_the_table(tmp_path: Path) -> None:
     client = _client(tmp_path)
     _channel(tmp_path, created_at=NOW - timedelta(days=5), last_message=NOW - timedelta(hours=1))
     assert "<table" in client.get("/status").text
+
+
+def test_status_banner_reflects_collector_health(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    assert "health-error" in client.get("/status").text  # never ran
+    _heartbeat(tmp_path, age_s=30)
+    page = client.get("/status").text
+    assert "health-ok" in page and "Coletor funcionando" in page
+    assert "(há 30 s)" in page  # relative time beside the absolute one
+
+
+def test_status_banner_is_amber_when_stale_and_red_when_fatal(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _heartbeat(tmp_path, age_s=600)
+    page = client.get("/status").text
+    assert "health-warning" in page and "Sem sinal há 10 min" in page
+    conn = connect(make_settings(tmp_path).db_path)
+    conn.execute(
+        "UPDATE collector_heartbeat SET connection_state='fatal', last_seen=?", (_iso(NOW),)
+    )
+    conn.commit()
+    conn.close()
+    assert "Sessão inválida" in client.get("/status").text
+
+
+def test_status_channel_rows_show_relative_last_message(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _channel(tmp_path, created_at=NOW - timedelta(days=5), last_message=NOW - timedelta(hours=2))
+    assert "(há 2 h)" in client.get("/status").text
