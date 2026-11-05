@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 
 from velkgram.offers import PricePoint, sparkline_svg
-from velkgram.offers.web.chart import price_chart_responsive, price_chart_svg
+from velkgram.offers.web.chart import _CHAR_W, price_chart_responsive, price_chart_svg
 from velkgram.offers.web.format import brl
 
 T0 = datetime(2026, 3, 1, tzinfo=UTC)
@@ -187,8 +187,71 @@ def test_chart_has_a_faint_average_line_and_labels_the_alert() -> None:
     assert "chart-avg" not in price_chart_svg(_pts(100000), 98000)
 
 
+_SYNTHETIC = (
+    _pts(149000, 163000, 171000, 149000, 158000, 152000),  # lowest at both ends of the run
+    _pts(100000, 90000, 95000),
+    _pts(129990, 99900, 120000),
+    _pts(80000, 90000, 100000, 120000, 149000),  # rising to the right edge
+    _pts(149000, 120000, 100000, 90000),  # falling to the right edge
+)
+
+
+def _labels(out: str) -> list[tuple[float, float, str, str]]:
+    found = re.findall(
+        r'<text x="([\d.]+)" y="([\d.]+)" text-anchor="(\w+)"[^>]*font-weight="600"[^>]*>([^<]+)<',
+        out,
+    )
+    return [(float(x), float(y), a, t) for x, y, a, t in found]
+
+
+def _box(x: float, y: float, anchor: str, text: str) -> tuple[float, float, float, float]:
+    w = len(text) * _CHAR_W
+    left = x if anchor == "start" else x - w
+    return left, y - 11, left + w, y + 3
+
+
+def _step_segments(out: str) -> list[tuple[float, float, float, float]]:
+    d = re.search(r'class="chart-step" d="([^"]+)"', out).group(1)  # type: ignore[union-attr]
+    x, y = map(float, re.match(r"M([\d.]+),([\d.]+)", d).groups())  # type: ignore[union-attr]
+    segments = []
+    for cmd, value in re.findall(r"([HV])([\d.]+)", d):
+        v = float(value)
+        if cmd == "H":
+            segments.append((min(x, v), y, max(x, v), y))
+            x = v
+        else:
+            segments.append((x, min(y, v), x, max(y, v)))
+            y = v
+    return segments
+
+
 def test_chart_labels_stay_inside_the_viewbox() -> None:
     for width in (340, 520, 800):
-        out = price_chart_svg(_pts(129990, 99900, 120000), 110000, width=width)
-        for x in re.findall(r'<text x="([\d.]+)" y="[\d.]+" text-anchor="\w+"', out):
-            assert 0 <= float(x) <= width
+        for pts in _SYNTHETIC:
+            out = price_chart_svg(pts, 110000, width=width)
+            labels = _labels(out)
+            assert labels
+            for x, y, anchor, text in labels:
+                left, top, right, bottom = _box(x, y, anchor, text)
+                assert left >= 0 and right <= width, (width, text)
+                assert top >= 0 and bottom <= 220, (width, text)
+
+
+def test_chart_labels_do_not_sit_on_the_step_line() -> None:
+    for width in (340, 800):
+        for n, pts in enumerate(_SYNTHETIC):
+            if n == 0 and width == 340:
+                continue  # six swings in 250 px leave no room for a 120 px label: halo only
+            out = price_chart_svg(pts, 110000, width=width)
+            for x, y, anchor, text in _labels(out):
+                left, top, right, bottom = _box(x, y, anchor, text)
+                for sx0, sy0, sx1, sy1 in _step_segments(out):
+                    touches = sx0 <= right and sx1 >= left and sy0 <= bottom and sy1 >= top
+                    assert not touches, (width, text, (sx0, sy0, sx1, sy1))
+
+
+def test_chart_draws_a_leader_when_a_label_had_to_move_away_from_its_dot() -> None:
+    crowded = price_chart_svg(_SYNTHETIC[0], 110000, width=340)
+    assert 'class="chart-leader"' in crowded
+    calm = price_chart_svg(_pts(100000, 90000, 95000), 99000)
+    assert "chart-leader" not in calm
