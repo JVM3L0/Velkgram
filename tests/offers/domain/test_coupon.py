@@ -1,14 +1,14 @@
 import pytest
 
-from velkgram.offers.domain.models import CouponTier
 from velkgram.offers.domain.coupon import (
     CouponDeal,
     best_tier,
-    coupon_title,
     coupon_deal,
+    coupon_title,
     starts_with_coupon_word,
     store_in_title,
 )
+from velkgram.offers.domain.models import CouponTier
 
 SHOPEE = (
     "Cupom Shopee\n\nR$ 10 OFF em R$ 40: QIP98Q1ZXO\n\n-Resgate aqui: \n"

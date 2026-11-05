@@ -22,6 +22,8 @@ def offer(
     comparable: bool = True,
     coupon: tuple[str, ...] = (),
     kind: OfferKind = OfferKind.product,
+    coupon_tiers: tuple[CouponTier, ...] | None = None,
+    coupon_discount: str | None = None,
 ) -> Offer:
     when = at or T0 + timedelta(minutes=message_id)
     return Offer(
@@ -43,10 +45,14 @@ def offer(
         comparable=comparable,
         kind=kind,
         coupons=coupon,
-        coupon_discount="R$ 10 OFF" if kind is OfferKind.coupon else None,
+        coupon_discount=coupon_discount or ("R$ 10 OFF" if kind is OfferKind.coupon else None),
         coupon_min_cents=4000 if kind is OfferKind.coupon else None,
         redeem_link="https://x.test/resgate" if kind is OfferKind.coupon else None,
-        coupon_tiers=(CouponTier("R$ 10 OFF", 4000),) if kind is OfferKind.coupon else (),
+        coupon_tiers=(
+            coupon_tiers
+            if coupon_tiers is not None
+            else ((CouponTier("R$ 10 OFF", 4000),) if kind is OfferKind.coupon else ())
+        ),
     )
 
 

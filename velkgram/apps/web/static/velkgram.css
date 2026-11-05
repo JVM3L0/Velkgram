@@ -1080,19 +1080,21 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 .offer .coupon-code:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .coupon-text { overflow-wrap: anywhere; user-select: all; }
 .coupon-code > i { flex: none; font-size: 1.25rem; }
-/* The confirmation covers the chip itself: no layout shift, no spill past the card edge. */
+/* A small tag on the chip's top edge: the code underneath stays readable. */
 .copy-status {
   position: absolute;
-  inset: 0;
+  inset-block-start: 0;
+  inset-inline-end: 0.5rem;
+  translate: 0 -55%;
   z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0.125rem 0.5rem;
   border-radius: var(--shape-control);
   background-color: var(--on-surface);
   color: var(--surface);
-  font-size: 1rem;
+  font-size: 0.8125rem;
   font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
   pointer-events: none;
 }
 .copy-status:empty { display: none; }
@@ -1141,3 +1143,20 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 .post-full:not([open]) > .post-text { display: none; }
 .offer-coupon .offer-actions { flex-wrap: wrap; gap: 0.5rem; }
 .offer-coupon-compact .offer-actions .button { padding-inline: 0.875rem 1rem; }
+.coupon-tiers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.125rem; font-size: 0.9375rem; font-weight: 500; line-height: 1.4; }
+.coupon-tiers-more { font-weight: 400; opacity: 0.85; }
+.coupon-more {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 3rem;
+  padding-inline: 1rem;
+  border-radius: var(--shape-control);
+  background-color: var(--surface);
+  color: var(--on-surface);
+  font-weight: 700;
+  text-decoration: none;
+}
+.coupon-more:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.offer-coupon-compact { gap: 0.25rem; }
+.offer-coupon-compact .coupon-tiers { font-size: 0.875rem; }
+.offer.offer-coupon-compact { padding-block: 0.75rem; }

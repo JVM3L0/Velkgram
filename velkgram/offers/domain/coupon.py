@@ -88,7 +88,7 @@ def best_tier(tiers: Sequence[CouponTier]) -> CouponTier | None:
 
 
 _LEADING_CUPOM = re.compile(r"^cupom(?:ns)?\b[\s:,-]*", re.IGNORECASE)
-_EDGE_NOISE = " \t-–—:,;"
+_EDGE_NOISE = " \t-\u2013\u2014:,;"
 
 
 def coupon_title(title: str) -> str:

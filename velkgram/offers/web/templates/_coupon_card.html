@@ -1,18 +1,28 @@
-<article class="offer offer-coupon{% if compact %} offer-coupon-compact{% endif %}{% if row.sold_out or row.deleted %} offer-gone{% endif %}"
+<article {% if not compact %}id="{{ row.anchor }}" {% endif %}class="offer offer-coupon{% if compact %} offer-coupon-compact{% endif %}{% if row.sold_out or row.deleted %} offer-gone{% endif %}"
   {%- if row.next_url %} hx-get="{{ row.next_url }}" hx-trigger="revealed" hx-swap="afterend"{% endif %}>
   <p class="coupon-discount">{{ row.discount }}</p>
-  {% if row.terms %}<p class="coupon-terms">{{ row.terms | join(" · ") }}</p>{% endif %}
-  <h2 class="offer-title">{{ row.title }}</h2>
+  {% if row.tier_lines %}
+  {% set tier_limit = 2 if compact else 3 %}
+  <ul class="coupon-tiers">
+    {% for line in row.tier_lines[:tier_limit] %}<li>{{ line }}</li>{% endfor %}
+    {% if row.tier_lines | length > tier_limit %}<li class="coupon-tiers-more">+{{ row.tier_lines | length - tier_limit }} condições</li>{% endif %}
+  </ul>
+  {% elif row.terms %}<p class="coupon-terms">{{ row.terms | join(" · ") }}</p>{% endif %}
+  {% if row.title %}<h2 class="offer-title">{{ row.title }}</h2>{% endif %}
   <p class="offer-meta">
     {% if row.store %}<span class="chip small tonal-chip">{{ row.store }}</span>{% endif %}
     {% if row.channel %}<span class="offer-channel">{{ row.channel }}</span>{% endif %}
     <time datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
   </p>
+  {% if compact %}
+  {% with codes = row.coupons[:2], more = row.coupons | length - 2, more_href = "/?tipo=cupons#" ~ row.anchor %}{% include "_coupon_codes.html" %}{% endwith %}
+  {% else %}
   {% with codes = row.coupons %}{% include "_coupon_codes.html" %}{% endwith %}
+  {% endif %}
   <div class="offer-actions">
     {% if row.redeem_href %}<a class="button small" href="{{ row.redeem_href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">redeem</i><span>Resgatar</span></a>{% endif %}
     {% if row.cart_href %}<a class="button small tonal" href="{{ row.cart_href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">shopping_cart</i><span>Carrinho</span></a>{% endif %}
     {% if not row.redeem_href and not row.cart_href and row.href %}<a class="button small" href="{{ row.href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">open_in_new</i><span>Abrir</span></a>{% endif %}
   </div>
-  {% include "_post_details.html" %}
+  {% if not compact %}{% include "_post_details.html" %}{% endif %}
 </article>

@@ -6,8 +6,8 @@ from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 
 from velkgram.offers.domain.models import (
-    MatchSource,
     CouponTier,
+    MatchSource,
     Offer,
     OfferKind,
     OfferMatch,

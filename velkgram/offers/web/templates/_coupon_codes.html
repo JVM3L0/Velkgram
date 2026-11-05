@@ -3,5 +3,6 @@
   {% for code in codes %}
   <span class="coupon-wrap"><button type="button" class="coupon-code" data-copy="{{ code }}" aria-label="Copiar cupom {{ code }}"><span class="coupon-text">{{ code }}</span><i aria-hidden="true">content_copy</i></button><span class="copy-status" role="status" aria-live="polite"></span></span>
   {% endfor %}
+  {% if more is defined and more > 0 %}<a class="coupon-more" href="{{ more_href }}" aria-label="Ver mais {{ more }} cupons desta oferta">+{{ more }}</a>{% endif %}
 </div>
 {% endif %}

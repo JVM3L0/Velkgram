@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
+from velkgram.offers.domain.coupon import best_tier, coupon_title
 from velkgram.offers.domain.insight import PriceVerdict, price_insight
 from velkgram.offers.domain.models import MatchSource, OfferKind, ProductStats, RetroStatus
 from velkgram.offers.ports.queries import (
@@ -87,6 +88,8 @@ class CardView:
     redeem_href: str | None = None
     cart_href: str | None = None
     text: str | None = None
+    tier_lines: tuple[str, ...] = ()
+    anchor: str = ""
 
 
 def _parse_cursor(raw: str) -> FeedCursor | None:
@@ -164,6 +167,21 @@ def _coupon_terms(card: OfferCard) -> tuple[str, ...]:
     return tuple(terms)
 
 
+def _headline(card: OfferCard) -> str:
+    if len(card.coupon_tiers) > 1:
+        best = best_tier(card.coupon_tiers)
+        if best is not None:
+            return f"Até {best.discount}"
+    return card.coupon_discount or "Cupom"
+
+
+def _tier_lines(card: OfferCard) -> tuple[str, ...]:
+    return tuple(
+        t.discount if t.min_cents is None else f"{t.discount} em {brl_short(t.min_cents)}"
+        for t in card.coupon_tiers
+    )
+
+
 def _int_or_none(raw: str) -> int | None:
     try:
         return int(raw)
@@ -187,7 +205,7 @@ def build_router(
 
     def card_view(card: OfferCard, now: datetime, names: dict[int, str]) -> CardView:
         return CardView(
-            title=card.title,
+            title=coupon_title(card.title) if card.kind is OfferKind.coupon else card.title,
             price=brl(card.price_cents),
             priced=card.price_cents is not None,
             store=STORE_NAMES.get(card.store, card.store) if card.store else None,
@@ -202,8 +220,10 @@ def build_router(
             comparable=card.comparable,
             is_coupon=card.kind is OfferKind.coupon,
             coupons=card.coupons,
-            discount=card.coupon_discount or "Cupom",
-            terms=_coupon_terms(card),
+            discount=_headline(card),
+            terms=_coupon_terms(card) if len(card.coupon_tiers) < 2 else (),
+            tier_lines=_tier_lines(card) if len(card.coupon_tiers) > 1 else (),
+            anchor=f"cupom-{card.channel_id}-{card.message_id}",
             redeem_href=safe_href(card.redeem_link),
             cart_href=safe_href(card.cart_link),
             text=card.text,

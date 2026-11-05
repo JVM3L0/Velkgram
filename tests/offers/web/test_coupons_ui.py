@@ -9,7 +9,7 @@ from tests.apps.web_support import make_client, make_settings
 from tests.fakes.clock import FakeClock
 from tests.offers.adapters._queries_helpers import match, offer, put
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
-from velkgram.offers.domain.models import MatchSource, Offer, OfferKind
+from velkgram.offers.domain.models import CouponTier, MatchSource, Offer, OfferKind
 from velkgram.shared.db import connect
 
 NOW = datetime(2026, 1, 1, 14, 0, tzinfo=UTC)
@@ -190,3 +190,72 @@ def test_product_match_row_has_copy_button(tmp_path: Path) -> None:
     page = client.get("/wishes/1").text
     assert [b["data-copy"] for b in _copy_buttons(page)] == ["ZAFADINHO10"]
     assert "com cupom" in page
+
+
+TIERS = (
+    CouponTier("R$ 90 OFF", 69900),
+    CouponTier("10% OFF", 7900),
+    CouponTier("10% OFF", 14900),
+    CouponTier("25% OFF", 100),
+    CouponTier("30% OFF", 100),
+)
+CODES = ("SEMPRESAUDE", "PROMOSML", "CLIENTESTOP", "GARANTAJA", "OFERTABOA")
+
+
+def _multi_tier(mid: int = 3) -> Offer:
+    return _coupon(
+        mid,
+        title="Cupom Mercado Livre",
+        coupon=CODES,
+        store="mercadolivre",
+        coupon_tiers=TIERS,
+        coupon_discount="R$ 90 OFF",
+    )
+
+
+def _card_html(page: str, marker: str) -> str:
+    start = page.index(marker)
+    return page[start : page.index("</article>", start)]
+
+
+def test_multi_tier_card_leads_with_the_best_tier_and_lists_three(tmp_path: Path) -> None:
+    page = _client(tmp_path, _multi_tier()).get("/", params={"tipo": "cupons"}).text
+    card = _card_html(page, 'class="offer offer-coupon')
+    assert "Até R$ 90 OFF" in card
+    assert card.count("<li>") == 3
+    assert "R$ 90 OFF em R$ 699" in card and "10% OFF em R$ 79" in card
+    assert "+2 condições" in card
+    assert len(_copy_buttons(card)) == 5  # the full card keeps every code
+    assert "Ver post completo" in card
+
+
+def test_single_tier_card_is_unchanged(tmp_path: Path) -> None:
+    page = _client(tmp_path, _coupon()).get("/", params={"tipo": "cupons"}).text
+    card = _card_html(page, 'class="offer offer-coupon')
+    assert "R$ 10 OFF" in card and "Até" not in card
+    assert "<li" not in card and "em compras a partir de R$ 40" in card
+
+
+def test_strip_card_is_compact(tmp_path: Path) -> None:
+    page = _client(tmp_path, _multi_tier()).get("/").text
+    strip = _section(page, "Cupons ativos")
+    assert len(_copy_buttons(strip)) == 2
+    assert 'class="coupon-more"' in strip and ">+3<" in strip
+    assert "/?tipo=cupons#cupom-1-3" in strip
+    assert "Ver post completo" not in strip
+    assert strip.count("<li>") == 2 and "+3 condições" in strip
+    assert 'id="cupom-1-3"' not in page  # anchors live on the full cards only
+
+
+def test_full_card_carries_the_anchor_the_strip_links_to(tmp_path: Path) -> None:
+    page = _client(tmp_path, _multi_tier()).get("/", params={"tipo": "cupons"}).text
+    assert 'id="cupom-1-3"' in page
+
+
+def test_coupon_card_does_not_repeat_the_discount_in_its_title(tmp_path: Path) -> None:
+    repeat = _coupon(4, title="Cupom KaBuM em produtos selecionados - 11% OFF", store="kabum")
+    bare = _coupon(5, title="Cupom Shopee")
+    page = _client(tmp_path, repeat, bare).get("/", params={"tipo": "cupons"}).text
+    assert 'class="offer-title">em produtos selecionados<' in page
+    assert "Cupom KaBuM" not in page
+    assert page.count('class="offer-title"') == 1  # "Cupom Shopee" leaves nothing to show
