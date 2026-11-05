@@ -11,9 +11,9 @@ Velkgram is a **modular monolith with hexagonal modules** (spec: `docs/superpowe
 
 ```
 velkgram/
-  shared/        events.py (plain-data payloads), ports.py (EventBus, Clock, ChangeSignal),
+  shared/        events.py (plain-data payloads), deals.py (pure deal parsing shared by modules), ports.py (EventBus, Clock, ChangeSignal),
                  adapters/ (bus_memory, signal_polling, clock_system), config.py, db.py
-  channels/  wishlist/  ingestion/  alerting/  reporting/     ← business modules
+  channels/  wishlist/  ingestion/  alerting/  offers/  reporting/     ← business modules
     __init__.py   public API: the only thing other modules may import
     domain/       pure Python: dataclasses + rules. No I/O, no third-party libs.
     ports/        typing.Protocol contracts the services need
@@ -38,7 +38,7 @@ velkgram/
 
 ## Hard rules (enforced by `import-linter`, CI fails otherwise)
 
-1. `*/domain` imports only stdlib + `shared.events` + `shared.text`.
+1. `*/domain` imports only stdlib + `shared.events` + `shared.text` + `shared.deals`.
 2. `*/services` imports only its own `domain`, `ports`, and `shared`.
 3. **No module imports another module's internals.** Cross-module: events, or a port in the consumer whose adapter calls the producer's `__init__` public API.
 4. **Only `apps/*` imports `*/adapters`.**

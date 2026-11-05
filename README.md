@@ -2,10 +2,11 @@
 
 Personal app that reads Telegram deal channels and alerts you in real time when an offer matches your wishlist: required/excluded keywords plus a maximum price.
 
-> **Status: v1 feature-complete (all 22 plan tasks implemented).** The collector, the alert pipeline, the web UI, the usage report and the Docker packaging are done. Alerts go to the log only (WhatsApp is a separate spec). See [Status](#status).
+> **Status: v0.2.0.** On top of v1 (collector, alert pipeline, web UI, usage report, Docker), it now builds an offers catalog with search, a feed, product pages with price history and a Material 3 UI with Catppuccin themes. Alerts go to the log only (WhatsApp is a separate spec). See [Status](#status).
 
 - Design spec: [docs/superpowers/specs/2026-11-04-velkgram-design.md](docs/superpowers/specs/2026-11-04-velkgram-design.md)
-- Implementation plan: [docs/superpowers/plans/2026-11-04-velkgram-v1.md](docs/superpowers/plans/2026-11-04-velkgram-v1.md)
+- v0.2.0 design spec: [docs/superpowers/specs/2026-11-04-velkgram-v0.2.0-design.md](docs/superpowers/specs/2026-11-04-velkgram-v0.2.0-design.md)
+- Implementation plans: [v1](docs/superpowers/plans/2026-11-04-velkgram-v1.md), [v0.2.0](docs/superpowers/plans/2026-11-04-velkgram-v0.2.0.md)
 
 ## How it works
 
@@ -13,12 +14,15 @@ Personal app that reads Telegram deal channels and alerts you in real time when 
 Telegram channels ──push──▶ collector ──▶ store raw message (SQLite)
                                    └──▶ match wishlist → extract price → fast dedup
                                          └──▶ save alert → notify (background, 3 attempts)
+                                   └──▶ build offer (title, price, store, link) → search index + match history
 ```
 
 - **Reading:** a secondary Telegram *user* account over MTProto (Telethon). Events arrive by push, with no polling. Missed messages are recovered by backfill, which takes up to 200 messages or 6 h per channel.
 - **Matching:** each wish has required terms, excluded terms and a max price in BRL. A term can list alternatives separated by `|`, e.g. `2tb|2 tb`. Matching ignores case and accents and respects word boundaries.
 - **Price:** extracted from the post text with regexes (`R$ 1.299,90`, `de R$ 499 por R$ 349`, `por 589`). Installments (`10x R$ 119,90`) are ignored. If no price is found, the alert is still sent, flagged as "preço não identificado".
 - **Dedup:** the same offer alerts only once within 30 min. That covers forwards of the same post, the same wish at the same price, and the same text when there is no price.
+- **Offers:** every message becomes one offer: title, price, store (from the link domain) and main link, indexed with SQLite FTS5 for search. Every wish, enabled or not, gets an `offer_matches` history row for each matching offer; alerts are still sent only for enabled wishes. When you create or edit a wish, it is matched retroactively against the offers of the last `RETENTION_DAYS`.
+- **Retention:** a daily job at 04:00 (`APP_TIMEZONE`) purges the message text older than `RETENTION_DAYS`. Offer summaries and match history are kept forever.
 - **Latency target:** under 10 s from the post to the notification, and under 200 ms inside the app.
 
 ## Requirements
@@ -43,6 +47,8 @@ Edit `.env`. Empty values count as unset and fall back to the default.
 | `DB_PATH` | `./data/velkgram.db` |
 | `NOTIFIER` | `log` (the only option in v1) |
 | `LOG_LEVEL` | `INFO` |
+| `RETENTION_DAYS` | days to keep message text (default `90`, minimum `30`) |
+| `APP_TIMEZONE` | IANA timezone for the daily purge and the web UI (default `America/Sao_Paulo`) |
 | `WEB_PASSWORD_HASH`, `WEB_SECRET_KEY` | for the web UI. Generate the hash with `uv run velkgram hash-password`; `WEB_SECRET_KEY` is any long random string |
 
 The app reads settings from environment variables only. Export them before running:
@@ -58,6 +64,12 @@ Create the session and the database:
 ```bash
 uv run velkgram login      # needs TG_API_ID/TG_API_HASH exported; asks phone + code; prints a session string → put it in TG_SESSION
 uv run velkgram migrate    # creates/updates the SQLite database
+```
+
+Then start the collector (next section) and, once it is up, build the offers from the messages already stored:
+
+```bash
+uv run velkgram rebuild-offers   # idempotent; safe to re-run
 ```
 
 > ⚠️ `TG_SESSION` gives full access to the Telegram account. Never commit it, and never run the same session in two places at once, because Telegram may invalidate it.
@@ -85,12 +97,28 @@ SQL
 
 Changes made in the web UI reach the running collector automatically; after inserting rows by hand, restart it. When a matching offer arrives, stdout shows a JSON log line with `"event": "alert_notified"` and the alert in its `text` field.
 
+## Upgrading from v1
+
+Order matters:
+
+1. Pull the new code and run `uv run velkgram migrate`.
+2. Start the new collector (stop the old v1 one first; never run two).
+3. Run `uv run velkgram rebuild-offers`.
+
+An old collector running during the rebuild would ingest messages that never become offers. The rebuild is idempotent, so running it with the new collector up is safe. With Docker: `docker compose up -d --build`, then `docker compose run --rm collector velkgram rebuild-offers`.
+
 ## Web UI and report
 
 ```bash
 uv run uvicorn --factory velkgram.apps.web.main:create_app --port 8000   # http://127.0.0.1:8000
 uv run velkgram report                                                   # usage report
 ```
+
+- **Feed (`/`):** the offers catalog with search, filters and infinite scroll. "Acompanhar" opens a new wish pre-filled from the offer.
+- **Product page (`/wishes/{id}`):** stats, price chart (30 days, 90 days or all), matches and the retroactive status of the wish.
+- **Wishes, channels, alerts, status and login** use Beer CSS 5.0.3 (Material 3 Expressive). The theme menu offers system, Latte, Frappé, Macchiato and Mocha (Catppuccin).
+
+> The usage report only sees message text from the last `RETENTION_DAYS`, because older text is purged. Token-cost numbers for older dates undercount.
 
 ## Docker
 
@@ -116,7 +144,7 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 uv run ty check   # informational only
 ```
 
-The architecture is a modular monolith with hexagonal modules (`channels`, `wishlist`, `ingestion`, `alerting`, `reporting`, plus `shared` and `apps`). Module boundaries are enforced by `import-linter`, and the domain code is pure Python. The rules for contributors, human or agent, live in `.claude/skills/velkgram-*` and [CLAUDE.md](CLAUDE.md).
+The architecture is a modular monolith with hexagonal modules (`channels`, `wishlist`, `ingestion`, `alerting`, `offers`, `reporting`, plus `shared` and `apps`). Module boundaries are enforced by `import-linter`, and the domain code is pure Python. The rules for contributors, human or agent, live in `.claude/skills/velkgram-*` and [CLAUDE.md](CLAUDE.md).
 
 ## Status
 
@@ -128,6 +156,10 @@ The architecture is a modular monolith with hexagonal modules (`channels`, `wish
 | Telethon adapter, CLI (`migrate`, `login`, `hash-password`) | ✅ done |
 | Collector runtime (`velkgram collector`) | ✅ done |
 | Web UI (login, wishes, channels, alerts, status) | ✅ done |
+| Offers (one per message, FTS5 search, match history, retention, `rebuild-offers`) | ✅ done |
+| Offers feed (search, filters, infinite scroll, "Acompanhar") | ✅ done |
+| Product page (stats, price chart, matches, retro status) | ✅ done |
+| New UI (Beer CSS M3 Expressive, Catppuccin themes) | ✅ done |
 | Usage report (`velkgram report`) | ✅ done |
 | Docker / compose, healthcheck | ✅ done |
 | WhatsApp notifier | ⬜ separate spec, after v1 |
