@@ -16,7 +16,17 @@ class FeedFilter:
     stores: tuple[str, ...]
     priced_only: bool
     channel_id: int | None
-    coupons_only: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CouponFilter:
+    """Filters of the coupons page; `since` keeps only coupons posted at or after it."""
+
+    q: str | None = None
+    store: str | None = None
+    since: datetime | None = None
+    q_stores: tuple[str, ...] = ()
+    """Store keys whose display name matched `q`, so a search by "mercado livre" finds them."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +104,18 @@ class OfferQueries(Protocol):
         self, now: datetime, hours: int = 6, limit: int = 12
     ) -> tuple[OfferCard, ...]:
         """Coupon offers posted in the last `hours`, newest first."""
+        ...
+
+    def coupons(self, f: CouponFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
+        """Live (not deleted, not a repost) coupon offers, newest first."""
+        ...
+
+    def coupon_stores(self) -> list[str]:
+        """Stores that have at least one live coupon, sorted."""
+        ...
+
+    def coupon_counts(self, now: datetime, hours: int = 24) -> dict[str, int]:
+        """Live coupons posted in the last `hours`, by store (store-less offers are left out)."""
         ...
 
     def product(

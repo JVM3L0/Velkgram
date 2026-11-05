@@ -1113,6 +1113,22 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 .product-page .offer.offer-coupon { display: flex; flex-direction: column; align-items: stretch; }
 
 .coupon-strip { margin-block-start: 1.25rem; }
+.coupon-strip-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.coupon-strip-all { display: inline-flex; align-items: center; min-block-size: 2.75rem; padding-inline: 0.5rem; font-weight: 600; }
+
+/* Feed tabs (Ofertas / Cupons): real links in a primary-tabs row. */
+.feed-tabs { margin-block: 0 1rem; border-block-end: 1px solid var(--outline-variant); }
+.feed-tabs > a { flex: 1 1 0; min-block-size: 3rem; justify-content: center; margin: 0; }
+@media (min-width: 600px) {
+  .tabs.feed-tabs { justify-content: flex-start; }
+  .feed-tabs > a { flex: 0 0 auto; inline-size: auto; min-inline-size: 9rem; }
+}
+
+.coupon-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; }
+.coupon-filters .filters-search { flex: 1 1 16rem; }
+.coupon-filters .filter-channel { flex: 1 1 12rem; margin: 0; }
+.coupon-filters .filter-switch { margin: 0; }
+.offer .store-coupons { text-decoration: none; }
 .coupon-strip-row {
   display: flex;
   align-items: flex-start;

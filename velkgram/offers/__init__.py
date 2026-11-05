@@ -3,6 +3,7 @@
 from velkgram.offers.domain.models import MatchSource
 from velkgram.offers.ports.messages import MessageSource, SourceMessage
 from velkgram.offers.ports.queries import (
+    CouponFilter,
     FeedCursor,
     FeedFilter,
     FeedPage,
@@ -22,6 +23,7 @@ from velkgram.offers.services.retro_match import RetroMatcher
 from velkgram.offers.web.chart import sparkline_svg
 
 __all__ = [
+    "CouponFilter",
     "FeedCursor",
     "FeedFilter",
     "FeedPage",

@@ -9,7 +9,7 @@
     </li>
     {% endfor %}
   </ul>
-  {% if compact and row.compact_more > 0 %}<p class="coupon-more-row"><a class="coupon-more" href="/?tipo=cupons#{{ row.anchor }}" aria-label="Ver mais {{ row.compact_more }} cupons desta oferta">+{{ row.compact_more }}</a></p>{% endif %}
+  {% if compact and row.compact_more > 0 %}<p class="coupon-more-row"><a class="coupon-more" href="/cupons#{{ row.anchor }}" aria-label="Ver mais {{ row.compact_more }} cupons desta oferta">+{{ row.compact_more }}</a></p>{% endif %}
   {% elif row.terms %}<p class="coupon-terms">{{ row.terms | join(" · ") }}</p>{% endif %}
   {% if row.title %}<h2 class="offer-title">{{ row.title }}</h2>{% endif %}
   <p class="offer-meta">
@@ -19,7 +19,7 @@
   </p>
   {% if compact %}
   {% if not row.tier_rows %}
-  {% with codes = row.loose_codes[:2], more = row.compact_more, more_href = "/?tipo=cupons#" ~ row.anchor %}{% include "_coupon_codes.html" %}{% endwith %}
+  {% with codes = row.loose_codes[:2], more = row.compact_more, more_href = "/cupons#" ~ row.anchor %}{% include "_coupon_codes.html" %}{% endwith %}
   {% endif %}
   {% else %}
   {% with codes = row.loose_codes %}{% include "_coupon_codes.html" %}{% endwith %}

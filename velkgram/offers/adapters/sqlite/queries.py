@@ -14,6 +14,7 @@ from velkgram.offers.adapters.sqlite.repository import (
 from velkgram.offers.domain.models import MatchSource, OfferKind
 from velkgram.offers.domain.stats import product_stats
 from velkgram.offers.ports.queries import (
+    CouponFilter,
     FeedCursor,
     FeedFilter,
     FeedPage,
@@ -32,6 +33,12 @@ _MATCH_JOIN = (
     "offer_matches m JOIN offers o ON o.channel_id = m.channel_id AND o.message_id = m.message_id"
 )
 _COMPARABLE_MATCH = "m.price_cents IS NOT NULL AND o.comparable = 1"
+
+_NOT_REPOST = (
+    "NOT (o.origin_channel_id IS NOT NULL AND EXISTS ("
+    "SELECT 1 FROM offers x WHERE x.channel_id = o.origin_channel_id "
+    "AND x.message_id = o.origin_message_id))"
+)
 
 _CARD_COLUMNS = (
     "o.channel_id, o.message_id, o.posted_at, o.title, o.price_cents, o.store, o.main_link, "
@@ -80,6 +87,10 @@ def _card(row: sqlite3.Row) -> OfferCard:
     )
 
 
+def _escape_like(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _cursor_of(card: OfferCard) -> FeedCursor:
     return FeedCursor(card.posted_at, card.channel_id, card.message_id)
 
@@ -90,12 +101,7 @@ class SqliteOfferQueries:
         self._repo = SqliteOfferRepository(conn)
 
     def feed(self, f: FeedFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
-        where = [
-            "NOT (o.origin_channel_id IS NOT NULL AND EXISTS ("
-            "SELECT 1 FROM offers x WHERE x.channel_id = o.origin_channel_id "
-            "AND x.message_id = o.origin_message_id))"
-        ]
-        where.append("o.kind = 'coupon'" if f.coupons_only else "o.kind = 'product'")
+        where = [_NOT_REPOST, "o.kind = 'product'"]
         params: list[object] = []
         match = fts_query(f.q) if f.q is not None else None
         if match is not None:
@@ -127,12 +133,56 @@ class SqliteOfferQueries:
         more = len(rows) > limit
         return FeedPage(cards, _cursor_of(cards[-1]) if more and cards else None)
 
+    def coupons(self, f: CouponFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
+        where = ["o.kind = 'coupon'", "o.deleted = 0", _NOT_REPOST]
+        params: list[object] = []
+        if f.since is not None:
+            where.append("o.posted_at >= ?")
+            params.append(to_iso(f.since))
+        if f.store is not None:
+            where.append("o.store = ?")
+            params.append(f.store)
+        if f.q:
+            like = "%" + _escape_like(f.q) + "%"
+            clauses = [f"o.{col} LIKE ? ESCAPE '\\'" for col in ("title", "store", "coupons")]
+            params.extend([like] * len(clauses))
+            if f.q_stores:
+                clauses.append(f"o.store IN ({', '.join('?' * len(f.q_stores))})")
+                params.extend(f.q_stores)
+            where.append(f"({' OR '.join(clauses)})")
+        if cursor is not None:
+            where.append("(o.posted_at, o.channel_id, o.message_id) < (?, ?, ?)")
+            params.extend((to_iso(cursor.posted_at), cursor.channel_id, cursor.message_id))
+        rows = self._conn.execute(
+            f"SELECT {_CARD_COLUMNS} FROM offers o WHERE {' AND '.join(where)} "
+            "ORDER BY o.posted_at DESC, o.channel_id DESC, o.message_id DESC LIMIT ?",
+            (*params, limit + 1),
+        ).fetchall()
+        cards = tuple(_card(r) for r in rows[:limit])
+        more = len(rows) > limit
+        return FeedPage(cards, _cursor_of(cards[-1]) if more and cards else None)
+
+    def coupon_stores(self) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT DISTINCT o.store FROM offers o WHERE o.kind = 'coupon' AND o.deleted = 0 "
+            f"AND o.store IS NOT NULL AND {_NOT_REPOST} ORDER BY o.store"
+        ).fetchall()
+        return [str(r[0]) for r in rows]
+
+    def coupon_counts(self, now: datetime, hours: int = 24) -> dict[str, int]:
+        rows = self._conn.execute(
+            "SELECT o.store, COUNT(*) FROM offers o WHERE o.kind = 'coupon' AND o.deleted = 0 "
+            f"AND o.posted_at >= ? AND o.store IS NOT NULL AND {_NOT_REPOST} GROUP BY o.store",
+            (to_iso(now - timedelta(hours=hours)),),
+        ).fetchall()
+        return {str(r[0]): int(r[1]) for r in rows}
+
     def active_coupons(
         self, now: datetime, hours: int = 6, limit: int = 12
     ) -> tuple[OfferCard, ...]:
         rows = self._conn.execute(
             f"SELECT {_CARD_COLUMNS} FROM offers o WHERE o.kind = 'coupon' AND o.deleted = 0 "
-            "AND o.posted_at >= ? ORDER BY o.posted_at DESC, o.channel_id DESC, "
+            f"AND {_NOT_REPOST} AND o.posted_at >= ? ORDER BY o.posted_at DESC, o.channel_id DESC, "
             "o.message_id DESC LIMIT ?",
             (to_iso(now - timedelta(hours=hours)), limit),
         ).fetchall()

@@ -6,6 +6,7 @@
   <h2 class="offer-title">{{ row.title }}</h2>
   <p class="offer-meta">
     {% if row.store %}<span class="chip small tonal-chip">{{ row.store }}</span>{% endif %}
+    {% if row.store_coupons %}<a class="chip small tonal-chip store-coupons" href="/cupons?loja={{ row.store_key | urlencode }}"><i aria-hidden="true">confirmation_number</i>{{ row.store_coupons }} {{ "cupom" if row.store_coupons == 1 else "cupons" }} da loja</a>{% endif %}
     {% if row.source %}<span class="chip small {{ 'source-retro' if row.historic else 'source-live' }}" title="{{ 'Encontrada na busca retroativa ao criar ou editar o desejo' if row.historic else 'Recebida em tempo real' }}" aria-describedby="{{ 'source-retro-desc' if row.historic else 'source-live-desc' }}">{{ row.source }}</span>{% endif %}
     {% if row.source and not row.comparable %}<span class="chip small" title="Cupom ou post com vários preços — fora do gráfico e das estatísticas">não comparável</span>{% endif %}
     {% if row.channel %}<span class="offer-channel">{{ row.channel }}</span>{% endif %}

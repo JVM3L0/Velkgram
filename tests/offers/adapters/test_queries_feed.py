@@ -1,6 +1,5 @@
 import sqlite3
 from collections.abc import Iterator
-from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 
@@ -10,7 +9,7 @@ from tests.offers.adapters._queries_helpers import T0, offer, put
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries, fts_query
 from velkgram.offers.domain.models import CouponTier, OfferKind
-from velkgram.offers.ports.queries import FeedFilter
+from velkgram.offers.ports.queries import CouponFilter, FeedFilter
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
 
@@ -131,14 +130,13 @@ def test_feed_search_skips_purged_text_but_lists_offer(conn: sqlite3.Connection)
     assert _ids(conn, FeedFilter("video", None, None, (), False, None)) == []
 
 
-def test_feed_hides_coupons_unless_the_coupon_filter_is_on(conn: sqlite3.Connection) -> None:
+def test_feed_never_lists_coupons(conn: sqlite3.Connection) -> None:
     put(
         conn,
         offer(1),
         offer(2, kind=OfferKind.coupon, price=None, title="Cupom Shopee", comparable=False),
     )
     assert _ids(conn, NO_FILTER) == [1]
-    assert _ids(conn, replace(NO_FILTER, coupons_only=True)) == [2]
 
 
 def test_card_carries_coupon_data_and_post_text(conn: sqlite3.Connection) -> None:
@@ -147,10 +145,9 @@ def test_card_carries_coupon_data_and_post_text(conn: sqlite3.Connection) -> Non
         offer(1, coupon=("KORUJAO", "ZAFA10"), text="SSD\ncupom: KORUJAO"),
         offer(2, kind=OfferKind.coupon, price=None, coupon=("QIP98Q1ZXO",)),
     )
-    product, coupon = (
-        SqliteOfferQueries(conn).feed(replace(NO_FILTER, coupons_only=flag), None).cards[0]
-        for flag in (False, True)
-    )
+    queries = SqliteOfferQueries(conn)
+    product = queries.feed(NO_FILTER, None).cards[0]
+    coupon = queries.coupons(CouponFilter(), None).cards[0]
     assert product.kind is OfferKind.product
     assert product.coupons == ("KORUJAO", "ZAFA10")
     assert product.text == "SSD\ncupom: KORUJAO"

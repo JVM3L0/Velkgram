@@ -3,13 +3,13 @@
 import sqlite3
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
@@ -23,6 +23,7 @@ from velkgram.offers.domain.models import (
     RetroStatus,
 )
 from velkgram.offers.ports.queries import (
+    CouponFilter,
     FeedCursor,
     FeedFilter,
     MatchCard,
@@ -52,7 +53,8 @@ _DEFAULT_RANGE = "90"
 _RANGE_LABELS = (("30", "30 dias"), ("90", "90 dias"), ("all", "Tudo"))
 _SOURCE_LABELS = {MatchSource.live: "ao vivo", MatchSource.retro: "histórico"}
 _DASH = "—"
-_COUPONS_TYPE = "cupons"
+_COUPONS_TYPE = "cupons"  # the retired `tipo` filter value, redirected to the coupons tab
+_ACTIVE_HOURS = 24
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +108,8 @@ class CardView:
     loose_codes: tuple[str, ...] = ()
     compact_more: int = 0
     anchor: str = ""
+    store_key: str | None = None
+    store_coupons: int = 0
 
 
 def _parse_cursor(raw: str) -> FeedCursor | None:
@@ -225,6 +229,16 @@ def _compact_more(card: OfferCard) -> int:
     return len(card.coupons) - shown
 
 
+def _redirect_to_coupons(q: str, stores: list[str] | None) -> RedirectResponse:
+    """The old `/?tipo=cupons` filter now lives on the coupons tab; keep store and search."""
+    params = [("loja", s) for s in (stores or [])[:1] if s]
+    if q.strip():
+        params.append(("q", q.strip()))
+    return RedirectResponse(
+        "/cupons" + ("?" + urlencode(params) if params else ""), status_code=303
+    )
+
+
 def _int_or_none(raw: str) -> int | None:
     try:
         return int(raw)
@@ -246,7 +260,13 @@ def build_router(
 ) -> APIRouter:
     router = APIRouter()
 
-    def card_view(card: OfferCard, now: datetime, names: dict[int, str]) -> CardView:
+    def card_view(
+        card: OfferCard,
+        now: datetime,
+        names: dict[int, str],
+        store_counts: dict[str, int] | None = None,
+    ) -> CardView:
+        is_coupon = card.kind is OfferKind.coupon
         return CardView(
             title=coupon_title(card.title) if card.kind is OfferKind.coupon else card.title,
             price=brl(card.price_cents),
@@ -261,7 +281,9 @@ def build_router(
             deleted=card.deleted,
             reposts=card.repost_count,
             comparable=card.comparable,
-            is_coupon=card.kind is OfferKind.coupon,
+            is_coupon=is_coupon,
+            store_key=card.store,
+            store_coupons=(store_counts or {}).get(card.store or "", 0) if not is_coupon else 0,
             coupons=card.coupons,
             discount=_headline(card),
             terms=_coupon_terms(card) if len(card.coupon_tiers) < 2 else (),
@@ -281,9 +303,11 @@ def build_router(
             raise HTTPException(status_code=404, detail="Desejo não encontrado")
         return wish
 
-    def match_view(m: MatchCard, now: datetime, names: dict[int, str]) -> CardView:
+    def match_view(
+        m: MatchCard, now: datetime, names: dict[int, str], counts: dict[str, int]
+    ) -> CardView:
         return replace(
-            card_view(m.card, now, names),
+            card_view(m.card, now, names, counts),
             source=_SOURCE_LABELS[m.source],
             historic=m.source is MatchSource.retro,
         )
@@ -321,10 +345,13 @@ def build_router(
         now = clock.now()
         history = queries.product(wish.id, now, _RANGES[range_key], None, _PAGE_SIZE)
         names = channel_names(conn)
+        counts = queries.coupon_counts(now, _ACTIVE_HOURS)
         context = chart_context(wish, history, range_key)
         context.update(
             {
-                "rows": _match_rows(wish.id, history.matches, history.next_cursor, now, names),
+                "rows": _match_rows(
+                    wish.id, history.matches, history.next_cursor, now, names, counts
+                ),
                 "first_page": True,
                 "status": history.retro.status if history.retro else None,
                 "wish_id": wish.id,
@@ -339,8 +366,9 @@ def build_router(
         next_cursor: FeedCursor | None,
         now: datetime,
         names: dict[int, str],
+        counts: dict[str, int],
     ) -> list[CardView]:
-        rows = [match_view(m, now, names) for m in matches]
+        rows = [match_view(m, now, names, counts) for m in matches]
         if rows and next_cursor is not None:
             url = f"/wishes/{wish_id}/matches?" + urlencode({"cursor": _cursor_text(next_cursor)})
             rows[-1] = replace(rows[-1], next_url=url)
@@ -355,10 +383,12 @@ def build_router(
     ) -> Response:
         wish = wish_or_404(conn, wish_id)
         parsed = _parse_cursor(cursor)
-        history = make_queries(conn).product(wish.id, clock.now(), None, parsed, _PAGE_SIZE)
+        queries = make_queries(conn)
         now = clock.now()
+        history = queries.product(wish.id, now, None, parsed, _PAGE_SIZE)
         names = channel_names(conn)
-        rows = _match_rows(wish.id, history.matches, history.next_cursor, now, names)
+        counts = queries.coupon_counts(now, _ACTIVE_HOURS)
+        rows = _match_rows(wish.id, history.matches, history.next_cursor, now, names, counts)
         return templates.TemplateResponse(
             request, "_product_matches.html", {"rows": rows, "first_page": parsed is None}
         )
@@ -407,6 +437,8 @@ def build_router(
         view: str = "cards",
         tipo: str = "",
     ) -> Response:
+        if tipo == _COUPONS_TYPE:
+            return _redirect_to_coupons(q, store)
         names = channel_names(conn)
         channel_id = _int_or_none(channel)
         if channel_id not in names:
@@ -422,13 +454,13 @@ def build_router(
             stores=stores,
             priced_only=priced == "1",
             channel_id=channel_id,
-            coupons_only=tipo == _COUPONS_TYPE,
         )
         view = view if view in _VIEWS else "cards"
         queries = make_queries(conn)
         page = queries.feed(flt, _parse_cursor(cursor), _PAGE_SIZE)
         now = clock.now()
-        rows = [card_view(c, now, names) for c in page.cards]
+        counts = queries.coupon_counts(now, _ACTIVE_HOURS)
+        rows = [card_view(c, now, names, counts) for c in page.cards]
         if rows and page.next_cursor is not None:
             params: list[tuple[str, str]] = []
             if flt.q:
@@ -442,8 +474,6 @@ def build_router(
                 params.append(("priced", "1"))
             if channel_id is not None:
                 params.append(("channel", str(channel_id)))
-            if flt.coupons_only:
-                params.append(("tipo", _COUPONS_TYPE))
             params.append(("view", view))
             params.append(("cursor", _cursor_text(page.next_cursor)))
             rows[-1] = replace(rows[-1], next_url="/?" + urlencode(params))
@@ -459,7 +489,6 @@ def build_router(
                     if unfiltered
                     else []
                 ),
-                "coupons_only": flt.coupons_only,
                 "q": query,
                 "min_value": min_raw.strip(),
                 "max_value": max_raw.strip(),
@@ -473,5 +502,54 @@ def build_router(
             }
         )
         return templates.TemplateResponse(request, "feed.html", context)
+
+    @router.get("/cupons", response_class=HTMLResponse)
+    def coupons_page(
+        request: Request,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        q: str = "",
+        loja: str = "",
+        ativos: Annotated[list[str] | None, Query()] = None,
+        cursor: str = "",
+    ) -> Response:
+        queries = make_queries(conn)
+        now = clock.now()
+        stores = queries.coupon_stores()
+        query = q.strip()
+        store = loja if loja in stores else ""
+        # The switch posts a hidden "0" before its checkbox "1": the last value wins.
+        only_active = not ativos or ativos[-1] != "0"
+        flt = CouponFilter(
+            q=query or None,
+            store=store or None,
+            since=now - timedelta(hours=_ACTIVE_HOURS) if only_active else None,
+            q_stores=tuple(
+                s for s in stores if query and query.casefold() in STORE_NAMES.get(s, s).casefold()
+            ),
+        )
+        page = queries.coupons(flt, _parse_cursor(cursor), _PAGE_SIZE)
+        names = channel_names(conn)
+        rows = [card_view(c, now, names) for c in page.cards]
+        if rows and page.next_cursor is not None:
+            params = [("q", query)] if query else []
+            if store:
+                params.append(("loja", store))
+            params.append(("ativos", "1" if only_active else "0"))
+            params.append(("cursor", _cursor_text(page.next_cursor)))
+            rows[-1] = replace(rows[-1], next_url="/cupons?" + urlencode(params))
+        if request.headers.get("HX-Request") == "true" and cursor:
+            return templates.TemplateResponse(request, "_coupons_page.html", {"rows": rows})
+        return templates.TemplateResponse(
+            request,
+            "cupons.html",
+            {
+                "rows": rows,
+                "q": query,
+                "store": store,
+                "only_active": only_active,
+                "store_options": [(s, STORE_NAMES.get(s, s)) for s in stores],
+                "has_filters": bool(query or store),
+            },
+        )
 
     return router

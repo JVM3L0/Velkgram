@@ -98,7 +98,7 @@ def test_card_without_codes_has_no_copy_button_or_cupom_label(tmp_path: Path) ->
 
 
 def test_coupon_card_layout_and_actions(tmp_path: Path) -> None:
-    page = _client(tmp_path, _coupon(), _product(1)).get("/", params={"tipo": "cupons"}).text
+    page = _client(tmp_path, _coupon(), _product(1)).get("/cupons").text
     assert "R$ 10 OFF" in page
     assert "em compras a partir de R$ 40" in page
     assert [b["data-copy"] for b in _copy_buttons(page)] == ["QIP98Q1ZXO"]
@@ -114,7 +114,7 @@ def test_coupon_card_falls_back_to_abrir_without_redeem_link(tmp_path: Path) -> 
     conn.execute("UPDATE offers SET redeem_link = NULL")
     conn.commit()
     conn.close()
-    page = client.get("/", params={"tipo": "cupons"}).text
+    page = client.get("/cupons").text
     assert "Resgatar" not in page and "Abrir" in page
 
 
@@ -136,17 +136,7 @@ def test_strip_is_hidden_without_active_coupons_or_when_filtered(tmp_path: Path)
     client = _client(tmp_path / "b", _product(1), _coupon(2))
     assert "Cupons ativos" in client.get("/").text
     assert "Cupons ativos" not in client.get("/", params={"q": "placa"}).text
-    assert "Cupons ativos" not in client.get("/", params={"tipo": "cupons"}).text
     assert "Cupons ativos" not in client.get("/", params={"store": "amazon"}).text
-
-
-def test_cupons_filter_chip_is_checked_when_on(tmp_path: Path) -> None:
-    client = _client(tmp_path, _coupon())
-    off = client.get("/").text
-    on = client.get("/", params={"tipo": "cupons"}).text
-    chip = re.compile(r'<input[^>]*name="tipo"[^>]*value="cupons"[^>]*>')
-    assert chip.search(off) is not None and "checked" not in chip.search(off).group(0)  # type: ignore[union-attr]
-    assert "checked" in chip.search(on).group(0)  # type: ignore[union-attr]
 
 
 def test_post_text_details_is_escaped_and_linkified(tmp_path: Path) -> None:
@@ -224,7 +214,7 @@ def _rows(card: str) -> list[str]:
 
 
 def test_multi_tier_card_has_one_row_per_tier_with_its_own_chips(tmp_path: Path) -> None:
-    page = _client(tmp_path, _multi_tier()).get("/", params={"tipo": "cupons"}).text
+    page = _client(tmp_path, _multi_tier()).get("/cupons").text
     card = _card_html(page, 'class="offer offer-coupon')
     assert "Até R$ 90 OFF" in card
     rows = _rows(card)
@@ -241,7 +231,7 @@ def test_multi_tier_card_has_one_row_per_tier_with_its_own_chips(tmp_path: Path)
 
 
 def test_single_tier_card_is_unchanged(tmp_path: Path) -> None:
-    page = _client(tmp_path, _coupon()).get("/", params={"tipo": "cupons"}).text
+    page = _client(tmp_path, _coupon()).get("/cupons").text
     card = _card_html(page, 'class="offer offer-coupon')
     assert "R$ 10 OFF" in card and "Até" not in card
     assert "<li" not in card and "em compras a partir de R$ 40" in card
@@ -259,20 +249,20 @@ def test_strip_card_is_compact(tmp_path: Path) -> None:
     ]
     assert len(_copy_buttons(strip)) == 2
     assert 'class="coupon-more"' in strip and ">+7<" in strip
-    assert "/?tipo=cupons#cupom-1-3" in strip
+    assert 'href="/cupons#cupom-1-3"' in strip
     assert "Ver post completo" not in strip
     assert 'id="cupom-1-3"' not in page  # anchors live on the full cards only
 
 
 def test_full_card_carries_the_anchor_the_strip_links_to(tmp_path: Path) -> None:
-    page = _client(tmp_path, _multi_tier()).get("/", params={"tipo": "cupons"}).text
+    page = _client(tmp_path, _multi_tier()).get("/cupons").text
     assert 'id="cupom-1-3"' in page
 
 
 def test_coupon_card_does_not_repeat_the_discount_in_its_title(tmp_path: Path) -> None:
     repeat = _coupon(4, title="Cupom KaBuM em produtos selecionados - 11% OFF", store="kabum")
     bare = _coupon(5, title="Cupom Shopee")
-    page = _client(tmp_path, repeat, bare).get("/", params={"tipo": "cupons"}).text
+    page = _client(tmp_path, repeat, bare).get("/cupons").text
     assert 'class="offer-title">em produtos selecionados<' in page
     assert "Cupom KaBuM" not in page
     assert page.count('class="offer-title"') == 1  # "Cupom Shopee" leaves nothing to show

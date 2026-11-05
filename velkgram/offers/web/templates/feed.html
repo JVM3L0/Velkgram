@@ -4,6 +4,7 @@
 {% block content %}
 <div class="feed-page">
 <h1>Ofertas</h1>
+{% with tab = "ofertas" %}{% include "_feed_tabs.html" %}{% endwith %}
 <form id="feed-filters" class="filters" method="get" action="/"
   hx-get="/" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true"
   hx-sync="this:replace" hx-trigger="submit, change, input changed delay:400ms from:#q">
@@ -31,12 +32,6 @@
     <div class="filters-panel-head">
       <h2>Filtros</h2>
       <button class="circle transparent" type="button" data-ui="#filters-panel" aria-label="Fechar filtros"><i>close</i></button>
-    </div>
-    <div class="filter-group chip-row" role="group" aria-label="Tipo">
-      <label class="chip">
-        <input type="checkbox" name="tipo" value="cupons"{% if coupons_only %} checked{% endif %}>
-        <span>Cupons</span>
-      </label>
     </div>
     {% if store_options %}
     <div class="filter-group" role="group" aria-labelledby="stores-label">
@@ -81,7 +76,10 @@
 
 {% if coupon_strip %}
 <section class="coupon-strip" aria-labelledby="coupon-strip-title">
-  <h2 id="coupon-strip-title" class="section-title">Cupons ativos</h2>
+  <div class="coupon-strip-head">
+    <h2 id="coupon-strip-title" class="section-title">Cupons ativos</h2>
+    <a class="coupon-strip-all" href="/cupons">Ver todos</a>
+  </div>
   <div class="coupon-strip-row">
     {% for row in coupon_strip %}{% with compact = true %}{% include "_coupon_card.html" %}{% endwith %}{% endfor %}
   </div>
