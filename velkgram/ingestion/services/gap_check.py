@@ -27,8 +27,10 @@ async def gap_check(
         except TelegramDeferred as e:
             log.warning("telegram_deferred", extra={"channel_id": channel_id, "seconds": e.seconds})
             continue
-        cursor = snapshot[channel_id] if snapshot and channel_id in snapshot else None
-        if cursor is None:
+        # A snapshotted None means "no cursor before going live": compare from 0, not live.
+        if snapshot is not None and channel_id in snapshot:
+            cursor = snapshot[channel_id]
+        else:
             cursor = repo.get_cursor(channel_id)
         if latest is not None and latest > (cursor or 0):
             behind.append(channel_id)

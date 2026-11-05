@@ -119,13 +119,15 @@ async def run(
         else:
             await gateway.warm_entity_cache()
             register_handlers(client, collector.ingestor, clock)
+            # Baseline before start(): web changes made during startup are still published.
+            signal = PollingChangeSignal(conn)
             try:
                 await collector.start()
             except Exception as exc:
                 if not is_auth_fatal(exc):
                     await _notify_start_failure(notifier_, exc)
                 raise
-            tasks = run_loops(collector, PollingChangeSignal(conn), sleep)
+            tasks = run_loops(collector, signal, sleep)
             await client.run_until_disconnected()  # type: ignore[misc]
     except Exception as exc:
         if not is_auth_fatal(exc):

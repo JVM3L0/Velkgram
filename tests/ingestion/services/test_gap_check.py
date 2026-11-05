@@ -25,3 +25,10 @@ async def test_gap_check_compares_against_snapshot_when_present() -> None:
     assert await gap_check(gw, repo, [10], {10: 5}) == [10]
     assert await gap_check(gw, repo, [10]) == []
     assert await gap_check(gw, repo, [11], {11: None}) == [11]
+
+
+async def test_gap_check_none_snapshot_means_never_seen_even_after_live_cursor() -> None:
+    repo = InMemoryMessageRepository()
+    repo.set_cursor(11, 3)  # a live message arrived for a channel that had no cursor at startup
+    gw = FakeTelegramGateway({11: [msg(3, 11)]}, {})
+    assert await gap_check(gw, repo, [11], {11: None}) == [11]
