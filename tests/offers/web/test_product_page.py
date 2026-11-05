@@ -68,8 +68,9 @@ def test_product_page_shows_stats_and_chart(tmp_path: Path) -> None:
     assert "SSD &lt;b&gt;1TB&lt;/b&gt;" in html
     assert "ativo" in html
     assert "R$ 300,00" in html
-    for label in ("Menor preço", "Média 30 dias", "Último preço", "Ofertas"):
+    for label in ("Menor preço", "Preço atual", "Ofertas"):
         assert label in html
+    assert "Média 30 dias" not in html  # the four equal tiles are gone
     assert "R$ 200,00" in html
     assert "<svg" in html
     assert 'href="/wishes/1/edit"' in html
@@ -80,8 +81,9 @@ def test_product_page_shows_stats_and_chart(tmp_path: Path) -> None:
 def test_product_page_empty_stats_show_dash(tmp_path: Path) -> None:
     client = _client(tmp_path)
     html = client.get("/wishes/1").text
-    assert html.count("—") >= 3
+    assert html.count("—") >= 2
     assert "Sem preços ainda" in html
+    assert "Poucos dados para comparar" in html
 
 
 def test_product_range_switch_limits_points(tmp_path: Path) -> None:
@@ -211,3 +213,53 @@ def test_source_chips_are_explained_and_match_rows_use_a_filled_abrir(tmp_path: 
     assert "Encontrada na busca retroativa ao criar ou editar o desejo</span>" in html
     assert "Recebida em tempo real</span>" in html
     assert '<a class="button small" href=' in html
+
+
+def _banner(html: str) -> str:
+    start = html.index('class="insight')
+    return html[start : html.index("</div>", html.index("insight-main", start))]
+
+
+def test_insight_banner_compares_the_current_price_with_the_range_average(
+    tmp_path: Path,
+) -> None:
+    client = _client(tmp_path)
+    _seed(
+        tmp_path,
+        [(1, 6, 30000, _LIVE), (2, 5, 30000, _LIVE), (3, 4, 30000, _LIVE), (4, 1, 24000, _LIVE)],
+    )
+    banner = _banner(client.get("/wishes/1").text)
+    assert "insight-below" in banner
+    assert "Preço atual" in banner and "R$ 240,00" in banner
+    assert "abaixo da média" in banner
+    _seed(tmp_path, [(5, 0, 36000, _LIVE)])
+    assert "acima da média" in _banner(client.get("/wishes/1").text)
+
+
+def test_insight_banner_says_when_there_is_too_little_data(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [(1, 3, 30000, _LIVE), (2, 1, 24000, _LIVE)])
+    banner = _banner(client.get("/wishes/1").text)
+    assert "insight-unknown" in banner and "Poucos dados para comparar" in banner
+
+
+def test_non_comparable_match_is_listed_with_a_chip_but_not_charted(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    conn = connect(make_settings(tmp_path).db_path)
+    try:
+        good = offer(1, at=NOW - timedelta(days=2), price=25000, title="SSD bom")
+        coupon = offer(
+            2, at=NOW - timedelta(days=1), price=100, title="Cupom SSD", comparable=False
+        )
+        put(conn, good, coupon)
+        repo = SqliteOfferRepository(conn)
+        repo.add_match(match(1, good))
+        repo.add_match(match(1, coupon))
+    finally:
+        conn.close()
+    html = client.get("/wishes/1").text
+    assert html.count("não comparável") == 1
+    assert "Cupom ou post com vários preços — fora do gráfico e das estatísticas" in html
+    svg = html[html.index("<svg") : html.index("</svg>")]
+    assert "R$ 1,00" not in svg
+    assert "Cupom SSD" in html

@@ -11,10 +11,13 @@ _PRIMARY = "var(--primary)"
 _OUTLINE = "var(--outline)"
 _MUTED = "var(--on-surface-variant)"
 _MAX_LINE = "var(--tertiary)"
+_ON_SURFACE = "var(--on-surface)"
+_HALO = "var(--surface-container-low)"  # the chart frame colour: a halo keeps labels legible
 
 _LEFT, _RIGHT, _TOP, _BOTTOM = 78, 12, 14, 28
 _LABEL_GAP = 14  # minimum vertical distance between y labels, in px
 _MAX_LINE_REACH = 0.25  # the max-price line joins the y-range only within this share of the span
+_CHAR_W = 6.8  # average glyph width of the 12 px label font, for collision checks
 _HEIGHT = 220  # fixed: text keeps its pixel size because the viewBox is rendered at ~1:1
 
 
@@ -28,6 +31,55 @@ def _open(width: int, height: int, title: str, desc: str, cls: str = "") -> str:
 
 def _num(v: float) -> str:
     return f"{v:.1f}"
+
+
+def _text_box(x: float, y: float, text: str, anchor: str) -> tuple[float, float, float, float]:
+    width = len(text) * _CHAR_W
+    left = x if anchor == "start" else x - width
+    return left, y - 11, left + width, y + 3
+
+
+def _overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def _place(
+    text: str,
+    spots: Sequence[tuple[float, float, str]],
+    taken: list[tuple[float, float, float, float]],
+    bounds: tuple[float, float, float, float],
+) -> tuple[float, float, str]:
+    """The first spot whose text box fits inside `bounds` without touching `taken`."""
+    for x, y, anchor in spots:
+        box = _text_box(x, y, text, anchor)
+        inside = box[0] >= bounds[0] and box[2] <= bounds[2] and box[1] >= bounds[1]
+        if inside and box[3] <= bounds[3] and not any(_overlaps(box, t) for t in taken):
+            taken.append(box)
+            return x, y, anchor
+    x, y, anchor = spots[0]
+    taken.append(_text_box(x, y, text, anchor))
+    return x, y, anchor
+
+
+def _label(x: float, y: float, anchor: str, text: str) -> str:
+    return (
+        f'<text x="{_num(x)}" y="{_num(y)}" text-anchor="{anchor}" font-size="12" '
+        f'font-weight="600" paint-order="stroke" stroke-width="4" stroke-linejoin="round" '
+        f'style="fill:{_ON_SURFACE};stroke:{_HALO}">{escape(text)}</text>'
+    )
+
+
+def _dot(cx: float, cy: float, title: str) -> str:
+    return (
+        f'<circle cx="{_num(cx)}" cy="{_num(cy)}" r="5" stroke-width="2" '
+        f'style="fill:{_PRIMARY};stroke:{_HALO}"><title>{escape(title)}</title></circle>'
+    )
+
+
+def _step_path(coords: Sequence[tuple[float, float]]) -> str:
+    """Each price holds until the next observation: horizontal run, then a vertical step."""
+    head = f"M{_num(coords[0][0])},{_num(coords[0][1])}"
+    return head + "".join(f" H{_num(cx)} V{_num(cy)}" for cx, cy in coords[1:])
 
 
 def price_chart_svg(
@@ -48,6 +100,8 @@ def price_chart_svg(
         )
     prices = [p.price_cents for p in points]
     data_lo, data_hi = min(prices), max(prices)
+    average = round(sum(prices) / len(prices))
+    current = prices[-1]
     span = (data_hi - data_lo) or max(data_hi * 0.1, 1)
     max_in_range = (
         data_lo - span * _MAX_LINE_REACH <= max_price_cents <= data_hi + span * _MAX_LINE_REACH
@@ -71,49 +125,93 @@ def price_chart_svg(
     first, last = points[0].posted_at, points[-1].posted_at
     desc = (
         f"{len(points)} preços de {first:%d/%m/%Y} a {last:%d/%m/%Y}. "
-        f"Menor {brl(min(prices))}, maior {brl(max(prices))}, preço máximo {brl(max_price_cents)}."
+        f"Menor {brl(data_lo)}, maior {brl(data_hi)}, atual {brl(current)}, "
+        f"média {brl(average)}, seu alerta {brl(max_price_cents)}."
     )
     parts = [_open(width, height, "Histórico de preços", desc, cls)]
     axis_y = height - _BOTTOM
+    right = width - _RIGHT
     parts.append(
         f'<line x1="{_LEFT}" y1="{_TOP}" x2="{_LEFT}" y2="{axis_y}" '
         f'style="stroke:{_OUTLINE}" stroke-width="1"/>'
-        f'<line x1="{_LEFT}" y1="{axis_y}" x2="{width - _RIGHT}" y2="{axis_y}" '
+        f'<line x1="{_LEFT}" y1="{axis_y}" x2="{right}" y2="{axis_y}" '
         f'style="stroke:{_OUTLINE}" stroke-width="1"/>'
     )
-    label_cents = [max(prices), min(prices)]
-    if max_in_range:
-        parts.append(
-            f'<line x1="{_LEFT}" y1="{_num(y(max_price_cents))}" x2="{width - _RIGHT}" '
-            f'y2="{_num(y(max_price_cents))}" style="stroke:{_MAX_LINE}" stroke-width="2" '
-            'stroke-dasharray="6 4"/>'
-        )
-        # Label the max-price line first so it wins any collision with the data min/max labels.
-        label_cents.insert(0, max_price_cents)
-    else:
-        parts.append(_max_marker(max_price_cents, above=max_price_cents > data_hi, width=width))
-    placed: list[float] = []
-    for cents in label_cents:
+    placed_y: list[float] = []
+    for cents in (data_hi, data_lo):
         yy = y(cents)
-        if any(abs(yy - other) < _LABEL_GAP for other in placed):
+        if any(abs(yy - other) < _LABEL_GAP for other in placed_y):
             continue
-        placed.append(yy)
+        placed_y.append(yy)
         parts.append(
             f'<text x="{_LEFT - 6}" y="{_num(yy + 4)}" text-anchor="end" font-size="12" '
             f'style="fill:{_MUTED}">{escape(brl(cents))}</text>'
         )
     parts.append(_date_labels(first, last, width, axis_y))
+
     coords = [(x(p), y(p.price_cents)) for p in points]
     if len(coords) > 1:
-        line = " ".join(f"{_num(cx)},{_num(cy)}" for cx, cy in coords)
+        step = _step_path(coords)
+        base = f"{_num(coords[0][0])},{_num(axis_y)}"
         parts.append(
-            f'<polyline points="{line}" fill="none" style="stroke:{_PRIMARY}" '
-            'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+            f'<path class="chart-area" d="M{base} L{_num(coords[0][0])},{_num(coords[0][1])}'
+            f'{step[step.index(" ") :]} V{_num(axis_y)} Z" fill-opacity="0.14" '
+            f'style="fill:{_PRIMARY}"/>'
         )
-    parts.extend(
-        f'<circle cx="{_num(cx)}" cy="{_num(cy)}" r="4" style="fill:{_PRIMARY}"/>'
-        for cx, cy in coords
-    )
+        if average != data_lo or average != data_hi:
+            parts.append(
+                f'<line class="chart-avg" x1="{_LEFT}" y1="{_num(y(average))}" x2="{right}" '
+                f'y2="{_num(y(average))}" style="stroke:{_OUTLINE}" stroke-width="1" '
+                'stroke-opacity="0.7"/>'
+            )
+    # Draw order: average, alert line, step line, dots, labels.
+    alert_y = y(max_price_cents)
+    if max_in_range:
+        parts.append(
+            f'<line x1="{_LEFT}" y1="{_num(alert_y)}" x2="{right}" y2="{_num(alert_y)}" '
+            f'style="stroke:{_MAX_LINE}" stroke-width="2" stroke-dasharray="6 4"/>'
+        )
+    if len(coords) > 1:
+        parts.append(
+            f'<path class="chart-step" d="{_step_path(coords)}" fill="none" '
+            f'style="stroke:{_PRIMARY}" stroke-width="2" stroke-linejoin="round" '
+            'stroke-linecap="round"/>'
+        )
+    low_i = min(range(len(prices)), key=lambda i: (prices[i], -i))
+    cur_i = len(prices) - 1
+    merged = prices[low_i] == current
+    bounds = (float(_LEFT), float(_TOP - 4), float(right), float(axis_y))
+    taken: list[tuple[float, float, float, float]] = []
+    labels: list[str] = []
+    dots = [(cur_i, "Menor e atual" if merged else "Atual")]
+    if not merged:
+        dots.append((low_i, "Menor"))
+    for i, word in dots:
+        cx, cy = coords[i]
+        taken.append((cx - 6, cy - 6, cx + 6, cy + 6))
+        parts.append(_dot(cx, cy, f"{word} {brl(prices[i])}"))
+    for i, word in dots:
+        cx, cy = coords[i]
+        text = f"{word} {brl(prices[i])}"
+        edge = min(cx + 4, right)  # a label right of the plot would be cut off
+        above = [(cx - 4, cy - 10, "start"), (edge, cy - 10, "end")]
+        below = [(cx - 4, cy + 18, "start"), (edge, cy + 18, "end")]
+        spots = below + above if i == low_i and not merged else above + below
+        lx, ly, anchor = _place(text, spots, taken, bounds)
+        labels.append(_label(lx, ly, anchor, text))
+    alert_text = f"Seu alerta {brl(max_price_cents)}"
+    if max_in_range:
+        spots = [
+            (right - 4, alert_y - 6, "end"),
+            (_LEFT + 6, alert_y - 6, "start"),
+            (right - 4, alert_y + 16, "end"),
+            (_LEFT + 6, alert_y + 16, "start"),
+        ]
+        lx, ly, anchor = _place(alert_text, spots, taken, bounds)
+        labels.append(_label(lx, ly, anchor, alert_text))
+    else:
+        parts.append(_max_marker(max_price_cents, above=max_price_cents > data_hi, width=width))
+    parts.extend(labels)
     parts.append("</svg>")
     if with_table:
         rows = "".join(
@@ -148,7 +246,7 @@ def _max_marker(max_price_cents: int, *, above: bool, width: int) -> str:
         f'<path class="max-marker" d="M{right - 8},{base} L{right},{base} L{right - 4},{tip} Z" '
         f'style="fill:{_MAX_LINE}"/>'
         f'<text x="{right - 12}" y="{text_y}" text-anchor="end" font-size="12" '
-        f'style="fill:{_MUTED}">Seu máx. {escape(brl(max_price_cents))} {arrow}</text>'
+        f'style="fill:{_MUTED}">Seu alerta {escape(brl(max_price_cents))} {arrow}</text>'
     )
 
 

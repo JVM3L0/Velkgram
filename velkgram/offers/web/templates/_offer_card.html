@@ -5,6 +5,7 @@
   <p class="offer-meta">
     {% if row.store %}<span class="chip small tonal-chip">{{ row.store }}</span>{% endif %}
     {% if row.source %}<span class="chip small {{ 'source-retro' if row.historic else 'source-live' }}" title="{{ 'Encontrada na busca retroativa ao criar ou editar o desejo' if row.historic else 'Recebida em tempo real' }}" aria-describedby="{{ 'source-retro-desc' if row.historic else 'source-live-desc' }}">{{ row.source }}</span>{% endif %}
+    {% if row.source and not row.comparable %}<span class="chip small" title="Cupom ou post com vários preços — fora do gráfico e das estatísticas">não comparável</span>{% endif %}
     {% if row.channel %}<span class="offer-channel">{{ row.channel }}</span>{% endif %}
     <time datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
   </p>

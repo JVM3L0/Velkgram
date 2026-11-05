@@ -729,22 +729,36 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .terms-label { font-size: 0.875rem; color: var(--on-surface-variant); align-self: center; margin-inline-end: 0.25rem; }
 
 .chart-block { display: flex; flex-direction: column; gap: 0.75rem; }
-.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin: 0; }
-@media (max-width: 599.98px) {
-  .stat-main, .stat:last-child { grid-column: 1 / -1; }
-  .stat dd { white-space: nowrap; }
+.insight {
+  --tint: var(--secondary);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--shape-xl);
+  color: var(--on-surface);
+  background-color: color-mix(in oklab, var(--tint) 20%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--tint) 40%, var(--surface));
 }
-@media (min-width: 840px) { .stats { grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr)); } }
-.stat {
-  display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: 0.25rem;
-  padding: 0.75rem 1rem; border-radius: var(--shape-xl);
-  background-color: var(--surface-container-low); border: 1px solid var(--outline-variant);
+.insight-below { --tint: var(--success); }
+.insight-above { --tint: var(--error); }
+.insight-unknown { --tint: var(--outline); }
+.insight > i { font-size: 2rem; color: var(--on-surface); }
+.insight-body > * { margin: 0; }
+.insight-label { font-size: 0.875rem; color: var(--on-surface-variant); }
+.insight-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.125rem 0.75rem; }
+.insight-price { font-size: 1.875rem; font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.insight-verdict { font-size: 1.125rem; font-weight: 600; }
+.insight-sub { font-size: 0.875rem; color: var(--on-surface-variant); }
+.stats-mini { border-radius: 0; grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.25rem 2rem; margin: 0; padding-block-start: 0.75rem; border-block-start: 1px solid color-mix(in oklab, var(--tint) 40%, var(--surface)); }
+.stats-mini > div { border-radius: 0; display: flex; flex-direction: column-reverse; gap: 0.125rem; }
+.stats-mini dt { font-size: 0.875rem; color: var(--on-surface-variant); }
+.stats-mini dd { margin: 0; font-size: 1.125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+@media (min-width: 840px) {
+  .insight { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .stats-mini { grid-column: auto; padding: 0 0 0 1.5rem; border-block-start: 0; border-inline-start: 1px solid color-mix(in oklab, var(--tint) 40%, var(--surface)); gap: 0.75rem 2rem; }
 }
-.stat dt { font-size: 0.875rem; color: var(--on-surface-variant); }
-.stat dd { margin: 0; font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.stat-main { background-color: var(--primary-container); border-color: transparent; }
-.stat-main dt { color: var(--on-primary-container); }
-.stat-main dd { white-space: nowrap; font-size: 1.875rem; font-weight: 800; letter-spacing: -0.03em; color: var(--on-primary-container); }
 
 .range-switch { display: inline-flex; align-self: flex-start; border: 1px solid var(--outline); border-radius: 999px; overflow: hidden; }
 .range-switch a {
@@ -767,6 +781,7 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 }
 .chart-key { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0; font-size: 0.875rem; }
 .key-line { inline-size: 1.25rem; block-size: 0; border-block-start: 2px solid var(--primary); }
+.key-avg { inline-size: 1.25rem; block-size: 0; border-block-start: 1px solid var(--outline); margin-inline-start: 0.75rem; }
 .key-dash { inline-size: 1.25rem; block-size: 0; border-block-start: 2px dashed var(--tertiary); margin-inline-start: 0.75rem; }
 
 .retro { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0; color: var(--on-surface-variant); }
@@ -892,11 +907,10 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .form-page .stack { gap: 1.25rem; }
 
 /* Cards lift off the page on Latte; dark flavours rely on tone alone. */
-body.latte .offer, body.latte .wish-card, body.latte .stat, body.latte .status-card,
+body.latte .offer, body.latte .wish-card, body.latte .status-card,
 body.latte .table-wrap, body.latte .chart-frame, body.latte .login-card,
 body:not(.frappe):not(.macchiato):not(.mocha) .offer,
 body:not(.frappe):not(.macchiato):not(.mocha) .wish-card,
-body:not(.frappe):not(.macchiato):not(.mocha) .stat,
 body:not(.frappe):not(.macchiato):not(.mocha) .status-card,
 body:not(.frappe):not(.macchiato):not(.mocha) .table-wrap,
 body:not(.frappe):not(.macchiato):not(.mocha) .chart-frame,
@@ -906,7 +920,6 @@ body:not(.frappe):not(.macchiato):not(.mocha) .login-card {
 @media (prefers-color-scheme: dark) {
   body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .offer,
   body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .wish-card,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .stat,
   body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .status-card,
   body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .table-wrap,
   body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .chart-frame,

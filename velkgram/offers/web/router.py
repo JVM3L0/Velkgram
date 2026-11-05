@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
+from velkgram.offers.domain.insight import PriceVerdict, price_insight
 from velkgram.offers.domain.models import MatchSource, ProductStats, RetroStatus
 from velkgram.offers.ports.queries import (
     FeedCursor,
@@ -20,6 +21,7 @@ from velkgram.offers.ports.queries import (
     MatchCard,
     OfferCard,
     OfferQueries,
+    PricePoint,
     ProductHistory,
 )
 from velkgram.offers.web.chart import price_chart_responsive
@@ -100,23 +102,47 @@ def _cursor_text(c: FeedCursor) -> str:
 
 @dataclass(frozen=True, slots=True)
 class StatsView:
-    """The four product stats, preformatted ("—" when there is nothing to show)."""
+    """The secondary product stats, preformatted ("—" when there is nothing to show)."""
 
     lowest: str
-    average: str
-    last: str
     count: str
 
 
-def _stats_view(stats: ProductStats) -> StatsView:
-    def money(cents: int | None) -> str:
-        return _DASH if cents is None else brl(cents)
+@dataclass(frozen=True, slots=True)
+class InsightView:
+    """The price banner: current price against the average of the selected range."""
 
+    kind: str
+    icon: str
+    price: str
+    verdict: str
+    average: str | None
+
+
+_VERDICTS = {
+    PriceVerdict.below: ("below", "trending_down", "abaixo da média"),
+    PriceVerdict.average: ("average", "trending_flat", "na média"),
+    PriceVerdict.above: ("above", "trending_up", "acima da média"),
+    PriceVerdict.unknown: ("unknown", "info", "Poucos dados para comparar"),
+}
+
+
+def _stats_view(stats: ProductStats) -> StatsView:
     return StatsView(
-        lowest=money(stats.lowest_cents),
-        average=money(stats.avg_30d_cents),
-        last=money(stats.last_cents),
+        lowest=_DASH if stats.lowest_cents is None else brl(stats.lowest_cents),
         count=str(stats.match_count) if stats.match_count else _DASH,
+    )
+
+
+def _insight_view(stats: ProductStats, points: tuple[PricePoint, ...]) -> InsightView:
+    insight = price_insight(stats.last_cents, [p.price_cents for p in points])
+    kind, icon, verdict = _VERDICTS[insight.verdict]
+    return InsightView(
+        kind=kind,
+        icon=icon,
+        price=_DASH if stats.last_cents is None else brl(stats.last_cents),
+        verdict=verdict,
+        average=None if insight.average_cents is None else brl(insight.average_cents),
     )
 
 
@@ -186,6 +212,7 @@ def build_router(
         return {
             "wish": wish,
             "stats": _stats_view(history.stats),
+            "insight": _insight_view(history.stats, history.points),
             "chart_svg": Markup(price_chart_responsive(history.points, wish.max_price_cents)),
             "range_key": range_key,
             "ranges": _RANGE_LABELS,

@@ -1,11 +1,17 @@
 <section id="chart-block" class="chart-block" aria-label="Preços"
   hx-get="/wishes/{{ wish.id }}/chart?range={{ range_key }}" hx-trigger="retro-done from:body" hx-swap="outerHTML">
-  <dl class="stats">
-    <div class="stat stat-main"><dt>Último preço</dt><dd>{{ stats.last }}</dd></div>
-    <div class="stat"><dt>Menor preço (sempre)</dt><dd>{{ stats.lowest }}</dd></div>
-    <div class="stat"><dt>Média 30 dias</dt><dd>{{ stats.average }}</dd></div>
-    <div class="stat"><dt>Ofertas</dt><dd>{{ stats.count }}</dd></div>
-  </dl>
+  <div class="insight insight-{{ insight.kind }}" role="status">
+    <i aria-hidden="true">{{ insight.icon }}</i>
+    <div class="insight-body">
+      <p class="insight-label">Preço atual</p>
+      <p class="insight-main"><strong class="insight-price">{{ insight.price }}</strong><span class="insight-verdict">{{ insight.verdict }}</span></p>
+      {% if insight.average %}<p class="insight-sub">Média do período: {{ insight.average }}</p>{% endif %}
+    </div>
+    <dl class="stats-mini">
+      <div><dt>Menor preço (sempre)</dt><dd>{{ stats.lowest }}</dd></div>
+      <div><dt>Ofertas</dt><dd>{{ stats.count }}</dd></div>
+    </dl>
+  </div>
   <nav class="range-switch" aria-label="Período do gráfico">
     {% for key, label in ranges %}
     <a href="/wishes/{{ wish.id }}?range={{ key }}" hx-get="/wishes/{{ wish.id }}/chart?range={{ key }}"
@@ -13,5 +19,5 @@
     {% endfor %}
   </nav>
   <div class="chart-frame">{{ chart_svg }}</div>
-  <p class="chart-key muted"><span class="key-line" aria-hidden="true"></span>menor preço do dia<span class="key-dash" aria-hidden="true"></span>seu preço máximo</p>
+  <p class="chart-key muted"><span class="key-line" aria-hidden="true"></span>menor preço do dia<span class="key-avg" aria-hidden="true"></span>média do período<span class="key-dash" aria-hidden="true"></span>seu alerta</p>
 </section>

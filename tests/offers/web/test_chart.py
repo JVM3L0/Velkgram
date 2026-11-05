@@ -25,8 +25,8 @@ def test_chart_has_title_desc_and_points() -> None:
     assert root.get("viewBox") == "0 0 800 220"
     assert "{http://www.w3.org/2000/svg}title" in [c.tag for c in root]
     assert "{http://www.w3.org/2000/svg}desc" in [c.tag for c in root]
-    assert out.count("<circle") == 3
-    assert "<polyline" in out
+    assert out.count("<circle") == 2  # only the lowest and the current price get a dot
+    assert 'class="chart-step"' in out
 
 
 def test_chart_draws_dashed_max_price_line() -> None:
@@ -38,13 +38,20 @@ def test_chart_uses_only_css_variables_for_color() -> None:
     for out in (price_chart_svg(_pts(1, 2, 3), 2), price_chart_svg([], 2), sparkline_svg([1, 2])):
         assert "#" not in out
         used = set(re.findall(r"var\((--[a-z-]+)\)", out))
-        assert used <= {"--primary", "--outline", "--on-surface-variant", "--tertiary"}
+        assert used <= {
+            "--primary",
+            "--outline",
+            "--on-surface-variant",
+            "--tertiary",
+            "--surface-container-low",
+            "--on-surface",
+        }
 
 
 def test_chart_empty_state() -> None:
     out = price_chart_svg([], 50000)
     assert "Sem preços ainda" in out
-    assert "<polyline" not in out
+    assert "chart-step" not in out
     ET.fromstring(out)
 
 
@@ -85,7 +92,7 @@ def test_chart_includes_hidden_data_table() -> None:
 def test_chart_single_point() -> None:
     out = price_chart_svg(_pts(100000), 98000)
     assert out.count("<circle") == 1
-    assert "<polyline" not in out
+    assert "chart-step" not in out
     assert re.search(r"<line[^>]*stroke-dasharray", out)
     ET.fromstring(_svg_only(out))
 
@@ -104,7 +111,9 @@ def test_brl_formats_thousands_and_unknown() -> None:
 
 
 def _circle_ys(out: str) -> list[float]:
-    return [float(v) for v in re.findall(r'<circle[^>]*cy="([\d.]+)"', out)]
+    path = re.search(r'class="chart-step" d="([^"]+)"', out)
+    assert path is not None
+    return [float(v) for v in re.findall(r"(?:V|,)([\d.]+)", path.group(1))]
 
 
 def test_chart_y_range_follows_data_when_max_price_is_far_away() -> None:
@@ -149,3 +158,37 @@ def test_responsive_chart_renders_three_sizes_with_one_table() -> None:
     for width in (340, 520, 800):
         assert f'viewBox="0 0 {width} 220"' in out
     assert out.count("<table") == 1
+
+
+def test_chart_is_a_step_line_with_an_area_below_it() -> None:
+    out = price_chart_svg(_pts(100000, 90000, 95000), 99000)
+    step = re.search(r'<path class="chart-step" d="([^"]+)"', out)
+    assert step is not None
+    assert re.fullmatch(r"M[\d.]+,[\d.]+( H[\d.]+ V[\d.]+)+", step.group(1))  # holds, then drops
+    area = re.search(r'<path class="chart-area" d="([^"]+)"[^>]*fill-opacity', out)
+    assert area is not None and area.group(1).endswith("Z")
+
+
+def test_chart_labels_lowest_and_current_price() -> None:
+    out = price_chart_svg(_pts(100000, 90000, 95000), 99000)
+    assert "Menor R$ 900,00" in out and "Atual R$ 950,00" in out
+    merged = price_chart_svg(_pts(100000, 95000, 90000), 99000)
+    assert "Menor e atual R$ 900,00" in merged
+    assert merged.count("<circle") == 1
+
+
+def test_chart_has_a_faint_average_line_and_labels_the_alert() -> None:
+    out = price_chart_svg(_pts(100000, 90000, 95000), 99000)
+    assert 'class="chart-avg"' in out
+    assert "Seu alerta R$ 990,00" in out
+    assert "R$ 950,00" in re.search(r"<desc>(.*?)</desc>", out).group(1)  # type: ignore[union-attr]
+    far = price_chart_svg(_pts(116900, 170900, 140000), 8000)
+    assert "Seu alerta R$ 80,00" in far
+    assert "chart-avg" not in price_chart_svg(_pts(100000), 98000)
+
+
+def test_chart_labels_stay_inside_the_viewbox() -> None:
+    for width in (340, 520, 800):
+        out = price_chart_svg(_pts(129990, 99900, 120000), 110000, width=width)
+        for x in re.findall(r'<text x="([\d.]+)" y="[\d.]+" text-anchor="\w+"', out):
+            assert 0 <= float(x) <= width
