@@ -96,3 +96,9 @@ def test_follow_url_truncates_long_names_on_a_word_boundary() -> None:
 def test_follow_url_keeps_short_names_intact() -> None:
     name = parse_qs(urlsplit(follow_url(_card("SSD 1TB"))).query)["name"][0]
     assert name == "SSD 1TB"
+
+
+def test_follow_url_real_feed_title_is_cut_at_60_without_dangling_plus() -> None:
+    title = "Kit Upgrade Amd Ryzen 7 5700x + Placa-Mãe Msi B550m WiFi6E + Water Cooler 240mm"
+    name = parse_qs(urlsplit(follow_url(_card(title))).query)["name"][0]
+    assert name == "Kit Upgrade Amd Ryzen 7 5700x + Placa-Mãe Msi B550m WiFi6E"

@@ -197,3 +197,17 @@ def test_matches_fragment_without_cursor_is_first_page(tmp_path: Path) -> None:
     assert 'hx-trigger="revealed"' in frag
     junk = client.get("/wishes/1/matches", params={"cursor": "lixo|x|y"})
     assert junk.status_code == 200 and "SSD 35" in junk.text
+
+
+def test_source_chips_are_explained_and_match_rows_use_a_filled_abrir(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [(1, 1, 10000, _LIVE), (2, 2, 20000, _RETRO)])
+    html = client.get("/wishes/1").text
+    assert 'title="Encontrada na busca retroativa ao criar ou editar o desejo"' in html
+    assert 'title="Recebida em tempo real"' in html
+    assert html.count('aria-describedby="source-retro-desc"') == 1
+    assert html.count('aria-describedby="source-live-desc"') == 1
+    assert html.count('id="source-retro-desc"') == 1  # one description per page, not per row
+    assert "Encontrada na busca retroativa ao criar ou editar o desejo</span>" in html
+    assert "Recebida em tempo real</span>" in html
+    assert '<a class="button small" href=' in html

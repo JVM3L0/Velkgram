@@ -74,7 +74,7 @@ def short_name(title: str, limit: int = _NAME_MAX) -> str:
     cut = title[:limit]
     if title[limit] != " " and " " in cut:
         cut = cut.rsplit(" ", 1)[0]
-    return cut.rstrip(" ,;:-")
+    return cut.rstrip(" ,;:+-")
 
 
 def follow_url(card: OfferCard) -> str:

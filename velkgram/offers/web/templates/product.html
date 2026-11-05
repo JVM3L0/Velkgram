@@ -33,6 +33,8 @@
 
   <section aria-labelledby="matches-title">
     <h2 id="matches-title" class="section-title">Ofertas</h2>
+    <span id="source-retro-desc" class="sr-only">Encontrada na busca retroativa ao criar ou editar o desejo</span>
+    <span id="source-live-desc" class="sr-only">Recebida em tempo real</span>
     <div id="matches" class="feed feed-list" hx-get="/wishes/{{ wish.id }}/matches" hx-trigger="retro-done from:body" hx-swap="innerHTML">
       {% include "_product_matches.html" %}
     </div>

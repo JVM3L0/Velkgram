@@ -99,3 +99,15 @@ def test_channel_delete_asks_for_confirmation_and_add_button_is_labelled(tmp_pat
     assert "hx-confirm=" in page
     assert "<span>Adicionar</span>" in page
     assert "<th>Status</th>" in page and "Estado" not in page
+
+
+def test_channel_row_stacks_name_over_handle_and_labels_icon_buttons(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    client.post("/channels", data={"ref": "@promos_br"})
+    _commands(tmp_path, "activate", 1, 99, "Promos BR")
+    page = client.get("/channels").text
+    assert '<span class="channel-name">Promos BR</span>' in page
+    assert '<span class="channel-handle muted">' in page
+    assert 'aria-label="Pausar" title="Pausar"' in page
+    assert 'aria-label="Remover canal" title="Remover canal"' in page
+    assert 'aria-label="Retomar" title="Retomar"' in client.post("/channels/1/toggle").text

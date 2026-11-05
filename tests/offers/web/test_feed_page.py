@@ -148,3 +148,9 @@ def test_old_root_redirect_is_gone(tmp_path: Path) -> None:
 def test_feed_view_toggle_says_grade_not_cards(tmp_path: Path) -> None:
     page = make_client(tmp_path).get("/").text
     assert "Grade" in page and "Cards</span>" not in page
+
+
+def test_feed_card_keeps_abrir_filled_and_acompanhar_outlined(tmp_path: Path) -> None:
+    html = _client(tmp_path, offer(1)).get("/").text
+    assert re.search(r'<a class="button small" href="https://x\.test/p"', html)
+    assert re.search(r'<a class="button small border" href="/wishes/new\?', html)

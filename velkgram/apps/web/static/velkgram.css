@@ -934,3 +934,11 @@ body:not(.frappe):not(.macchiato):not(.mocha) .login-card {
 }
 .add-row .field { min-inline-size: 0; }
 .add-row button { flex: none; }
+
+/* ---- Pass 3: alignment ---- */
+form.inline { margin: 0 !important; }
+.channel-name, .channel-handle { display: block; }
+.channel-handle { font-size: 0.875rem; }
+.row-actions button { min-block-size: 3rem; }
+.filter-switch { translate: -0.75rem 0; }
+.filter-channel { margin: 0 !important; }
