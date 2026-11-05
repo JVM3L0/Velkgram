@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime
 
 from velkgram.offers.domain.comparable import is_comparable
-from velkgram.offers.domain.coupon import coupon_deal
+from velkgram.offers.domain.coupon import coupon_deal, store_in_title
 from velkgram.offers.domain.models import Offer, OfferKind
 from velkgram.offers.domain.stores import main_link, store_of
 from velkgram.offers.domain.title import title_of
@@ -23,6 +23,8 @@ def offer_from_message(
     store = store_of(link) if link else None
     title = title_of(m.text, store)
     deal = coupon_deal(title, text, m.links)
+    if deal is not None and store is None:
+        store = store_in_title(title)  # short links (tidd.ly) hide the store; the title names it
     return Offer(
         channel_id=m.channel_id,
         message_id=m.message_id,

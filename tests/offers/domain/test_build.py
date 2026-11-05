@@ -150,3 +150,23 @@ def test_post_without_coupon_words_has_no_codes() -> None:
     assert offer is not None
     assert offer.coupons == ()
     assert offer.kind is OfferKind.product
+
+
+def test_coupon_without_a_store_link_takes_the_store_from_its_title() -> None:
+    text = "Cupom KaBuM em Cadeira selecionada - 50% OFF\n\n-CUPOM: BLACK50\n\nhttps://tidd.ly/abc"
+    offer = offer_from_message(
+        _msg(text, ("https://tidd.ly/abc",)), sold_out=False, deleted=False, now=NOW
+    )
+    assert offer is not None
+    assert offer.store == "kabum"
+
+
+def test_product_post_never_guesses_its_store_from_the_title() -> None:
+    offer = offer_from_message(
+        _msg("Fone Amazon Basics R$ 50\nhttps://tidd.ly/x", ("https://tidd.ly/x",)),
+        sold_out=False,
+        deleted=False,
+        now=NOW,
+    )
+    assert offer is not None
+    assert offer.store is None

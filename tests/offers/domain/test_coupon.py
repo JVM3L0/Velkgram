@@ -1,6 +1,11 @@
 import pytest
 
-from velkgram.offers.domain.coupon import CouponDeal, coupon_deal, starts_with_coupon_word
+from velkgram.offers.domain.coupon import (
+    CouponDeal,
+    coupon_deal,
+    starts_with_coupon_word,
+    store_in_title,
+)
 
 SHOPEE = (
     "Cupom Shopee\n\nR$ 10 OFF em R$ 40: QIP98Q1ZXO\n\n-Resgate aqui: \n"
@@ -63,3 +68,21 @@ def test_minimum_spend_phrases(phrase: str) -> None:
 def test_title_only_coupon_has_no_extras() -> None:
     deal = coupon_deal("Cupom Misterioso", None, ())
     assert deal == CouponDeal("", None, None, None, None)
+
+
+@pytest.mark.parametrize(
+    ("title", "store"),
+    [
+        ("Cupom KaBuM em Memórias ram selecionadas - 15% OFF", "kabum"),
+        ("CUPOM MAGALU 10% OFF", "magalu"),
+        ("Cupom Mercado Livre 20% OFF", "mercadolivre"),
+        ("Cupom Casas Bahia R$ 50 OFF", "casasbahia"),
+        ("Cupom Amazon Primeira Compra", "amazon"),
+        ("Cupom Shopee", "shopee"),
+        ("Cupom Americanas", "americanas"),
+        ("Cupom de desconto geral", None),
+        ("Cupom Amazonas 10% OFF", None),
+    ],
+)
+def test_store_is_inferred_from_a_coupon_title_by_whole_word(title: str, store: str | None) -> None:
+    assert store_in_title(title) == store

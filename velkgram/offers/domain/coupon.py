@@ -5,6 +5,7 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from velkgram.offers.domain.title import STORE_TITLES
 from velkgram.shared.text import URL_PATTERN
 
 _MONEY = r"R\$\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?"
@@ -29,6 +30,20 @@ def _plain(text: str) -> str:
 
 def starts_with_coupon_word(title: str) -> bool:
     return _plain(title).startswith("cupom")
+
+
+def _store_words(slug: str) -> str:
+    return re.sub(r"[^a-z0-9 ]", "", _plain(STORE_TITLES[slug]))
+
+
+def store_in_title(title: str) -> str | None:
+    """The store named as a whole word in a coupon title ("Cupom KaBuM ..."), else None."""
+    plain = re.sub(r"[^a-z0-9 ]", " ", _plain(title))
+    for slug in STORE_TITLES:
+        for name in {slug, _store_words(slug)}:
+            if re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", plain):
+                return slug
+    return None
 
 
 def _cents(reais: str, cents: str | None) -> int:
