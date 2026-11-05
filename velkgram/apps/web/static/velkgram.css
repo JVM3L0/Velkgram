@@ -662,9 +662,9 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
   overflow-wrap: anywhere;
   /* Breathing room inside the clamp box: overflow:hidden would clip ascenders, descenders
      and the first glyph; the negative margins keep the visual position unchanged. */
-  padding: 0.15em 0.3em;
+  padding: 0.15em 0.3em 0;
 }
-.offer > .offer-title { margin: -0.15em -0.3em !important; }
+.offer > .offer-title { margin: -0.15em -0.3em 0 !important; }
 .offer-meta, .offer-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; color: var(--on-surface-variant); font-size: 0.875rem; }
 .offer-flags { gap: 0.5rem; }
 .offer .chip { margin: 0; }
