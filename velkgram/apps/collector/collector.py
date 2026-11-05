@@ -10,6 +10,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from velkgram.alerting import Alert, AlertKind, AlertMessage, Notifier, SuppressionRule
+from velkgram.alerting.adapters.offers_api import OffersActiveCoupons
 from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
 from velkgram.alerting.adapters.wishlist_api import WishlistApiReader
 from velkgram.alerting.domain.dedup import DedupCache
@@ -36,12 +37,14 @@ from velkgram.ingestion import (
     snapshot_cursors,
 )
 from velkgram.ingestion.adapters.sqlite.repository import SqliteMessageRepository
-from velkgram.offers import OfferBuilder, RetroMatcher, purge_offer_text_before
+from velkgram.offers import OfferBuilder, RetroMatcher, classify_message, purge_offer_text_before
+from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
 from velkgram.shared.events import (
     ChannelsChanged,
     CouponMatchedWish,
+    MessageData,
     MessageDeleted,
     MessageEdited,
     MessageReceived,
@@ -55,6 +58,11 @@ log = logging.getLogger(__name__)
 
 _DEDUP_WINDOW = timedelta(minutes=30)
 _COUPON_DEDUP_WINDOW = timedelta(days=3)
+
+
+def _classify(m: MessageData) -> tuple[str | None, bool]:
+    c = classify_message(m)
+    return c.store, c.is_coupon_post
 
 
 class Collector:
@@ -112,6 +120,8 @@ class Collector:
             channel_names=lambda: self._names,
             on_alert_sent=self.heartbeat.count_alert,
             sleep=sleep,
+            coupons=OffersActiveCoupons(SqliteOfferQueries(conn)),
+            classify=_classify,
         )
         self.coupon_alerter = CouponAlerter(
             WishlistApiReader(self._wish_repo),
@@ -401,4 +411,6 @@ class Collector:
             channel_name=channel_name,
             link=message_link(m),
             delayed_minutes=alert.delayed_minutes,
+            # Coupon lines are not re-fetched on retry; the over-max suffix is kept.
+            over_max_cents=wish.max_price_cents if alert.over_max else None,
         )

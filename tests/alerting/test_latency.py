@@ -1,6 +1,7 @@
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -208,3 +209,65 @@ def _offer() -> Offer:
         deleted=False,
         updated_at=now,
     )
+
+
+async def test_coupon_burst_does_not_delay_persisting_a_live_alert() -> None:
+    from tests.fakes.active_coupons import FakeActiveCoupons
+    from tests.fakes.repositories import FakeWishReader
+    from velkgram.alerting import Alert
+    from velkgram.alerting.domain.models import WishView
+    from velkgram.alerting.services.coupon_alerts import CouponAlerter
+    from velkgram.shared.events import CouponMatchedWish, CouponTargetData
+
+    wishes = InMemoryWishRepository()
+    wishes.add(Wish(None, "wish", ("item25",), ("usado",), 100000, True))
+    notifier = FakeNotifier(delay_s=0.01)
+    bus = MemoryBus()
+    clock = SystemClock()
+    alerts = InMemoryAlertRepository()
+    cache = DedupCache(timedelta(minutes=30))
+    evaluator = Evaluator(
+        wishes=WishlistApiReader(wishes),
+        repo=alerts,
+        cache=cache,
+        notifier=notifier,
+        bus=bus,
+        clock=clock,
+        mark_processed=lambda c, m: None,
+        channel_names=lambda: {10: "Promos"},
+        coupons=FakeActiveCoupons([]),
+        classify=lambda m: ("shopee", False),
+    )
+    views = FakeWishReader()
+    views.views = [WishView(i, f"w{i}", (("x",),), (), 100000) for i in range(1, 21)]
+    views.enabled_ids = set(range(1, 21))
+    alerter = CouponAlerter(views, alerts, cache, notifier, clock)
+    bus.subscribe(MessageReceived, evaluator.on_received)
+    bus.subscribe(CouponMatchedWish, alerter.on_coupon)
+    runner = asyncio.create_task(bus.run())
+    worker = asyncio.create_task(alerter.run())
+    now = datetime.now(UTC)
+    targets = tuple(
+        CouponTargetData(i, 10, 1, 9900, False, "R$ 10 OFF", None, ("C",)) for i in range(1, 21)
+    )
+    event = CouponMatchedWish(10, 50, None, None, now, now, "shopee", "Shopee", None, None, targets)
+    for n in range(20):
+        await bus.publish(replace(event, coupon_message_id=50 + n))
+    start = time.perf_counter()
+    await bus.publish(MessageReceived(msg(5, 10, "Oferta item25 por R$ 99,90")))
+    persisted: list[Alert] = []
+    while not persisted:
+        await asyncio.sleep(0)
+        persisted = [
+            a
+            for a in alerts.list_since(datetime(2000, 1, 1, tzinfo=UTC))
+            if a.kind.value == "offer"
+        ]
+        assert time.perf_counter() - start < 1
+    elapsed = time.perf_counter() - start
+    runner.cancel()
+    await alerter.stop()
+    worker.cancel()
+    await asyncio.gather(runner, worker, return_exceptions=True)
+    await evaluator.wait_idle()
+    assert elapsed < 0.2

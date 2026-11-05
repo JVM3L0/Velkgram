@@ -1,6 +1,6 @@
 """Link helpers and pt-BR alert text."""
 
-from velkgram.alerting.domain.models import AlertMessage
+from velkgram.alerting.domain.models import ActiveCoupon, AlertMessage
 from velkgram.shared.deals import extract_coupons
 from velkgram.shared.events import MessageData
 
@@ -29,7 +29,9 @@ def format_alert(msg: AlertMessage) -> str:
     codes = extract_coupons(msg.text)
     if codes:
         price += f" com {'cupom' if len(codes) == 1 else 'cupons'} {', '.join(codes)}"
-    lines = [f"🔔 {msg.wish_name}", price]
+    if msg.over_max_cents is not None:
+        price += f" (acima do seu limite de {format_brl(msg.over_max_cents)}, mas há cupom)"
+    lines = [f"🔔 {msg.wish_name}", price, *msg.coupon_lines]
     if msg.delayed_minutes is not None:
         lines.append(f"⏱ atrasado {msg.delayed_minutes} min")
     lines.append(f"via {msg.channel_name}")
@@ -37,6 +39,15 @@ def format_alert(msg: AlertMessage) -> str:
         lines.append(msg.link)
     lines.append(msg.text[:_MAX_TEXT])
     return "\n".join(lines)
+
+
+def format_coupon_line(c: ActiveCoupon) -> str:
+    line = f"🎟️ Cupom ativo da loja: {', '.join(c.codes)}"
+    if c.discount:
+        line += f" — {c.discount}"
+    if c.min_cents is not None:
+        line += f" a partir de {format_brl(c.min_cents)}"
+    return line
 
 
 def format_coupon_alert(

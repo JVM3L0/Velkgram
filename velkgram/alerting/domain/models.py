@@ -51,6 +51,18 @@ class Alert:
 
 
 @dataclass(frozen=True, slots=True)
+class ActiveCoupon:
+    """A live store coupon as it applies to a price (alerting's own view of an offers coupon)."""
+
+    channel_id: int
+    message_id: int
+    posted_at: datetime
+    discount: str
+    min_cents: int | None
+    codes: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AlertMessage:
     wish_name: str
     text: str
@@ -59,3 +71,5 @@ class AlertMessage:
     link: str | None
     delayed_minutes: int | None
     rendered: str | None = None  # final text (coupon alerts); format_alert returns it verbatim
+    coupon_lines: tuple[str, ...] = ()  # active store coupons, already formatted
+    over_max_cents: int | None = None  # set on above-max alerts: the wish max, for the suffix

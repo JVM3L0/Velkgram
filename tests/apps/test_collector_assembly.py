@@ -12,6 +12,7 @@ from tests.fakes.messages import NOW, msg
 from tests.fakes.notifier import FakeNotifier
 from tests.fakes.telegram import FakeTelegramGateway
 from velkgram.alerting import Alert, AlertKind, AlertStatus
+from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
 from velkgram.channels import ChannelCommands, ChannelStatus
@@ -475,3 +476,38 @@ def test_coupon_alert_without_payload_is_expired_not_rebuilt(env: Env) -> None:
         payload=None,
     )
     assert env.collector.build_message(alert) is None
+
+
+async def _over_max_alert_with_active_coupon(env: Env) -> None:
+    env.channel()
+    env.wish()  # max R$ 500
+    await env.collector.start()
+    await _post_coupon(env, 2)
+    live = replace(
+        msg(3, CH, "Teclado mecanico por R$ 600"),
+        date=env.clock.now(),
+        links=("https://s.shopee.com.br/prod",),
+    )
+    await env.collector.ingestor.on_new(live)
+    await _settle(env)
+
+
+async def test_over_max_offer_after_a_stored_coupon_alerts_with_the_suffix(env: Env) -> None:
+    await _over_max_alert_with_active_coupon(env)
+    assert env.count("alerts", "kind='offer' AND over_max=1 AND status='sent'") == 1
+    [sent] = [m for m in env.notifier.sent if m.rendered is None]
+    assert sent.over_max_cents == 50000
+
+
+async def test_retry_of_an_over_max_alert_keeps_the_suffix(env: Env) -> None:
+    await _over_max_alert_with_active_coupon(env)
+    [alert] = [
+        a
+        for a in SqliteAlertRepository(env.conn).list_since(NOW - timedelta(days=1))
+        if a.kind is AlertKind.offer
+    ]
+    assert alert.over_max
+    rebuilt = env.collector.build_message(alert)
+    assert rebuilt is not None
+    assert rebuilt.over_max_cents == 50000
+    assert rebuilt.coupon_lines == ()
