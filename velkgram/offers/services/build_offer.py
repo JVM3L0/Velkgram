@@ -2,13 +2,16 @@
 
 import asyncio
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import replace
+from datetime import datetime
 
 from velkgram.offers.domain.build import offer_from_message
-from velkgram.offers.domain.models import MatchSource, OfferMatch
+from velkgram.offers.domain.models import MatchSource, Offer, OfferMatch
+from velkgram.offers.ports.messages import SourceMessage
 from velkgram.offers.ports.repository import OfferRepository
 from velkgram.offers.ports.wishes import WishReader
-from velkgram.shared.deals import matches
+from velkgram.shared.deals import WishView, matches
 from velkgram.shared.events import MessageData, MessageDeleted, MessageEdited, MessageReceived
 from velkgram.shared.ports import Clock
 
@@ -70,25 +73,62 @@ class OfferBuilder:
         source: MatchSource = MatchSource.live,
     ) -> bool:
         now = self._clock.now()
+        offer = self._store(m, sold_out=sold_out, deleted=deleted, now=now)
+        if offer is None:
+            return False
+        found = self._matches_for(offer, self._wishes.all, source, now)
+        if found:
+            self._repo.add_matches(found)
+        return True
+
+    def ingest_many(self, items: Sequence[SourceMessage], *, source: MatchSource) -> int:
+        """Ingest a batch with `ingest`'s rules: one wish read and one `add_matches` call."""
+        if not items:
+            return 0
+        now = self._clock.now()
+        wishes = self._wishes.all()
+        built = 0
+        found: list[OfferMatch] = []
+        for item in items:
+            offer = self._store(item.message, sold_out=item.sold_out, deleted=item.deleted, now=now)
+            if offer is None:
+                continue
+            built += 1
+            found.extend(self._matches_for(offer, lambda: wishes, source, now))
+        if found:
+            self._repo.add_matches(found)
+        return built
+
+    def _store(
+        self, m: MessageData, *, sold_out: bool, deleted: bool, now: datetime
+    ) -> Offer | None:
+        """Upsert the offer for `m`; return it, or None when `m` yields no offer."""
         if not m.text.strip():
             existing = self._repo.get(m.channel_id, m.message_id)
             if existing is not None:
-                self._repo.upsert(
-                    replace(
-                        existing,
-                        sold_out=existing.sold_out or sold_out,
-                        deleted=existing.deleted or deleted,
-                        updated_at=now,
-                    )
+                flags_only = replace(
+                    existing,
+                    sold_out=existing.sold_out or sold_out,
+                    deleted=existing.deleted or deleted,
+                    updated_at=now,
                 )
-                return True
+                self._repo.upsert(flags_only)
+                return flags_only
         offer = offer_from_message(m, sold_out=sold_out, deleted=deleted, now=now)
-        if offer is None:
-            return False
-        self._repo.upsert(offer)
+        if offer is not None:
+            self._repo.upsert(offer)
+        return offer
+
+    @staticmethod
+    def _matches_for(
+        offer: Offer,
+        wishes: Callable[[], list[WishView]],
+        source: MatchSource,
+        now: datetime,
+    ) -> list[OfferMatch]:
         if offer.deleted or offer.norm_text is None:
-            return True
-        found = [
+            return []
+        return [
             OfferMatch(
                 wish_id=w.id,
                 channel_id=offer.channel_id,
@@ -98,12 +138,9 @@ class OfferBuilder:
                 source=source,
                 matched_at=now,
             )
-            for w in self._wishes.all()
+            for w in wishes()
             if matches(w, offer.norm_text, offer.price_cents)
         ]
-        if found:
-            self._repo.add_matches(found)
-        return True
 
 
 def _ids(e: _Event) -> dict[str, object]:

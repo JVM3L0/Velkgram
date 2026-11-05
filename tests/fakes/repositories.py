@@ -6,6 +6,7 @@ from velkgram.alerting import Alert, AlertStatus, SuppressionRule
 from velkgram.channels import Channel, ChannelStatus
 from velkgram.ingestion import Heartbeat
 from velkgram.offers.domain.models import Offer, OfferMatch, OfferText, RetroRun
+from velkgram.offers.ports.messages import SourceMessage
 from velkgram.shared.deals import WishView
 from velkgram.shared.events import MessageData
 from velkgram.wishlist import Wish
@@ -292,3 +293,11 @@ class FakeWishReader:
 
     def all(self) -> list[WishView]:
         return list(self.views)
+
+
+class FakeMessageSource:
+    def __init__(self, items: list[SourceMessage]) -> None:
+        self.items = items
+
+    def iter_messages(self) -> Iterator[SourceMessage]:
+        yield from self.items
