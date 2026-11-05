@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import sqlite3
-from collections.abc import Awaitable, Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from datetime import timedelta
 from typing import Any
 
@@ -28,6 +28,7 @@ from velkgram.ingestion import (
     backfill_all,
     backfill_channel,
     gap_check,
+    snapshot_cursors,
 )
 from velkgram.ingestion.adapters.sqlite.repository import SqliteMessageRepository
 from velkgram.shared.events import (
@@ -66,6 +67,8 @@ class Collector:
         self._names: dict[int, str] = {}
         self._tasks: set[asyncio.Task[None]] = set()
         self._resolve_lock = asyncio.Lock()
+        # Cursors taken before live messages could advance them (startup, disconnect, new channel).
+        self._snapshot: dict[int, int | None] = {}
 
         self._wish_repo = SqliteWishRepository(conn)
         self._channel_repo = SqliteChannelRepository(conn)
@@ -95,7 +98,7 @@ class Collector:
             sleep=sleep,
         )
         self.watcher = ConnectionWatcher(
-            gateway.is_connected, self.heartbeat, self.backfill_enabled
+            gateway.is_connected, self.heartbeat, self.backfill_enabled, self._take_snapshot
         )
 
     # --- lifecycle -------------------------------------------------------------------------
@@ -104,6 +107,7 @@ class Collector:
         apply_migrations(self._conn, MIGRATION_PACKAGES)
         self.reload_wishes()
         self._load_channels()
+        self._take_snapshot()  # same sync step as enabling channels: no live message in between
         warm_cache(self._alerts, self._cache, self._clock)
         await reprocess_unprocessed(
             self._messages.list_unprocessed_since, self.evaluator, self._clock
@@ -139,6 +143,12 @@ class Collector:
     def reload_wishes(self) -> None:
         """Wishes are read per message by the evaluator; nothing is cached to refresh."""
         log.info("wishes_reloaded")
+
+    def _take_snapshot(self, channel_ids: Sequence[int] | None = None) -> None:
+        """Remember cursors per channel until it is backfilled; never overwrite an older one."""
+        ids = sorted(self._enabled) if channel_ids is None else channel_ids
+        for channel_id, cursor in snapshot_cursors(self._messages, ids).items():
+            self._snapshot.setdefault(channel_id, cursor)
 
     def _load_channels(self) -> None:
         enabled = self._channel_repo.list_enabled_active()
@@ -200,6 +210,7 @@ class Collector:
         resolved = await self._gateway.resolve_and_join(ref)
         self._channels.activate(id, resolved.telegram_id, resolved.title)
         self._load_channels()
+        self._take_snapshot([resolved.telegram_id])  # before any await: live can't advance it
         return resolved.telegram_id
 
     def _fail_channel(self, id: int, reason_pt: str) -> None:
@@ -211,7 +222,12 @@ class Collector:
     async def _backfill_one(self, channel_id: int) -> None:
         try:
             await backfill_channel(
-                self._gateway, self.ingestor, self._messages, self._clock, channel_id
+                self._gateway,
+                self.ingestor,
+                self._messages,
+                self._clock,
+                channel_id,
+                self._snapshot,
             )
         except TelegramDeferred as e:
             log.warning("telegram_deferred", extra={"channel_id": channel_id, "seconds": e.seconds})
@@ -224,13 +240,16 @@ class Collector:
             self._clock,
             sorted(self._enabled),
             sleep=self._sleep,
+            snapshot=self._snapshot,
         )
 
     # --- loop entry points (Task 17) -------------------------------------------------------
 
     async def run_gap_check(self) -> None:
         try:
-            behind = await gap_check(self._gateway, self._messages, sorted(self._enabled))
+            behind = await gap_check(
+                self._gateway, self._messages, sorted(self._enabled), self._snapshot
+            )
             for channel_id in behind:
                 await self._backfill_one(channel_id)
         except Exception:

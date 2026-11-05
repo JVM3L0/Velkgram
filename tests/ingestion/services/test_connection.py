@@ -75,3 +75,30 @@ async def test_heartbeat_connected_before_recovery_backfill() -> None:
     state["up"] = True
     await w.tick()
     assert seen == ["connected"]
+
+
+async def test_on_disconnect_called_once_per_outage() -> None:
+    repo = InMemoryMessageRepository()
+    state = {"up": True}
+    downs = 0
+
+    async def on_recovered() -> None:
+        return None
+
+    def on_disconnect() -> None:
+        nonlocal downs
+        downs += 1
+
+    w = ConnectionWatcher(
+        lambda: state["up"], HeartbeatWriter(repo, FakeClock(NOW)), on_recovered, on_disconnect
+    )
+    await w.tick()
+    state["up"] = False
+    await w.tick()
+    await w.tick()
+    assert downs == 1
+    state["up"] = True
+    await w.tick()
+    state["up"] = False
+    await w.tick()
+    assert downs == 2

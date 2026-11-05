@@ -283,3 +283,66 @@ async def test_fatal_is_idempotent(env: Env) -> None:
     await env.collector.fatal("x")
     await env.collector.fatal("y")
     assert len(env.notifier.system) == 1
+
+
+def _active_channel_with_cursor(env: Env, cursor: int) -> None:
+    cid = env.channel()
+    ChannelCommands(SqliteChannelRepository(env.conn), env.clock).activate(cid, CH, "Loja")
+    SqliteMessageRepository(env.conn, env.clock).set_cursor(CH, cursor)
+
+
+async def test_live_message_before_startup_backfill_does_not_hide_offline_gap(
+    tmp_path: Path,
+) -> None:
+    offline = [msg(6, CH, "Teclado R$ 100"), msg(7, CH, "Teclado R$ 110")]
+    live = msg(9, CH, "Teclado R$ 90")
+    holder: list[Env] = []
+
+    class LiveDuringStart(FakeTelegramGateway):
+        async def resolve_and_join(self, ref: str) -> ResolvedChannel:
+            await holder[0].collector.ingestor.on_new(live)  # lands mid-start()
+            return await super().resolve_and_join(ref)
+
+    gw = LiveDuringStart({CH: [*offline, live]}, {"@outro": ResolvedChannel(-1007777777777, "O")})
+    env = Env(tmp_path, gw)
+    holder.append(env)
+    env.wish()
+    _active_channel_with_cursor(env, 5)
+    env.channel("@outro")
+    await env.collector.start()
+    await env.bus.drain()
+    await env.collector.wait_idle()
+    await env.bus.drain()
+    await env.collector.wait_idle()
+    assert env.count("messages", f"channel_id={CH}") == 3
+    assert env.count("alerts") == 3  # 6, 7 backfilled; 9 once (live + backfill dedup)
+
+
+async def test_live_message_after_reconnect_does_not_hide_offline_gap(tmp_path: Path) -> None:
+    gw = FakeTelegramGateway({CH: []}, {})
+    env = Env(tmp_path, gw)
+    env.wish()
+    _active_channel_with_cursor(env, 5)
+    await env.collector.start()
+    gw.connected = False
+    await env.collector.housekeeping_tick()  # disconnect detected: snapshot taken
+    gw.messages[CH] = [msg(6, CH, "Teclado R$ 100"), msg(9, CH, "Teclado R$ 90")]
+    await env.collector.ingestor.on_new(msg(9, CH, "Teclado R$ 90"))  # live after catch-up
+    gw.connected = True
+    await env.collector.housekeeping_tick()
+    await env.bus.drain()
+    await env.collector.wait_idle()
+    await env.bus.drain()
+    await env.collector.wait_idle()
+    assert env.count("messages", f"channel_id={CH}") == 2
+    assert env.count("alerts") == 2
+
+
+async def test_gap_check_uses_pending_snapshot(tmp_path: Path) -> None:
+    gw = FakeTelegramGateway({CH: [msg(6, CH, "Teclado R$ 100"), msg(9, CH, "Teclado R$ 90")]}, {})
+    env = Env(tmp_path, gw)
+    env.wish()
+    _active_channel_with_cursor(env, 5)
+    await env.collector.start()  # startup backfill consumes the snapshot
+    assert env.count("messages", f"channel_id={CH}") == 2
+    assert gw.iter_calls[0][1] == 5

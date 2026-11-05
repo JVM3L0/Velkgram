@@ -78,3 +78,34 @@ async def test_deferred_channel_is_skipped_and_rest_backfilled() -> None:
     assert repo.get(10, 1) is not None
     assert repo.get(11, 1) is None
     assert repo.get(12, 1) is not None
+
+
+async def test_backfill_uses_snapshot_not_live_advanced_cursor() -> None:
+    repo, bus, clock, ingestor, received = build()
+    gw = FakeTelegramGateway({10: [msg(i, 10) for i in (6, 7, 9)]}, {})
+    repo.set_cursor(10, 5)
+    snapshot: dict[int, int | None] = {10: 5}
+    await ingestor.on_new(msg(9, 10))  # live message arrives first and advances the cursor
+    n = await backfill_channel(gw, ingestor, repo, clock, 10, snapshot)
+    await bus.drain()
+    assert gw.iter_calls[-1][1] == 5
+    assert n == 3
+    assert sorted(e.message.message_id for e in received if isinstance(e, MessageReceived)) == [
+        6,
+        7,
+        9,
+    ]  # 9 only once: re-storing an existing message publishes nothing
+    assert snapshot == {}  # consumed once the channel was backfilled
+
+
+async def test_deferred_backfill_keeps_snapshot_entry() -> None:
+    repo, _bus, clock, ingestor, _ = build()
+    gw = FakeTelegramGateway({10: [msg(6, 10)]}, {})
+    gw.deferred[10] = TelegramDeferred(30)
+    snapshot: dict[int, int | None] = {10: 5}
+
+    async def no_sleep(s: float) -> None:
+        return None
+
+    await backfill_all(gw, ingestor, repo, clock, [10], 1.0, no_sleep, snapshot)
+    assert snapshot == {10: 5}

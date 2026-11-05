@@ -10,7 +10,7 @@ from velkgram.ingestion.ports.telegram import (
     TelegramDeferred,
     TelegramGateway,
 )
-from velkgram.ingestion.services.backfill import backfill_all, backfill_channel
+from velkgram.ingestion.services.backfill import backfill_all, backfill_channel, snapshot_cursors
 from velkgram.ingestion.services.connection import ConnectionWatcher
 from velkgram.ingestion.services.gap_check import gap_check
 from velkgram.ingestion.services.heartbeat import HeartbeatWriter
@@ -34,4 +34,5 @@ __all__ = [
     "backfill_channel",
     "detect_sold_out",
     "gap_check",
+    "snapshot_cursors",
 ]

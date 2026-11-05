@@ -16,3 +16,12 @@ async def test_gap_check_reports_channels_behind() -> None:
     gw.deferred[13] = TelegramDeferred(90)
     # 12 has no cursor but has messages: behind. 13 is deferred: skipped. 14 is empty: fine.
     assert await gap_check(gw, repo, [10, 11, 12, 13, 14]) == [10, 12]
+
+
+async def test_gap_check_compares_against_snapshot_when_present() -> None:
+    repo = InMemoryMessageRepository()
+    repo.set_cursor(10, 9)  # live message advanced the cursor past offline messages
+    gw = FakeTelegramGateway({10: [msg(9, 10)], 11: [msg(3, 11)]}, {})
+    assert await gap_check(gw, repo, [10], {10: 5}) == [10]
+    assert await gap_check(gw, repo, [10]) == []
+    assert await gap_check(gw, repo, [11], {11: None}) == [11]
