@@ -1,10 +1,11 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
 from datetime import datetime
 
 from velkgram.alerting import Alert, AlertStatus, SuppressionRule
 from velkgram.channels import Channel, ChannelStatus
 from velkgram.ingestion import Heartbeat
+from velkgram.offers.domain.models import Offer, OfferMatch, OfferText, RetroRun
 from velkgram.shared.events import MessageData
 from velkgram.wishlist import Wish
 
@@ -188,3 +189,85 @@ class InMemoryAlertRepository:
         return any(
             a.channel_id == channel_id and a.message_id == message_id for a in self._alerts.values()
         )
+
+
+class InMemoryOfferRepository:
+    def __init__(self) -> None:
+        self._offers: dict[tuple[int, int], Offer] = {}
+        self._matches: dict[tuple[int, int, int], OfferMatch] = {}
+        self._runs: dict[int, RetroRun] = {}
+
+    def upsert(self, o: Offer) -> None:
+        self._offers[(o.channel_id, o.message_id)] = o
+
+    def get(self, channel_id: int, message_id: int) -> Offer | None:
+        return self._offers.get((channel_id, message_id))
+
+    def mark_deleted(self, channel_id: int, message_ids: Sequence[int], at: datetime) -> None:
+        for mid in message_ids:
+            o = self._offers.get((channel_id, mid))
+            if o is not None:
+                self._offers[(channel_id, mid)] = replace(o, deleted=True, updated_at=at)
+
+    def add_match(self, m: OfferMatch) -> bool:
+        key = (m.wish_id, m.channel_id, m.message_id)
+        if key in self._matches:
+            return False
+        self._matches[key] = m
+        return True
+
+    def add_matches(self, ms: Sequence[OfferMatch]) -> int:
+        return sum(1 for m in ms if self.add_match(m))
+
+    def delete_matches(self, wish_id: int, since: datetime | None) -> int:
+        doomed = [
+            k
+            for k, m in self._matches.items()
+            if m.wish_id == wish_id and (since is None or m.posted_at >= since)
+        ]
+        for k in doomed:
+            del self._matches[k]
+        return len(doomed)
+
+    def iter_offers_with_text(self, since: datetime, batch_size: int) -> Iterator[list[OfferText]]:
+        rows = sorted(
+            (
+                OfferText(o.channel_id, o.message_id, o.posted_at, o.price_cents, o.norm_text)
+                for o in self._offers.values()
+                if o.norm_text is not None and not o.deleted and o.posted_at >= since
+            ),
+            key=lambda t: (t.posted_at, t.channel_id, t.message_id),
+        )
+        for i in range(0, len(rows), batch_size):
+            yield rows[i : i + batch_size]
+
+    def priced_points(self, wish_id: int) -> list[tuple[datetime, int | None]]:
+        ms = sorted(
+            (m for m in self._matches.values() if m.wish_id == wish_id),
+            key=lambda m: (m.posted_at, m.channel_id, m.message_id),
+        )
+        return [(m.posted_at, m.price_cents) for m in ms]
+
+    def purge_text_before(self, cutoff: datetime) -> int:
+        n = 0
+        for k, o in list(self._offers.items()):
+            if o.posted_at < cutoff and o.text is not None:
+                self._offers[k] = replace(o, text=None, norm_text=None)
+                n += 1
+        return n
+
+    def get_retro_run(self, wish_id: int) -> RetroRun | None:
+        return self._runs.get(wish_id)
+
+    def save_retro_run(self, r: RetroRun) -> None:
+        self._runs[r.wish_id] = r
+
+    def list_retro_runs(self) -> list[RetroRun]:
+        return [self._runs[k] for k in sorted(self._runs)]
+
+    def delete_wish_data(self, wish_id: int) -> None:
+        self.delete_matches(wish_id, None)
+        self._runs.pop(wish_id, None)
+
+    def delete_retro_run(self, wish_id: int) -> None:
+        self._runs.pop(wish_id, None)

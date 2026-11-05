@@ -62,3 +62,14 @@ class ProductStats:
     avg_30d_cents: int | None
     last_cents: int | None
     match_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class OfferText:
+    """Light offer row for retroactive matching (no full decode)."""
+
+    channel_id: int
+    message_id: int
+    posted_at: datetime
+    price_cents: int | None
+    norm_text: str
