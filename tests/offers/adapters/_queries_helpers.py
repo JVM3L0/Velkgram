@@ -2,7 +2,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
-from velkgram.offers.domain.models import MatchSource, Offer, OfferMatch
+from velkgram.offers.domain.models import MatchSource, Offer, OfferKind, OfferMatch
 
 T0 = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
@@ -20,6 +20,8 @@ def offer(
     sold_out: bool = False,
     deleted: bool = False,
     comparable: bool = True,
+    coupon: tuple[str, ...] = (),
+    kind: OfferKind = OfferKind.product,
 ) -> Offer:
     when = at or T0 + timedelta(minutes=message_id)
     return Offer(
@@ -39,6 +41,11 @@ def offer(
         deleted=deleted,
         updated_at=when,
         comparable=comparable,
+        kind=kind,
+        coupons=coupon,
+        coupon_discount="R$ 10 OFF" if kind is OfferKind.coupon else None,
+        coupon_min_cents=4000 if kind is OfferKind.coupon else None,
+        redeem_link="https://x.test/resgate" if kind is OfferKind.coupon else None,
     )
 
 

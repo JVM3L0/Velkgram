@@ -2,6 +2,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 
 from velkgram.offers.domain.build import offer_from_message, wish_fingerprint
+from velkgram.offers.domain.models import OfferKind
 from velkgram.shared.deals import WishView
 from velkgram.shared.events import MessageData
 from velkgram.shared.text import normalize_text
@@ -100,3 +101,52 @@ def test_offer_comparable_flag_follows_the_coupon_and_multi_price_rule() -> None
     assert plain is not None and coupon is not None
     assert plain.comparable is True
     assert coupon.comparable is False
+
+
+PALIT = (
+    "Placa de Video Palit GeForce RTX 5070 WHITE OC 12GB GDDR7 192bit 3-DP e HDMI\n\n"
+    "R$ 4679\n-CUPOM: ZAFADINHO10\n\nhttps://cutt.ly/XyIWx4MZ\n\n-Anúncio"
+)
+SHOPEE = (
+    "Cupom Shopee\n\nR$ 10 OFF em R$ 40: QIP98Q1ZXO\n\n-Resgate aqui: \n"
+    "https://s.shopee.com.br/70GSVaUJxC\n\n-Link carrinho:\n"
+    "https://s.shopee.com.br/7fW9IpEnZG\n\n-Anúncio"
+)
+
+
+def test_product_with_coupon_keeps_the_posted_price_and_lists_codes() -> None:
+    offer = offer_from_message(
+        _msg(PALIT, ("https://cutt.ly/XyIWx4MZ",)), sold_out=False, deleted=False, now=NOW
+    )
+    assert offer is not None
+    assert offer.kind is OfferKind.product
+    assert offer.price_cents == 467900  # already the final price with the coupon
+    assert offer.coupons == ("ZAFADINHO10",)
+    assert offer.coupon_discount is None
+    assert offer.comparable
+
+
+def test_coupon_post_has_no_price_and_carries_the_deal() -> None:
+    links = ("https://s.shopee.com.br/70GSVaUJxC", "https://s.shopee.com.br/7fW9IpEnZG")
+    offer = offer_from_message(_msg(SHOPEE, links), sold_out=False, deleted=False, now=NOW)
+    assert offer is not None
+    assert offer.kind is OfferKind.coupon
+    assert offer.price_cents is None
+    assert not offer.comparable
+    assert offer.coupons == ("QIP98Q1ZXO",)
+    assert (offer.coupon_discount, offer.coupon_min_cents, offer.coupon_scope) == (
+        "R$ 10 OFF",
+        4000,
+        None,
+    )
+    assert offer.redeem_link == links[0]
+    assert offer.cart_link == links[1]
+
+
+def test_post_without_coupon_words_has_no_codes() -> None:
+    offer = offer_from_message(
+        _msg("SSD por R$ 299", ("https://amzn.to/x",)), sold_out=False, deleted=False, now=NOW
+    )
+    assert offer is not None
+    assert offer.coupons == ()
+    assert offer.kind is OfferKind.product

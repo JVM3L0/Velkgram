@@ -9,7 +9,14 @@ import pytest
 from tests.fakes.repositories import InMemoryOfferRepository
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
-from velkgram.offers.domain.models import MatchSource, Offer, OfferMatch, RetroRun, RetroStatus
+from velkgram.offers.domain.models import (
+    MatchSource,
+    Offer,
+    OfferKind,
+    OfferMatch,
+    RetroRun,
+    RetroStatus,
+)
 from velkgram.offers.ports.repository import OfferRepository
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
@@ -74,6 +81,26 @@ def test_upsert_replaces_existing(handle: Handle) -> None:
     changed = _offer(title="Outro", price_cents=None, text=None, norm_text=None, sold_out=True)
     handle.repo.upsert(changed)
     assert handle.repo.get(10, 1) == changed
+
+
+def test_coupon_fields_round_trip_and_upsert_updates_them(handle: Handle) -> None:
+    coupon = _offer(
+        title="Cupom Shopee",
+        price_cents=None,
+        comparable=False,
+        kind=OfferKind.coupon,
+        coupons=("QIP98Q1ZXO", "ZAFADINHO10"),
+        coupon_discount="R$ 10 OFF",
+        coupon_min_cents=4000,
+        coupon_scope="Selecionados",
+        redeem_link="https://s.shopee.com.br/a",
+        cart_link="https://s.shopee.com.br/b",
+    )
+    handle.repo.upsert(coupon)
+    assert handle.repo.get(10, 1) == coupon
+    plain = _offer(title="Cupom Shopee")
+    handle.repo.upsert(plain)
+    assert handle.repo.get(10, 1) == plain
 
 
 def test_mark_deleted(handle: Handle) -> None:

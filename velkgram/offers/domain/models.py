@@ -16,6 +16,11 @@ class RetroStatus(StrEnum):
     failed = "failed"
 
 
+class OfferKind(StrEnum):
+    product = "product"
+    coupon = "coupon"
+
+
 @dataclass(frozen=True, slots=True)
 class Offer:
     channel_id: int
@@ -34,6 +39,13 @@ class Offer:
     deleted: bool
     updated_at: datetime
     comparable: bool = True
+    kind: OfferKind = OfferKind.product
+    coupons: tuple[str, ...] = ()
+    coupon_discount: str | None = None
+    coupon_min_cents: int | None = None
+    coupon_scope: str | None = None
+    redeem_link: str | None = None
+    cart_link: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

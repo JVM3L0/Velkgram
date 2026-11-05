@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from velkgram.offers.domain.models import MatchSource, ProductStats, RetroRun
+from velkgram.offers.domain.models import MatchSource, OfferKind, ProductStats, RetroRun
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +16,7 @@ class FeedFilter:
     stores: tuple[str, ...]
     priced_only: bool
     channel_id: int | None
+    coupons_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +40,14 @@ class OfferCard:
     deleted: bool
     repost_count: int
     comparable: bool = True
+    kind: OfferKind = OfferKind.product
+    coupons: tuple[str, ...] = ()
+    coupon_discount: str | None = None
+    coupon_min_cents: int | None = None
+    coupon_scope: str | None = None
+    redeem_link: str | None = None
+    cart_link: str | None = None
+    text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +88,12 @@ class WishSummary:
 
 class OfferQueries(Protocol):
     def feed(self, f: FeedFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage: ...
+
+    def active_coupons(
+        self, now: datetime, hours: int = 6, limit: int = 12
+    ) -> tuple[OfferCard, ...]:
+        """Coupon offers posted in the last `hours`, newest first."""
+        ...
 
     def product(
         self,

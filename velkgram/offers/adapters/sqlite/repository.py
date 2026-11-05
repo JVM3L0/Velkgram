@@ -1,5 +1,6 @@
 """SQLite offer repository. Datetimes are stored as UTC ISO-8601 strings."""
 
+import json
 import sqlite3
 from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
@@ -7,6 +8,7 @@ from datetime import UTC, datetime
 from velkgram.offers.domain.models import (
     MatchSource,
     Offer,
+    OfferKind,
     OfferMatch,
     OfferText,
     RetroRun,
@@ -47,6 +49,13 @@ def _to_offer(row: sqlite3.Row) -> Offer:
         deleted=bool(row["deleted"]),
         updated_at=from_iso(row["updated_at"]),
         comparable=bool(row["comparable"]),
+        kind=OfferKind(row["kind"]),
+        coupons=tuple(json.loads(row["coupons"])) if row["coupons"] else (),
+        coupon_discount=row["coupon_discount"],
+        coupon_min_cents=_opt_int(row["coupon_min_cents"]),
+        coupon_scope=row["coupon_scope"],
+        redeem_link=row["redeem_link"],
+        cart_link=row["cart_link"],
     )
 
 
@@ -82,7 +91,9 @@ _INSERT_MATCH = (
 _UPSERT = (
     "INSERT INTO offers (channel_id, message_id, posted_at, title, price_cents, store, "
     "main_link, has_photo, text, norm_text, origin_channel_id, origin_message_id, sold_out, "
-    "deleted, updated_at, comparable) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+    "deleted, updated_at, comparable, kind, coupons, coupon_discount, coupon_min_cents, "
+    "coupon_scope, redeem_link, cart_link) VALUES "
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
     "ON CONFLICT(channel_id, message_id) DO UPDATE SET "
     "posted_at = excluded.posted_at, title = excluded.title, "
     "price_cents = excluded.price_cents, store = excluded.store, "
@@ -90,7 +101,10 @@ _UPSERT = (
     "norm_text = excluded.norm_text, origin_channel_id = excluded.origin_channel_id, "
     "origin_message_id = excluded.origin_message_id, sold_out = excluded.sold_out, "
     "deleted = excluded.deleted, updated_at = excluded.updated_at, "
-    "comparable = excluded.comparable"
+    "comparable = excluded.comparable, kind = excluded.kind, coupons = excluded.coupons, "
+    "coupon_discount = excluded.coupon_discount, "
+    "coupon_min_cents = excluded.coupon_min_cents, coupon_scope = excluded.coupon_scope, "
+    "redeem_link = excluded.redeem_link, cart_link = excluded.cart_link"
 )
 
 
@@ -116,6 +130,13 @@ class SqliteOfferRepository:
             int(o.deleted),
             to_iso(o.updated_at),
             int(o.comparable),
+            OfferKind(o.kind).value,
+            json.dumps(list(o.coupons)) if o.coupons else None,
+            o.coupon_discount,
+            o.coupon_min_cents,
+            o.coupon_scope,
+            o.redeem_link,
+            o.cart_link,
         )
         with transaction(self._conn) as c:
             c.execute(_UPSERT, params)

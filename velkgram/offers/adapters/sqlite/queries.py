@@ -1,5 +1,6 @@
 """SQLite read queries for the offers feed, product history and summaries."""
 
+import json
 import sqlite3
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
@@ -9,7 +10,7 @@ from velkgram.offers.adapters.sqlite.repository import (
     from_iso,
     to_iso,
 )
-from velkgram.offers.domain.models import MatchSource
+from velkgram.offers.domain.models import MatchSource, OfferKind
 from velkgram.offers.domain.stats import product_stats
 from velkgram.offers.ports.queries import (
     FeedCursor,
@@ -33,7 +34,8 @@ _COMPARABLE_MATCH = "m.price_cents IS NOT NULL AND o.comparable = 1"
 
 _CARD_COLUMNS = (
     "o.channel_id, o.message_id, o.posted_at, o.title, o.price_cents, o.store, o.main_link, "
-    "o.has_photo, o.sold_out, o.deleted, o.comparable, "
+    "o.has_photo, o.sold_out, o.deleted, o.comparable, o.kind, o.coupons, o.coupon_discount, "
+    "o.coupon_min_cents, o.coupon_scope, o.redeem_link, o.cart_link, o.text, "
     "(SELECT COUNT(*) FROM offers r WHERE r.origin_channel_id = o.channel_id "
     "AND r.origin_message_id = o.message_id) AS repost_count"
 )
@@ -63,6 +65,16 @@ def _card(row: sqlite3.Row) -> OfferCard:
         deleted=bool(row["deleted"]),
         comparable=bool(row["comparable"]),
         repost_count=int(row["repost_count"]),
+        kind=OfferKind(row["kind"]),
+        coupons=tuple(json.loads(row["coupons"])) if row["coupons"] else (),
+        coupon_discount=row["coupon_discount"],
+        coupon_min_cents=(
+            None if row["coupon_min_cents"] is None else int(row["coupon_min_cents"])
+        ),
+        coupon_scope=row["coupon_scope"],
+        redeem_link=row["redeem_link"],
+        cart_link=row["cart_link"],
+        text=row["text"],
     )
 
 
@@ -81,6 +93,7 @@ class SqliteOfferQueries:
             "SELECT 1 FROM offers x WHERE x.channel_id = o.origin_channel_id "
             "AND x.message_id = o.origin_message_id))"
         ]
+        where.append("o.kind = 'coupon'" if f.coupons_only else "o.kind = 'product'")
         params: list[object] = []
         match = fts_query(f.q) if f.q is not None else None
         if match is not None:
@@ -111,6 +124,17 @@ class SqliteOfferQueries:
         cards = tuple(_card(r) for r in rows[:limit])
         more = len(rows) > limit
         return FeedPage(cards, _cursor_of(cards[-1]) if more and cards else None)
+
+    def active_coupons(
+        self, now: datetime, hours: int = 6, limit: int = 12
+    ) -> tuple[OfferCard, ...]:
+        rows = self._conn.execute(
+            f"SELECT {_CARD_COLUMNS} FROM offers o WHERE o.kind = 'coupon' AND o.deleted = 0 "
+            "AND o.posted_at >= ? ORDER BY o.posted_at DESC, o.channel_id DESC, "
+            "o.message_id DESC LIMIT ?",
+            (to_iso(now - timedelta(hours=hours)), limit),
+        ).fetchall()
+        return tuple(_card(r) for r in rows)
 
     def product(
         self,

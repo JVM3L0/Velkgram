@@ -69,3 +69,25 @@ def test_comparable_column_defaults_to_true_and_backfills_coupon_titles(
     rows = dict(c.execute("SELECT message_id, comparable FROM offers").fetchall())
     assert rows == {1: 0, 2: 1}
     c.close()
+
+
+def test_coupon_migration_adds_columns_and_marks_coupon_titles(tmp_path: Path) -> None:
+    c = connect(tmp_path / "old.db")
+    for name in ("001_offers.sql", "002_offer_comparable.sql"):
+        c.executescript((files("velkgram.offers") / "migrations" / name).read_text())
+    for mid, title in ((1, "Cupom Shopee"), (2, "SSD Kingston")):
+        c.execute(
+            "INSERT INTO offers (channel_id, message_id, posted_at, title, price_cents, "
+            "has_photo, sold_out, deleted, updated_at) VALUES (1, ?, '2026-01-01T00:00:00Z', ?, "
+            "1000, 0, 0, 0, '2026-01-01T00:00:00Z')",
+            (mid, title),
+        )
+    c.executescript((files("velkgram.offers") / "migrations" / "003_offer_coupons.sql").read_text())
+    rows = c.execute(
+        "SELECT message_id, kind, price_cents, coupons, coupon_discount, coupon_min_cents, "
+        "coupon_scope, redeem_link, cart_link FROM offers ORDER BY message_id"
+    ).fetchall()
+    assert [tuple(r) for r in rows] == [
+        (1, "coupon", None, None, None, None, None, None, None),
+        (2, "product", 1000, None, None, None, None, None, None),
+    ]

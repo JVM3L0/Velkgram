@@ -1,5 +1,6 @@
 import sqlite3
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import pytest
 from tests.offers.adapters._queries_helpers import T0, offer, put
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries, fts_query
+from velkgram.offers.domain.models import OfferKind
 from velkgram.offers.ports.queries import FeedFilter
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
@@ -127,3 +129,57 @@ def test_feed_search_skips_purged_text_but_lists_offer(conn: sqlite3.Connection)
     SqliteOfferRepository(conn).purge_text_before(T0 + timedelta(days=1))
     assert _ids(conn, NO_FILTER) == [1]
     assert _ids(conn, FeedFilter("video", None, None, (), False, None)) == []
+
+
+def test_feed_hides_coupons_unless_the_coupon_filter_is_on(conn: sqlite3.Connection) -> None:
+    put(
+        conn,
+        offer(1),
+        offer(2, kind=OfferKind.coupon, price=None, title="Cupom Shopee", comparable=False),
+    )
+    assert _ids(conn, NO_FILTER) == [1]
+    assert _ids(conn, replace(NO_FILTER, coupons_only=True)) == [2]
+
+
+def test_card_carries_coupon_data_and_post_text(conn: sqlite3.Connection) -> None:
+    put(
+        conn,
+        offer(1, coupon=("KORUJAO", "ZAFA10"), text="SSD\ncupom: KORUJAO"),
+        offer(2, kind=OfferKind.coupon, price=None, coupon=("QIP98Q1ZXO",)),
+    )
+    product, coupon = (
+        SqliteOfferQueries(conn).feed(replace(NO_FILTER, coupons_only=flag), None).cards[0]
+        for flag in (False, True)
+    )
+    assert product.kind is OfferKind.product
+    assert product.coupons == ("KORUJAO", "ZAFA10")
+    assert product.text == "SSD\ncupom: KORUJAO"
+    assert coupon.kind is OfferKind.coupon
+    assert (coupon.coupon_discount, coupon.coupon_min_cents) == ("R$ 10 OFF", 4000)
+    assert coupon.redeem_link == "https://x.test/resgate"
+
+
+def test_active_coupons_are_recent_newest_first_and_capped(conn: sqlite3.Connection) -> None:
+    now = T0 + timedelta(hours=10)
+
+    def coupon(mid: int, age_h: float, **kw: object):  # type: ignore[no-untyped-def]
+        return offer(
+            mid,
+            at=now - timedelta(hours=age_h),
+            kind=OfferKind.coupon,
+            price=None,
+            title="Cupom X",
+            **kw,  # type: ignore[arg-type]
+        )
+
+    put(
+        conn,
+        coupon(1, 7),
+        coupon(2, 5),
+        coupon(3, 1),
+        coupon(4, 2, deleted=True),
+        offer(5, at=now - timedelta(hours=1)),
+    )
+    q = SqliteOfferQueries(conn)
+    assert [c.message_id for c in q.active_coupons(now)] == [3, 2]
+    assert [c.message_id for c in q.active_coupons(now, limit=1)] == [3]
