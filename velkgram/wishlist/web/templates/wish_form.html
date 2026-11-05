@@ -1,18 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Desejo - Velkgram{% endblock %}
 {% block content %}
+<div class="form-page">
 <h1>{{ "Editar desejo" if wish_id else "Novo desejo" }}</h1>
-{% if error %}<p class="error">{{ error }}</p>{% endif %}
-<form method="post" action="{{ '/wishes/%d/edit' % wish_id if wish_id else '/wishes/new' }}">
-  <label for="name">Nome</label>
-  <input id="name" type="text" name="name" value="{{ values.name }}" required>
-  <label for="required_terms">Termos obrigatórios</label>
-  <textarea id="required_terms" name="required_terms" rows="4">{{ values.required_terms }}</textarea>
-  <small class="muted">Um por linha; use | para alternativas.</small>
-  <label for="excluded_terms">Termos proibidos</label>
-  <textarea id="excluded_terms" name="excluded_terms" rows="3">{{ values.excluded_terms }}</textarea>
-  <label for="max_price">Preço máximo</label>
-  <input id="max_price" type="text" name="max_price" value="{{ values.max_price }}" placeholder="599,90" required>
-  <p><button type="submit">Salvar</button> <a href="/wishes">Cancelar</a></p>
+{% if error %}<p class="error" role="alert"><i aria-hidden="true">error</i> {{ error }}</p>{% endif %}
+<form class="stack" method="post" action="{{ '/wishes/%d/edit' % wish_id if wish_id else '/wishes/new' }}">
+  <div class="field label border round">
+    <input id="name" type="text" name="name" value="{{ values.name }}" placeholder=" " required>
+    <label for="name">Nome</label>
+  </div>
+  <div class="field label textarea border round">
+    <textarea id="required_terms" name="required_terms" rows="4" placeholder=" " aria-describedby="required-help">{{ values.required_terms }}</textarea>
+    <label for="required_terms">Termos obrigatórios</label>
+    <span id="required-help" class="helper">Um por linha; use | para alternativas.</span>
+  </div>
+  <div class="field label textarea border round">
+    <textarea id="excluded_terms" name="excluded_terms" rows="3" placeholder=" ">{{ values.excluded_terms }}</textarea>
+    <label for="excluded_terms">Termos proibidos</label>
+  </div>
+  <div class="field label border round">
+    <input id="max_price" type="text" name="max_price" value="{{ values.max_price }}" inputmode="decimal" placeholder=" " required>
+    <label for="max_price">Preço máximo (R$)</label>
+  </div>
+  <div class="form-actions">
+    <button type="submit"><i aria-hidden="true">check</i><span>Salvar</span></button>
+    <a class="button border" href="/wishes">Cancelar</a>
+  </div>
 </form>
+</div>
 {% endblock %}

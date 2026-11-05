@@ -2,15 +2,16 @@
 
 import re
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import replace
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from velkgram.wishlist import InvalidWish, Wish, WishCommands, WishRepository
+from velkgram.wishlist.web.view import WishCardStats
 
 _PRICE_RE = re.compile(r"^(\d+|\d{1,3}(\.\d{3})+)(,\d{1,2})?$")
 _INVALID_PRICE = "Preço inválido"
@@ -38,8 +39,17 @@ def build_router(
     get_conn: Callable[..., Iterator[sqlite3.Connection]],
     templates: Jinja2Templates,
     make_repo: Callable[[sqlite3.Connection], WishRepository],
+    summaries: Callable[
+        [sqlite3.Connection, Sequence[int]], Mapping[int, WishCardStats]
+    ] = lambda _c, _ids: {},
+    on_deleted: Callable[[sqlite3.Connection, int], None] = lambda _c, _id: None,
 ) -> APIRouter:
     router = APIRouter()
+
+    def card_context(conn: sqlite3.Connection, wishes: Sequence[Wish]) -> list[dict[str, object]]:
+        ids = [w.id for w in wishes if w.id is not None]
+        stats = summaries(conn, ids)
+        return [{"wish": w, "stats": stats.get(w.id) if w.id is not None else None} for w in wishes]
 
     def commands(conn: sqlite3.Connection) -> tuple[WishRepository, WishCommands]:
         repo = make_repo(conn)
@@ -72,12 +82,26 @@ def build_router(
         request: Request, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
     ) -> Response:
         repo, _ = commands(conn)
-        return templates.TemplateResponse(request, "wishes.html", {"wishes": repo.list_all()})
+        return templates.TemplateResponse(
+            request, "wishes.html", {"cards": card_context(conn, repo.list_all())}
+        )
 
     @router.get("/new")
-    def new_form(request: Request) -> Response:
-        empty = {"name": "", "required_terms": "", "excluded_terms": "", "max_price": ""}
-        return form_response(request, wish_id=None, values=empty)
+    def new_form(
+        request: Request,
+        name: str = "",
+        required: Annotated[list[str] | None, Query()] = None,
+        excluded: Annotated[list[str] | None, Query()] = None,
+        max_price: str = "",
+    ) -> Response:
+        """Pre-fills the form from the query string; nothing is saved until the POST."""
+        values = {
+            "name": name.strip(),
+            "required_terms": "\n".join(t.strip() for t in required or () if t.strip()),
+            "excluded_terms": "\n".join(t.strip() for t in excluded or () if t.strip()),
+            "max_price": max_price.strip() if parse_price_cents(max_price) is not None else "",
+        }
+        return form_response(request, wish_id=None, values=values)
 
     @router.post("/new")
     def create(
@@ -160,12 +184,16 @@ def build_router(
             raise HTTPException(status_code=404, detail="Desejo não encontrado")
         cmds.toggle(wish_id, not current.enabled)
         updated = repo.get(wish_id)
-        return templates.TemplateResponse(request, "_wish_row.html", {"wish": updated})
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Desejo não encontrado")
+        (card,) = card_context(conn, [updated])
+        return templates.TemplateResponse(request, "_wish_row.html", card)
 
     @router.post("/{wish_id}/delete")
     def delete(wish_id: int, conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> Response:
         _, cmds = commands(conn)
         cmds.delete(wish_id)
+        on_deleted(conn, wish_id)
         return RedirectResponse("/wishes", status_code=303)
 
     return router

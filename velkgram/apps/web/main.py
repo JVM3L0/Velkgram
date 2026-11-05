@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -34,6 +35,7 @@ from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.channels.web.router import build_router as build_channels_router
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.web.router import build_router as build_status_router
+from velkgram.offers import sparkline_svg
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.web.router import WishInfo
@@ -44,6 +46,7 @@ from velkgram.shared.db import bump_version, transaction
 from velkgram.shared.ports import Clock
 from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 from velkgram.wishlist.web.router import build_router as build_wishlist_router
+from velkgram.wishlist.web.view import WishCardStats, format_brl
 
 _APP_TEMPLATES = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -65,6 +68,7 @@ def _build_templates() -> Jinja2Templates:
     env.globals["theme_classes"] = theme_classes
     env.globals["nav_items"] = nav_items
     env.globals["theme_modes"] = THEME_MODES
+    env.filters["brl"] = format_brl
     return Jinja2Templates(env=env)
 
 
@@ -99,6 +103,23 @@ def _request_retro(conn: sqlite3.Connection, wish_id: int) -> None:
     SqliteOfferRepository(conn).delete_retro_run(wish_id)
     with transaction(conn):
         bump_version(conn, "wishlist")
+
+
+def _wish_card_stats(
+    conn: sqlite3.Connection, wish_ids: Sequence[int]
+) -> Mapping[int, WishCardStats]:
+    return {
+        wid: WishCardStats(
+            last_price_cents=s.last_cents,
+            match_count=s.match_count,
+            sparkline_svg=sparkline_svg(s.recent_prices) if s.recent_prices else "",
+        )
+        for wid, s in SqliteOfferQueries(conn).summaries(wish_ids).items()
+    }
+
+
+def _wish_deleted(conn: sqlite3.Connection, wish_id: int) -> None:
+    SqliteOfferRepository(conn).delete_wish_data(wish_id)
 
 
 def _active_channels(conn: sqlite3.Connection) -> list[tuple[int, str, int, datetime]]:
@@ -187,7 +208,11 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
 
     app.include_router(
         build_wishlist_router(
-            get_conn=get_conn, templates=templates, make_repo=SqliteWishRepository
+            get_conn=get_conn,
+            templates=templates,
+            make_repo=SqliteWishRepository,
+            summaries=_wish_card_stats,
+            on_deleted=_wish_deleted,
         ),
         prefix="/wishes",
         dependencies=[Depends(require_user)],
