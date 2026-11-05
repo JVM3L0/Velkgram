@@ -715,8 +715,10 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
   .feed-list { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
   .feed-list .offer {
     display: grid;
-    grid-template-columns: 11rem minmax(0, 1fr) auto;
-    grid-template-areas: "price title actions" "price meta actions" "price flags actions";
+    grid-template-columns: 15rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "price title actions" "price meta actions" "price flags actions"
+      "price codes actions" "price post actions";
     align-items: center;
     column-gap: 1.25rem;
     row-gap: 0.15rem;
@@ -726,6 +728,8 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
   .feed-list .offer-title { grid-area: title; -webkit-line-clamp: 1; line-clamp: 1; }
   .feed-list .offer-meta { grid-area: meta; }
   .feed-list .offer-flags { grid-area: flags; }
+  .feed-list .coupon-codes { grid-area: codes; }
+  .feed-list .post-full { grid-area: post; }
   .feed-list .offer-actions { grid-area: actions; margin: 0 !important; padding: 0; }
 }
 
@@ -974,7 +978,7 @@ body:not(.frappe):not(.macchiato):not(.mocha) .login-card {
   .product-page .offer {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "price actions" "title title" "meta meta" "flags flags";
+    grid-template-areas: "price actions" "title title" "meta meta" "flags flags" "codes codes" "post post";
     align-items: center;
     column-gap: 0.75rem;
   }
@@ -982,6 +986,8 @@ body:not(.frappe):not(.macchiato):not(.mocha) .login-card {
   .product-page .offer-title { grid-area: title; }
   .product-page .offer-meta { grid-area: meta; }
   .product-page .offer-flags { grid-area: flags; }
+  .product-page .coupon-codes { grid-area: codes; }
+  .product-page .post-full { grid-area: post; }
   .product-page .offer-actions { grid-area: actions; margin: 0 !important; padding: 0; }
   .product-page .offer-actions .button { min-block-size: 2.5rem; }
 }
@@ -1046,3 +1052,90 @@ body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel
 
 /* Squarer fields (Beer's default border fields), matching --shape-control. */
 .field.border > :is(input, select, textarea) { border-radius: var(--shape-control); }
+
+/* ---- Coupons: copyable code chips, coupon cards, the active strip, full post text ---- */
+.offer-with-coupon { display: inline-block; margin-inline-start: 0.3em; font-size: 1rem; font-weight: 600; letter-spacing: 0; color: var(--on-surface-variant); }
+.coupon-codes { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.coupon-wrap { position: relative; display: inline-flex; }
+.offer .coupon-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 3rem;
+  margin: 0;
+  padding: 0 0.875rem 0 1rem;
+  border: 2px dashed currentColor;
+  border-radius: var(--shape-control);
+  background-color: var(--tertiary-container);
+  color: var(--on-tertiary-container);
+  font-family: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: none;
+}
+.offer .coupon-code:hover { filter: brightness(0.97); }
+.offer .coupon-code:active { border-radius: var(--shape-pressed); }
+.offer .coupon-code:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.coupon-text { overflow-wrap: anywhere; user-select: all; }
+.coupon-code > i { flex: none; font-size: 1.25rem; }
+/* The confirmation covers the chip itself: no layout shift, no spill past the card edge. */
+.copy-status {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--shape-control);
+  background-color: var(--on-surface);
+  color: var(--surface);
+  font-size: 1rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+.copy-status:empty { display: none; }
+
+.offer-coupon { background-color: var(--tertiary-container); color: var(--on-tertiary-container); border-color: transparent; }
+.offer-coupon .offer-meta { color: inherit; }
+.offer-coupon .chip { background-color: var(--surface); color: var(--on-surface); }
+.offer-coupon .coupon-code { background-color: var(--surface); color: var(--on-surface); }
+.offer-coupon .offer-actions .button.tonal { background-color: var(--surface); color: var(--on-surface); }
+.coupon-discount { font-size: 2.25rem; font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.coupon-terms { font-size: 0.9375rem; line-height: 1.4; }
+.offer .offer-actions { flex-wrap: wrap; }
+@media (min-width: 840px) {
+  .feed-list .offer.offer-coupon { display: flex; flex-direction: column; align-items: stretch; padding-block: 1rem; }
+}
+.product-page .offer.offer-coupon { display: flex; flex-direction: column; align-items: stretch; }
+
+.coupon-strip { margin-block-start: 1.25rem; }
+.coupon-strip-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-block-start: 0.5rem;
+  padding-block: 0.25rem 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+}
+.coupon-strip-row > .offer { margin: 0 !important; }
+.coupon-strip-row > .offer-coupon-compact { flex: 0 0 min(17rem, 82%); scroll-snap-align: start; }
+.offer-coupon-compact .coupon-discount { font-size: 1.75rem; }
+
+.post-full { font-size: 0.875rem; }
+.post-full > summary {
+  display: flex;
+  align-items: center;
+  min-block-size: 2.5rem;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+}
+.post-full > summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: var(--shape-control); }
+.offer-coupon .post-full > summary { color: inherit; }
+.post-text { padding-block: 0.25rem 0.5rem; color: var(--on-surface); white-space: pre-line; overflow-wrap: anywhere; line-height: 1.5; }
+.post-text a { color: inherit; text-decoration: underline; }
+.post-full:not([open]) > .post-text { display: none; }

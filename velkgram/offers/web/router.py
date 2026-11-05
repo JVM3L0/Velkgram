@@ -14,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
 from velkgram.offers.domain.insight import PriceVerdict, price_insight
-from velkgram.offers.domain.models import MatchSource, ProductStats, RetroStatus
+from velkgram.offers.domain.models import MatchSource, OfferKind, ProductStats, RetroStatus
 from velkgram.offers.ports.queries import (
     FeedCursor,
     FeedFilter,
@@ -29,6 +29,7 @@ from velkgram.offers.web.format import (
     SQLITE_MAX_INT,
     STORE_NAMES,
     brl,
+    brl_short,
     follow_url,
     format_price,
     parse_price_cents,
@@ -44,6 +45,7 @@ _DEFAULT_RANGE = "90"
 _RANGE_LABELS = (("30", "30 dias"), ("90", "90 dias"), ("all", "Tudo"))
 _SOURCE_LABELS = {MatchSource.live: "ao vivo", MatchSource.retro: "histórico"}
 _DASH = "—"
+_COUPONS_TYPE = "cupons"
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +80,13 @@ class CardView:
     next_url: str | None = None
     source: str | None = None
     historic: bool = False
+    is_coupon: bool = False
+    coupons: tuple[str, ...] = ()
+    discount: str = ""
+    terms: tuple[str, ...] = ()
+    redeem_href: str | None = None
+    cart_href: str | None = None
+    text: str | None = None
 
 
 def _parse_cursor(raw: str) -> FeedCursor | None:
@@ -146,6 +155,15 @@ def _insight_view(stats: ProductStats, points: tuple[PricePoint, ...]) -> Insigh
     )
 
 
+def _coupon_terms(card: OfferCard) -> tuple[str, ...]:
+    terms: list[str] = []
+    if card.coupon_min_cents is not None:
+        terms.append(f"em compras a partir de {brl_short(card.coupon_min_cents)}")
+    if card.coupon_scope:
+        terms.append(f"em {card.coupon_scope}")
+    return tuple(terms)
+
+
 def _int_or_none(raw: str) -> int | None:
     try:
         return int(raw)
@@ -182,6 +200,13 @@ def build_router(
             deleted=card.deleted,
             reposts=card.repost_count,
             comparable=card.comparable,
+            is_coupon=card.kind is OfferKind.coupon,
+            coupons=card.coupons,
+            discount=card.coupon_discount or "Cupom",
+            terms=_coupon_terms(card),
+            redeem_href=safe_href(card.redeem_link),
+            cart_href=safe_href(card.cart_link),
+            text=card.text,
         )
 
     def wish_or_404(conn: sqlite3.Connection, raw_id: str) -> WishInfo:
@@ -315,6 +340,7 @@ def build_router(
         channel: str = "",
         cursor: str = "",
         view: str = "cards",
+        tipo: str = "",
     ) -> Response:
         names = channel_names(conn)
         channel_id = _int_or_none(channel)
@@ -331,6 +357,7 @@ def build_router(
             stores=stores,
             priced_only=priced == "1",
             channel_id=channel_id,
+            coupons_only=tipo == _COUPONS_TYPE,
         )
         view = view if view in _VIEWS else "cards"
         queries = make_queries(conn)
@@ -350,6 +377,8 @@ def build_router(
                 params.append(("priced", "1"))
             if channel_id is not None:
                 params.append(("channel", str(channel_id)))
+            if flt.coupons_only:
+                params.append(("tipo", _COUPONS_TYPE))
             params.append(("view", view))
             params.append(("cursor", _cursor_text(page.next_cursor)))
             rows[-1] = replace(rows[-1], next_url="/?" + urlencode(params))
@@ -357,8 +386,15 @@ def build_router(
         context: dict[str, object] = {"rows": rows}
         if is_fragment:
             return templates.TemplateResponse(request, "_feed_page.html", context)
+        unfiltered = flt == FeedFilter(None, None, None, (), False, None) and not cursor
         context.update(
             {
+                "coupon_strip": (
+                    [card_view(c, now, names) for c in queries.active_coupons(now)]
+                    if unfiltered
+                    else []
+                ),
+                "coupons_only": flt.coupons_only,
                 "q": query,
                 "min_value": min_raw.strip(),
                 "max_value": max_raw.strip(),

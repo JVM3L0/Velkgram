@@ -7,8 +7,10 @@ import pytest
 from velkgram.offers import OfferCard
 from velkgram.offers.web.format import (
     STORE_NAMES,
+    brl_short,
     follow_url,
     format_price,
+    linkify,
     parse_price_cents,
     relative_time,
     safe_href,
@@ -102,3 +104,19 @@ def test_follow_url_real_feed_title_is_cut_at_60_without_dangling_plus() -> None
     title = "Kit Upgrade Amd Ryzen 7 5700x + Placa-Mãe Msi B550m WiFi6E + Water Cooler 240mm"
     name = parse_qs(urlsplit(follow_url(_card(title))).query)["name"][0]
     assert name == "Kit Upgrade Amd Ryzen 7 5700x + Placa-Mãe Msi B550m WiFi6E"
+
+
+def test_linkify_escapes_first_and_links_only_safe_urls() -> None:
+    out = linkify('<b>x</b> https://a.test/p?x=1&y=2. e javascript:alert(1) "q"')
+    assert out.startswith("&lt;b&gt;x&lt;/b&gt; ")
+    assert (
+        '<a href="https://a.test/p?x=1&amp;y=2" rel="noopener noreferrer" target="_blank">'
+        "https://a.test/p?x=1&amp;y=2</a>. e javascript:alert(1) &#34;q&#34;"
+    ) in out
+    assert "<a " not in linkify("tg://resolve?domain=x e ftp://x.test")
+
+
+def test_brl_short_drops_zero_cents() -> None:
+    assert brl_short(4000) == "R$ 40"
+    assert brl_short(4050) == "R$ 40,50"
+    assert brl_short(123456) == "R$ 1.234,56"

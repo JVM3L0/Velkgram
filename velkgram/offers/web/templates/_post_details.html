@@ -1,0 +1,6 @@
+{% if row.text %}
+<details class="post-full">
+  <summary>Ver post completo</summary>
+  <div class="post-text">{{ row.text | linkify }}</div>
+</details>
+{% endif %}

@@ -32,6 +32,12 @@
       <h2>Filtros</h2>
       <button class="circle transparent" type="button" data-ui="#filters-panel" aria-label="Fechar filtros"><i>close</i></button>
     </div>
+    <div class="filter-group chip-row" role="group" aria-label="Tipo">
+      <label class="chip">
+        <input type="checkbox" name="tipo" value="cupons"{% if coupons_only %} checked{% endif %}>
+        <span>Cupons</span>
+      </label>
+    </div>
     {% if store_options %}
     <div class="filter-group" role="group" aria-labelledby="stores-label">
       <p id="stores-label" class="filter-label">Lojas</p>
@@ -72,6 +78,15 @@
     <button class="filters-done" type="button" data-ui="#filters-panel">Ver ofertas</button>
   </dialog>
 </form>
+
+{% if coupon_strip %}
+<section class="coupon-strip" aria-labelledby="coupon-strip-title">
+  <h2 id="coupon-strip-title" class="section-title">Cupons ativos</h2>
+  <div class="coupon-strip-row">
+    {% for row in coupon_strip %}{% with compact = true %}{% include "_coupon_card.html" %}{% endwith %}{% endfor %}
+  </div>
+</section>
+{% endif %}
 
 <section id="results" class="results" aria-label="Resultados">
   {% if q %}<p class="note"><i aria-hidden="true">info</i>A busca cobre os últimos {{ retention_days }} dias.</p>{% endif %}
