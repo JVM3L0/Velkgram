@@ -69,6 +69,7 @@ def _tokens(title: str) -> list[tuple[str, bool]]:
             not is_price
             and not lowered.endswith("%")
             and lowered not in STOPWORDS
+            and len(lowered) >= 2  # FR12: words under 2 characters are dropped
             and any(c.isalnum() for c in lowered)
         )
         if keep:

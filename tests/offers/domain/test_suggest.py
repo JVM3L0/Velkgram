@@ -15,4 +15,8 @@ def test_percentage_only_gives_nothing() -> None:
 
 
 def test_bare_integers_are_kept_but_prices_are_not() -> None:
-    assert suggest_terms("Ryzen 5 5600 por 589!!") == ("5", "5600", "ryzen")
+    assert suggest_terms("Ryzen 5 5600 por 589!!") == ("5600", "ryzen")
+
+
+def test_words_under_two_characters_are_dropped() -> None:
+    assert suggest_terms("Mouse X 7 cores") == ("mouse", "cores")
