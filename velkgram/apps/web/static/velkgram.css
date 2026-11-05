@@ -672,9 +672,12 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .offer .flag-warn { background-color: var(--surface); color: var(--warning); font-weight: 600; }
 .offer .flag-error { background-color: var(--error-container); color: var(--on-error-container); font-weight: 600; }
 .offer-channel { display: inline-block; max-inline-size: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* No comparable price (coupon, several prices, none found): the price steps back. */
+.offer-quiet .offer-price { font-size: 1.125rem; font-weight: 600; letter-spacing: 0; color: var(--on-surface-variant); }
 .offer-gone .offer-price, .offer-gone .offer-title { text-decoration: line-through; color: var(--on-surface-variant); }
 .offer-actions { display: flex; gap: 0.5rem; margin-block-start: auto !important; padding-block-start: 0.5rem; }
 .offer-actions .button { min-block-size: 3rem; margin: 0; gap: 0.375rem; padding-inline: 1rem 1.25rem; }
+.offer-actions .button.circle { inline-size: 3rem; padding: 0; background-color: var(--secondary-container); color: var(--on-secondary-container); }
 
 @media (min-width: 840px) {
   .feed-list { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }

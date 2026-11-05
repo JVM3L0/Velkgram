@@ -72,6 +72,7 @@ class CardView:
     sold_out: bool
     deleted: bool
     reposts: int
+    comparable: bool = True
     next_url: str | None = None
     source: str | None = None
     historic: bool = False
@@ -154,6 +155,7 @@ def build_router(
             sold_out=card.sold_out,
             deleted=card.deleted,
             reposts=card.repost_count,
+            comparable=card.comparable,
         )
 
     def wish_or_404(conn: sqlite3.Connection, raw_id: str) -> WishInfo:

@@ -150,7 +150,26 @@ def test_feed_view_toggle_says_grade_not_cards(tmp_path: Path) -> None:
     assert "Grade" in page and "Cards</span>" not in page
 
 
-def test_feed_card_keeps_abrir_filled_and_acompanhar_outlined(tmp_path: Path) -> None:
+def test_feed_card_has_one_filled_button_and_an_icon_only_follow_heart(tmp_path: Path) -> None:
     html = _client(tmp_path, offer(1)).get("/").text
     assert re.search(r'<a class="button small" href="https://x\.test/p"', html)
-    assert re.search(r'<a class="button small border" href="/wishes/new\?', html)
+    follow = re.search(r'<a class="button circle tonal"[^>]*href="/wishes/new\?[^>]*>', html)
+    assert follow is not None
+    assert 'aria-label="Acompanhar"' in follow.group(0)
+    assert 'title="Acompanhar"' in follow.group(0)
+    assert "<span>Acompanhar</span>" not in html
+
+
+def test_feed_card_without_comparable_price_uses_the_quiet_layout(tmp_path: Path) -> None:
+    html = (
+        _client(
+            tmp_path,
+            offer(1, title="Normal"),
+            offer(2, title="Cupom Kabum 10%", comparable=False),
+            offer(3, title="Sem preço", price=None),
+        )
+        .get("/")
+        .text
+    )
+    cards = re.findall(r'<article class="([^"]*)"', html)
+    assert sorted("offer-quiet" in c for c in cards) == [False, True, True]
