@@ -743,7 +743,16 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .range-switch a[aria-current="true"] { background-color: var(--secondary-container); color: var(--on-secondary-container); font-weight: 700; }
 .range-switch a:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .chart-frame { padding: 0.5rem; border-radius: var(--shape-xl); background-color: var(--surface-container-low); border: 1px solid var(--outline-variant); }
-.chart-frame svg { display: block; max-inline-size: 100%; block-size: auto; }
+.chart-frame svg { display: none; max-inline-size: 100%; block-size: auto; }
+.chart-frame .chart-svg-compact { display: block; }
+@media (min-width: 600px) {
+  .chart-frame .chart-svg-compact { display: none; }
+  .chart-frame .chart-svg-medium { display: block; }
+}
+@media (min-width: 840px) {
+  .chart-frame .chart-svg-medium { display: none; }
+  .chart-frame .chart-svg-wide { display: block; }
+}
 .chart-key { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0; font-size: 0.875rem; }
 .key-line { inline-size: 1.25rem; block-size: 0; border-block-start: 2px solid var(--primary); }
 .key-dash { inline-size: 1.25rem; block-size: 0; border-block-start: 2px dashed var(--tertiary); margin-inline-start: 0.75rem; }

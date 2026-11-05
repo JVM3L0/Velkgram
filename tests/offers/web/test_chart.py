@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 
 from velkgram.offers import PricePoint, sparkline_svg
-from velkgram.offers.web.chart import price_chart_svg
+from velkgram.offers.web.chart import price_chart_responsive, price_chart_svg
 from velkgram.offers.web.format import brl
 
 T0 = datetime(2026, 3, 1, tzinfo=UTC)
@@ -22,7 +22,7 @@ def test_chart_has_title_desc_and_points() -> None:
     root = ET.fromstring(_svg_only(out))
     assert root.get("role") == "img"
     assert root.get("width") == "100%"
-    assert root.get("viewBox") == "0 0 640 240"
+    assert root.get("viewBox") == "0 0 800 220"
     assert "{http://www.w3.org/2000/svg}title" in [c.tag for c in root]
     assert "{http://www.w3.org/2000/svg}desc" in [c.tag for c in root]
     assert out.count("<circle") == 3
@@ -83,7 +83,7 @@ def test_chart_includes_hidden_data_table() -> None:
 
 
 def test_chart_single_point() -> None:
-    out = price_chart_svg(_pts(100000), 90000)
+    out = price_chart_svg(_pts(100000), 98000)
     assert out.count("<circle") == 1
     assert "<polyline" not in out
     assert re.search(r"<line[^>]*stroke-dasharray", out)
@@ -101,3 +101,51 @@ def test_brl_formats_thousands_and_unknown() -> None:
     assert brl(5) == "R$ 0,05"
     assert brl(100000000) == "R$ 1.000.000,00"
     assert brl(None) == "preço não identificado"
+
+
+def _circle_ys(out: str) -> list[float]:
+    return [float(v) for v in re.findall(r'<circle[^>]*cy="([\d.]+)"', out)]
+
+
+def test_chart_y_range_follows_data_when_max_price_is_far_away() -> None:
+    out = price_chart_svg(_pts(116900, 170900, 140000), 8000)
+    ys = _circle_ys(out)
+    assert max(ys) - min(ys) > 120  # the real offers fill most of the 220 px plot
+    assert not re.search(r"<line[^>]*stroke-dasharray", out)
+    assert 'class="max-marker"' in out
+    assert "R$ 80,00" in out  # still labelled, as a marker at the bottom edge
+
+
+def test_chart_far_max_above_data_marks_the_top_edge() -> None:
+    out = price_chart_svg(_pts(10000, 12000), 900000)
+    assert 'class="max-marker"' in out
+    assert not re.search(r"<line[^>]*stroke-dasharray", out)
+    assert "R$ 9.000,00" in out
+
+
+def test_chart_keeps_dashed_line_when_max_is_within_a_quarter_of_the_range() -> None:
+    out = price_chart_svg(_pts(100000, 120000), 124000)  # 4000 above a 20000 span
+    assert re.search(r"<line[^>]*stroke-dasharray", out)
+    assert "max-marker" not in out
+
+
+def test_chart_variants_carry_a_class_and_skip_the_table_on_request() -> None:
+    out = price_chart_svg(
+        _pts(100000, 90000), 95000, width=340, variant="compact", with_table=False
+    )
+    assert 'class="chart-svg chart-svg-compact"' in out
+    assert 'viewBox="0 0 340 220"' in out
+    assert "<table" not in out
+
+
+def test_chart_labels_first_and_last_date() -> None:
+    out = price_chart_svg(_pts(100000, 90000, 95000), 95000)
+    assert ">01/03<" in out and ">03/03<" in out
+
+
+def test_responsive_chart_renders_three_sizes_with_one_table() -> None:
+    out = price_chart_responsive(_pts(100000, 90000, 95000), 99000)
+    assert out.count("<svg") == 3
+    for width in (340, 520, 800):
+        assert f'viewBox="0 0 {width} 220"' in out
+    assert out.count("<table") == 1

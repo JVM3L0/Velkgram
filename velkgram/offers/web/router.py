@@ -22,7 +22,7 @@ from velkgram.offers.ports.queries import (
     OfferQueries,
     ProductHistory,
 )
-from velkgram.offers.web.chart import price_chart_svg
+from velkgram.offers.web.chart import price_chart_responsive
 from velkgram.offers.web.format import (
     SQLITE_MAX_INT,
     STORE_NAMES,
@@ -184,7 +184,7 @@ def build_router(
         return {
             "wish": wish,
             "stats": _stats_view(history.stats),
-            "chart_svg": Markup(price_chart_svg(history.points, wish.max_price_cents)),
+            "chart_svg": Markup(price_chart_responsive(history.points, wish.max_price_cents)),
             "range_key": range_key,
             "ranges": _RANGE_LABELS,
         }

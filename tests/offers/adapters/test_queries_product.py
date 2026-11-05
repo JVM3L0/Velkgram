@@ -34,9 +34,11 @@ def test_product_points_are_daily_minimum_and_capped_at_200(conn: sqlite3.Connec
     _add(conn, 1, 1, T0, 500)
     _add(conn, 1, 2, T0 + timedelta(hours=2), 300)
     _add(conn, 1, 3, T0 + timedelta(days=1), 400)
+    _add(conn, 1, 4, T0 + timedelta(days=1, hours=3), 450)
+    _add(conn, 1, 5, T0 + timedelta(days=2), 350)
     q = SqliteOfferQueries(conn)
     pts = q.product(1, NOW, None, None).points
-    assert [p.price_cents for p in pts] == [300, 400]
+    assert [p.price_cents for p in pts] == [300, 400, 350]
     assert pts[0].posted_at.date() == T0.date()
 
     for d in range(2, 260):
@@ -55,6 +57,29 @@ def test_product_points_respect_range_and_skip_unknown_prices(conn: sqlite3.Conn
     _add(conn, 1, 3, now - timedelta(days=4), None)
     pts = SqliteOfferQueries(conn).product(1, now, 30, None).points
     assert [p.price_cents for p in pts] == [200]
+
+
+def test_product_points_are_one_per_match_on_fewer_than_three_days(
+    conn: sqlite3.Connection,
+) -> None:
+    day = T0 + timedelta(days=10)
+    _add(conn, 1, 1, day, 8000)
+    _add(conn, 1, 2, day + timedelta(hours=1), 170900)
+    _add(conn, 1, 3, day + timedelta(hours=2), 116900)
+    _add(conn, 1, 4, day + timedelta(hours=3), None)
+    pts = SqliteOfferQueries(conn).product(1, NOW, None, None).points
+    assert [p.price_cents for p in pts] == [8000, 170900, 116900]
+    assert pts[1].posted_at - pts[0].posted_at == timedelta(hours=1)
+
+
+def test_product_points_downsample_to_daily_minimum_from_three_days(
+    conn: sqlite3.Connection,
+) -> None:
+    for i, price in enumerate((500, 300, 700)):
+        _add(conn, 1, 10 + i, T0 + timedelta(days=i), price)
+    _add(conn, 1, 20, T0 + timedelta(days=1, hours=2), 250)
+    pts = SqliteOfferQueries(conn).product(1, NOW, None, None).points
+    assert [p.price_cents for p in pts] == [500, 250, 700]
 
 
 def test_product_stats_use_all_matches(conn: sqlite3.Connection) -> None:

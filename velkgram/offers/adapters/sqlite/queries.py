@@ -22,6 +22,7 @@ from velkgram.offers.ports.queries import (
     WishSummary,
 )
 
+_MIN_DAYS_FOR_DAILY = 3  # fewer distinct days: plot every priced match
 _MAX_POINTS = 200
 _RECENT = 30
 
@@ -125,15 +126,30 @@ class SqliteOfferQueries:
         )
 
     def _points(self, wish_id: int, since: str | None) -> tuple[PricePoint, ...]:
-        sql = (
-            "SELECT substr(posted_at, 1, 10) AS day, MIN(price_cents) AS low FROM offer_matches "
-            "WHERE wish_id = ? AND price_cents IS NOT NULL"
-        )
+        where = "wish_id = ? AND price_cents IS NOT NULL"
         params: list[object] = [wish_id]
         if since is not None:
-            sql += " AND posted_at >= ?"
+            where += " AND posted_at >= ?"
             params.append(since)
-        rows = self._conn.execute(sql + " GROUP BY day ORDER BY day", params).fetchall()
+        distinct_days = self._conn.execute(
+            f"SELECT COUNT(DISTINCT substr(posted_at, 1, 10)) FROM offer_matches WHERE {where}",
+            params,
+        ).fetchone()[0]
+        if distinct_days < _MIN_DAYS_FOR_DAILY:
+            rows = self._conn.execute(
+                f"SELECT posted_at, price_cents FROM offer_matches WHERE {where} "
+                "ORDER BY posted_at, channel_id, message_id",
+                params,
+            ).fetchall()
+            return tuple(
+                PricePoint(datetime.fromisoformat(r["posted_at"]), int(r["price_cents"]))
+                for r in rows
+            )
+        rows = self._conn.execute(
+            "SELECT substr(posted_at, 1, 10) AS day, MIN(price_cents) AS low FROM offer_matches "
+            f"WHERE {where} GROUP BY day ORDER BY day",
+            params,
+        ).fetchall()
         days = [(datetime.fromisoformat(r["day"]).replace(tzinfo=UTC), int(r["low"])) for r in rows]
         if len(days) > _MAX_POINTS:
             n = len(days)
