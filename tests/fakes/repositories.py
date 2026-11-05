@@ -6,6 +6,7 @@ from velkgram.alerting import Alert, AlertStatus, SuppressionRule
 from velkgram.channels import Channel, ChannelStatus
 from velkgram.ingestion import Heartbeat
 from velkgram.offers.domain.models import Offer, OfferMatch, OfferText, RetroRun
+from velkgram.shared.deals import WishView
 from velkgram.shared.events import MessageData
 from velkgram.wishlist import Wish
 
@@ -271,3 +272,15 @@ class InMemoryOfferRepository:
 
     def delete_retro_run(self, wish_id: int) -> None:
         self._runs.pop(wish_id, None)
+
+
+class FakeWishReader:
+    def __init__(self) -> None:
+        self.views: list[WishView] = []
+        self.enabled_ids: set[int] = set()
+
+    def enabled(self) -> list[WishView]:
+        return [v for v in self.views if v.id in self.enabled_ids]
+
+    def all(self) -> list[WishView]:
+        return list(self.views)
