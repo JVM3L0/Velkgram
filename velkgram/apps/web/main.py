@@ -15,6 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import velkgram.alerting.web as alerting_web
 import velkgram.channels.web as channels_web
 import velkgram.ingestion.web as ingestion_web
+import velkgram.offers.web as offers_web
 import velkgram.wishlist.web as wishlist_web
 from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.alerting.web.router import build_router as build_alerts_router
@@ -33,8 +34,13 @@ from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.channels.web.router import build_router as build_channels_router
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.web.router import build_router as build_status_router
+from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
+from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
+from velkgram.offers.web.router import WishInfo
+from velkgram.offers.web.router import build_router as build_offers_router
 from velkgram.shared.adapters.clock_system import SystemClock
 from velkgram.shared.config import Settings, load_settings
+from velkgram.shared.db import bump_version, transaction
 from velkgram.shared.ports import Clock
 from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 from velkgram.wishlist.web.router import build_router as build_wishlist_router
@@ -46,6 +52,7 @@ _MODULE_TEMPLATE_DIRS = (
     Path(channels_web.__file__).parent / "templates",
     Path(alerting_web.__file__).parent / "templates",
     Path(ingestion_web.__file__).parent / "templates",
+    Path(offers_web.__file__).parent / "templates",
 )
 
 
@@ -71,6 +78,27 @@ def _channel_names(conn: sqlite3.Connection) -> dict[int, str]:
         for c in SqliteChannelRepository(conn).list_all()
         if c.telegram_id is not None
     }
+
+
+def _wish_info(conn: sqlite3.Connection, wish_id: int) -> WishInfo | None:
+    w = SqliteWishRepository(conn).get(wish_id)
+    if w is None or w.id is None:
+        return None
+    return WishInfo(
+        id=w.id,
+        name=w.name,
+        required_terms=w.required_terms,
+        excluded_terms=w.excluded_terms,
+        max_price_cents=w.max_price_cents,
+        enabled=w.enabled,
+    )
+
+
+def _request_retro(conn: sqlite3.Connection, wish_id: int) -> None:
+    """Drop the wish's retro run so the collector reruns it; two sequential transactions."""
+    SqliteOfferRepository(conn).delete_retro_run(wish_id)
+    with transaction(conn):
+        bump_version(conn, "wishlist")
 
 
 def _active_channels(conn: sqlite3.Connection) -> list[tuple[int, str, int, datetime]]:
@@ -140,10 +168,6 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         request.session.clear()
         return RedirectResponse("/login", status_code=303)
 
-    @app.get("/", dependencies=[Depends(require_user)])
-    def index() -> Response:
-        return RedirectResponse("/wishes", status_code=303)
-
     @app.post("/theme", dependencies=[Depends(require_user)])
     def set_theme(mode: str = Form(""), next: str = Form("/")) -> Response:
         if mode not in THEME_MODES:
@@ -199,6 +223,21 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             clock=clock,
         ),
         prefix="/status",
+        dependencies=[Depends(require_user)],
+    )
+    # Included after the wishlist router so `/wishes/new` wins over `/wishes/{id}`.
+    app.include_router(
+        build_offers_router(
+            get_conn=get_conn,
+            templates=templates,
+            make_queries=SqliteOfferQueries,
+            channel_names=_channel_names,
+            get_wish=_wish_info,
+            request_retro=_request_retro,
+            clock=clock,
+            tz=settings.app_timezone,
+            retention_days=settings.retention_days,
+        ),
         dependencies=[Depends(require_user)],
     )
     return app

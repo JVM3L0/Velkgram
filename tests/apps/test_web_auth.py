@@ -22,7 +22,7 @@ def test_login_correct_password_sets_session(tmp_path: Path) -> None:
     assert response.status_code == 303
     assert response.headers["location"] == "/"
     assert client.get("/wishes").status_code == 200
-    assert client.get("/").headers["location"] == "/wishes"
+    assert client.get("/").status_code == 200
 
 
 def test_login_wrong_password_shows_error(tmp_path: Path) -> None:

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Feed - Velkgram{% endblock %}
+{% block content %}
+<div class="feed-page">
+<h1>Ofertas</h1>
+<form id="feed-filters" class="filters" method="get" action="/"
+  hx-get="/" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true"
+  hx-sync="this:replace" hx-trigger="submit, change, input changed delay:400ms from:#q">
+  <div class="filters-bar">
+    <div class="field prefix round border filters-search">
+      <i>search</i>
+      <input type="search" id="q" name="q" value="{{ q }}" placeholder="Buscar ofertas" aria-label="Buscar ofertas" enterkeyhint="search">
+    </div>
+    <button class="filters-open" type="button" data-ui="#filters-panel" aria-haspopup="dialog">
+      <i>tune</i><span>Filtros</span>
+    </button>
+    <div class="view-toggle" role="group" aria-label="Exibição">
+      <label class="view-option">
+        <input type="radio" name="view" value="list"{% if view == "list" %} checked{% endif %}>
+        <span><i>view_list</i>Lista</span>
+      </label>
+      <label class="view-option">
+        <input type="radio" name="view" value="cards"{% if view != "list" %} checked{% endif %}>
+        <span><i>grid_view</i>Cards</span>
+      </label>
+    </div>
+  </div>
+
+  <dialog id="filters-panel" class="bottom filters-panel" aria-label="Filtros">
+    <div class="filters-panel-head">
+      <h2>Filtros</h2>
+      <button class="circle transparent" type="button" data-ui="#filters-panel" aria-label="Fechar filtros"><i>close</i></button>
+    </div>
+    {% if store_options %}
+    <div class="filter-group" role="group" aria-labelledby="stores-label">
+      <p id="stores-label" class="filter-label">Lojas</p>
+      <div class="chip-row">
+        {% for value, name in store_options %}
+        <label class="chip">
+          <input type="checkbox" name="store" value="{{ value }}"{% if value in selected_stores %} checked{% endif %}>
+          <span>{{ name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    <label class="switch filter-switch">
+      <input type="checkbox" name="priced" value="1"{% if priced_only %} checked{% endif %}>
+      <span>Só com preço</span>
+    </label>
+    <div class="field label suffix border round filter-channel">
+      <select id="channel" name="channel">
+        <option value="">Todos os canais</option>
+        {% for cid, cname in channels %}
+        <option value="{{ cid }}"{% if cid == channel_id %} selected{% endif %}>{{ cname }}</option>
+        {% endfor %}
+      </select>
+      <label for="channel">Canal</label>
+      <i>arrow_drop_down</i>
+    </div>
+    <div class="filter-prices">
+      <div class="field label border round">
+        <input type="search" id="min" name="min" value="{{ min_value }}" inputmode="decimal" autocomplete="off" placeholder=" ">
+        <label for="min">Mínimo (R$)</label>
+      </div>
+      <div class="field label border round">
+        <input type="search" id="max" name="max" value="{{ max_value }}" inputmode="decimal" autocomplete="off" placeholder=" ">
+        <label for="max">Máximo (R$)</label>
+      </div>
+    </div>
+    <button class="filters-done" type="button" data-ui="#filters-panel">Ver ofertas</button>
+  </dialog>
+</form>
+
+<section id="results" class="results" aria-label="Resultados">
+  {% if q %}<p class="note"><i aria-hidden="true">info</i>A busca cobre os últimos {{ retention_days }} dias.</p>{% endif %}
+  <div id="feed" class="feed feed-{{ view }}">
+    {% if rows %}{% include "_feed_page.html" %}{% else %}
+    <div class="empty">
+      <i aria-hidden="true">search_off</i>
+      <p class="empty-title">Nenhuma oferta encontrada</p>
+      <p class="muted">Ajuste a busca ou limpe os filtros para ver mais ofertas.</p>
+      <a class="button border" href="/">Limpar filtros</a>
+    </div>
+    {% endif %}
+  </div>
+</section>
+</div>
+{% endblock %}
