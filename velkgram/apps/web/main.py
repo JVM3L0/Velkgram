@@ -47,7 +47,7 @@ from velkgram.shared.db import bump_version, transaction
 from velkgram.shared.ports import Clock
 from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 from velkgram.wishlist.web.router import build_router as build_wishlist_router
-from velkgram.wishlist.web.view import WishCardStats, format_brl
+from velkgram.wishlist.web.view import WishCardStats, format_brl, is_below_alert
 
 _APP_TEMPLATES = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -74,6 +74,7 @@ def _build_templates() -> Jinja2Templates:
         (_STATIC_DIR / "velkgram.css").read_bytes()
     ).hexdigest()[:12]
     env.filters["brl"] = format_brl
+    env.globals["below_alert"] = is_below_alert
     return Jinja2Templates(env=env)
 
 
@@ -118,6 +119,7 @@ def _wish_card_stats(
             last_price_cents=s.last_cents,
             match_count=s.match_count,
             sparkline_svg=sparkline_svg(s.recent_prices) if s.recent_prices else "",
+            previous_price_cents=s.recent_prices[-2] if len(s.recent_prices) > 1 else None,
         )
         for wid, s in SqliteOfferQueries(conn).summaries(wish_ids).items()
     }

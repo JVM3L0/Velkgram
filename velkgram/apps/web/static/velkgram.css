@@ -834,6 +834,13 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .wish-head .chip { flex: none; margin: 0; }
 .wish-price { font-size: 1.875rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--primary); }
 .wish-price-unknown { font-size: 1rem; line-height: 1.3; font-weight: 600; letter-spacing: 0; color: var(--on-surface-variant); }
+.wish-signals { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem 0.75rem; min-block-size: 2rem; }
+.wish-delta { display: inline-flex; align-items: center; gap: 0.125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wish-delta i { font-size: 1.25rem; }
+/* Success/error on the card tone fall under 4.5:1 for text on Latte, so only the arrow carries the colour. */
+.wish-delta-down i { color: var(--success); }
+.wish-delta-up i { color: var(--error); }
+.wish-card .chip.wish-below { margin: 0; background-color: var(--secondary-container); color: var(--on-secondary-container); font-weight: 600; }
 .wish-spark svg { display: block; inline-size: 100%; max-inline-size: 9rem; block-size: auto; }
 .wish-count, .wish-limit { font-size: 0.875rem; color: var(--on-surface-variant); }
 .wish-paused .wish-price, .wish-paused .wish-name { color: var(--on-surface-variant); }
