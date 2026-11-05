@@ -139,3 +139,14 @@ def test_icon_only_buttons_have_labels(tmp_path: Path, path: str) -> None:
     for name, attrs, text in _parse(_page(client, path)).actions:
         if not text.strip():
             assert attrs.get("aria-label"), f"<{name}> without text or aria-label on {path}"
+
+
+def test_login_page_uses_base_theme(tmp_path: Path) -> None:
+    page = make_client(tmp_path, login=False).get("/login").text
+    assert "/static/velkgram.css" in page
+    assert "beercss@5.0.3/dist/cdn/beer.min.css" in page
+    assert 'class="auth"' in page
+    assert "login-card" in page
+    assert "Entrar" in page
+    assert 'type="password"' in page
+    assert "Navegação principal" not in page

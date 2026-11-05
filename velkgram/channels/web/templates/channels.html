@@ -1,21 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Canais - Velkgram{% endblock %}
 {% block content %}
+<div class="list-page">
 <h1>Canais</h1>
-{% if error %}<p class="error">{{ error }}</p>{% endif %}
-<form method="post" action="/channels">
-  <label for="ref">Canal</label>
-  <input id="ref" type="text" name="ref" value="{{ ref }}" placeholder="@canal ou https://t.me/canal" required>
-  <p><button type="submit">Adicionar</button></p>
+{% if error %}<p class="error" role="alert"><i aria-hidden="true">error</i> {{ error }}</p>{% endif %}
+<form class="add-row" method="post" action="/channels">
+  <div class="field label border round">
+    <input id="ref" type="text" name="ref" value="{{ ref }}" placeholder=" " required>
+    <label for="ref">Canal</label>
+    <span class="helper">@canal ou https://t.me/canal</span>
+  </div>
+  <button type="submit" aria-label="Adicionar canal"><i aria-hidden="true">add</i><span>Adicionar</span></button>
 </form>
-<table>
-  <thead><tr><th>Canal</th><th>Status</th><th>Silêncio após</th><th>Ativo</th><th></th></tr></thead>
+<div class="table-wrap">
+<table class="data">
+  <thead><tr><th>Canal</th><th>Estado</th><th class="hide-compact">Silêncio após</th><th><span class="sr-only">Ações</span></th></tr></thead>
   <tbody>
   {% for channel in channels %}
     {% include "_channel_row.html" %}
   {% else %}
-    <tr><td colspan="5" class="muted">Nenhum canal cadastrado.</td></tr>
+    <tr><td colspan="4" class="muted">Nenhum canal cadastrado.</td></tr>
   {% endfor %}
   </tbody>
 </table>
+</div>
+</div>
 {% endblock %}

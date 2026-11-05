@@ -88,3 +88,23 @@ def test_alerts_pagination(tmp_path: Path) -> None:
 def test_alerts_requires_login(tmp_path: Path) -> None:
     client = make_client(tmp_path, login=False, clock=FakeClock(NOW))
     assert client.get("/alerts").status_code == 303
+
+
+def test_alert_status_labels_are_portuguese(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(
+        tmp_path,
+        [(1, 1000, "sent"), (2, 1000, "failed"), (3, 1000, "pending"), (4, 1000, "expired")],
+    )
+    page = client.get("/alerts").text
+    for label in ("enviado", "falhou", "pendente", "expirado"):
+        assert label in page
+    for raw in (">sent<", ">failed<", ">pending<", ">expired<"):
+        assert raw not in page.replace(" ", "").replace("\n", "")
+
+
+def test_alerts_mark_dedup_and_latency_columns_hidden_on_compact(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [(1, 1000, "sent")])
+    page = client.get("/alerts").text
+    assert page.count("hide-compact") >= 2

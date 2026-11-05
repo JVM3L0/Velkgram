@@ -8,9 +8,15 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
-from velkgram.alerting import Alert, AlertQueries, format_brl, telegram_link
+from velkgram.alerting import Alert, AlertQueries, AlertStatus, format_brl, telegram_link
 
 PAGE_SIZE = 50
+_STATUS_PT = {
+    AlertStatus.sent: "enviado",
+    AlertStatus.failed: "falhou",
+    AlertStatus.pending: "pendente",
+    AlertStatus.expired: "expirado",
+}
 
 
 def _parse_page(raw: str | None) -> int:
@@ -34,6 +40,8 @@ def build_router(
     def row(alert: Alert, wishes: dict[int, str], channels: dict[int, str]) -> dict[str, object]:
         return {
             "status": alert.status.value,
+            "status_label": _STATUS_PT[alert.status],
+            "dedup_keys": len(alert.dedup_keys),
             "price": None if alert.price_cents is None else format_brl(alert.price_cents),
             "latency_telegram_ms": alert.latency_telegram_ms,
             "latency_internal_ms": alert.latency_internal_ms,

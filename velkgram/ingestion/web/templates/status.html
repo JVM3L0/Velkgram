@@ -1,42 +1,61 @@
 {% extends "base.html" %}
 {% block title %}Status - Velkgram{% endblock %}
 {% block content %}
+{% set silent_count = channels | selectattr("silent") | list | length %}
+<div class="list-page">
 <h1>Status</h1>
-<h2>Coletor</h2>
-{% if heartbeat %}
-<p>
-  Estado: <strong>{{ heartbeat.state }}</strong>{% if heartbeat.reason %} ({{ heartbeat.reason }}){% endif %}
-  {% if heartbeat.stale %}<span class="error">desatualizado</span>{% endif %}
-  <br><span class="muted">Último sinal: {{ heartbeat.last_seen.strftime("%d/%m/%Y %H:%M:%S") }}
-  · {{ heartbeat.messages_seen }} mensagens · {{ heartbeat.alerts_sent }} alertas enviados</span>
-</p>
-{% else %}
-<p class="error">coletor nunca rodou</p>
-{% endif %}
-<h2>Canais</h2>
-<table>
-  <thead><tr><th>Canal</th><th>Última mensagem</th><th></th></tr></thead>
-  <tbody>
-  {% for c in channels %}
-    <tr>
-      <td>{{ c.name }}</td>
-      <td>{% if c.last_message_at %}{{ c.last_message_at.strftime("%d/%m/%Y %H:%M") }}{% else %}<span class="muted">nenhuma</span>{% endif %}</td>
-      <td>{% if c.silent %}<span class="error">silencioso (&gt; {{ c.silent_after_hours }} h)</span>{% endif %}</td>
-    </tr>
+<section class="status-card" aria-labelledby="collector-title">
+  <h2 id="collector-title" class="section-title">Coletor</h2>
+  {% if heartbeat %}
+  <p class="status-line">
+    <span class="chip small {{ 'flag-error' if heartbeat.state == 'erro fatal' else 'state-on' }}">{{ heartbeat.state }}</span>
+    {% if heartbeat.reason %}<span>{{ heartbeat.reason }}</span>{% endif %}
+    {% if heartbeat.stale %}<span class="chip small flag-error">desatualizado</span>{% endif %}
+  </p>
+  <p class="muted">Último sinal: {{ heartbeat.last_seen.strftime("%d/%m/%Y %H:%M:%S") }}
+  · {{ heartbeat.messages_seen }} mensagens · {{ heartbeat.alerts_sent }} alertas enviados</p>
   {% else %}
-    <tr><td colspan="3" class="muted">Nenhum canal ativo.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-<h2>Falhas recentes</h2>
-<table>
-  <thead><tr><th>Quando</th><th>Desejo</th><th>Status</th></tr></thead>
-  <tbody>
-  {% for wish, state, when in failures %}
-    <tr><td>{{ when.strftime("%d/%m/%Y %H:%M") }}</td><td>{{ wish }}</td><td>{{ state }}</td></tr>
-  {% else %}
-    <tr><td colspan="3" class="muted">Nenhuma falha recente.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+  <p class="status-line"><span class="chip small flag-error">coletor nunca rodou</span></p>
+  {% endif %}
+</section>
+
+<section aria-labelledby="channels-title">
+  <h2 id="channels-title" class="section-title">Canais</h2>
+  <p class="status-card show-compact">
+    <strong>{{ channels | length }} {{ "canal" if channels | length == 1 else "canais" }}, {{ silent_count }} {{ "silencioso" if silent_count == 1 else "silenciosos" }}</strong>
+  </p>
+  <div class="table-wrap hide-compact">
+  <table class="data">
+    <thead><tr><th>Canal</th><th>Última mensagem</th><th><span class="sr-only">Situação</span></th></tr></thead>
+    <tbody>
+    {% for c in channels %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{% if c.last_message_at %}{{ c.last_message_at.strftime("%d/%m/%Y %H:%M") }}{% else %}<span class="muted">nenhuma</span>{% endif %}</td>
+        <td>{% if c.silent %}<span class="chip small flag-error">silencioso (&gt; {{ c.silent_after_hours }} h)</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3" class="muted">Nenhum canal ativo.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section aria-labelledby="failures-title">
+  <h2 id="failures-title" class="section-title">Falhas recentes</h2>
+  <div class="table-wrap">
+  <table class="data">
+    <thead><tr><th>Quando</th><th>Desejo</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for wish, state, when in failures %}
+      <tr><td>{{ when.strftime("%d/%m/%Y %H:%M") }}</td><td>{{ wish }}</td><td><span class="chip small status-{{ state }}">{{ {"failed": "falhou", "expired": "expirado", "pending": "pendente", "sent": "enviado"}.get(state, state) }}</span></td></tr>
+    {% else %}
+      <tr><td colspan="3" class="muted">Nenhuma falha recente.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+</div>
 {% endblock %}

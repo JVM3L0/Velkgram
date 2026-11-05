@@ -1,28 +1,37 @@
 {% extends "base.html" %}
 {% block title %}Alertas - Velkgram{% endblock %}
 {% block content %}
+<div class="list-page">
 <h1>Alertas</h1>
-<table>
-  <thead><tr><th>Quando</th><th>Status</th><th>Preço</th><th>Latência</th><th>Desejo</th><th>Canal</th><th>Mensagem</th></tr></thead>
+<div class="table-wrap">
+<table class="data">
+  <thead><tr>
+    <th>Quando</th><th>Status</th><th>Preço</th>
+    <th class="hide-compact">Latência</th><th class="hide-compact">Dedup</th>
+    <th>Desejo</th><th class="hide-compact">Canal</th><th class="hide-compact"><span class="sr-only">Mensagem</span></th>
+  </tr></thead>
   <tbody>
   {% for r in rows %}
     <tr>
       <td>{{ r.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
-      <td>{{ r.status }}</td>
-      <td>{% if r.price %}{{ r.price }}{% else %}<span class="muted">preço não identificado</span>{% endif %}</td>
-      <td>Telegram {{ r.latency_telegram_ms }} ms · interno {{ r.latency_internal_ms }} ms</td>
-      <td>{{ r.wish }}</td>
-      <td>{{ r.channel }}</td>
-      <td><a href="{{ r.link }}" rel="noopener noreferrer" target="_blank">abrir</a></td>
+      <td><span class="chip small status-{{ r.status }}">{{ r.status_label }}</span></td>
+      <td>{% if r.price %}<strong class="num">{{ r.price }}</strong>{% else %}<span class="muted">preço não identificado</span>{% endif %}</td>
+      <td class="hide-compact">Telegram {{ r.latency_telegram_ms }} ms · interno {{ r.latency_internal_ms }} ms</td>
+      <td class="hide-compact">{{ r.dedup_keys }} {{ "chave" if r.dedup_keys == 1 else "chaves" }}</td>
+      <td>{{ r.wish }}<span class="show-compact muted compact-sub">{{ r.channel }}</span><a class="show-compact compact-sub" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
+      <td class="hide-compact">{{ r.channel }}</td>
+      <td class="hide-compact"><a class="button small border" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
     </tr>
   {% else %}
-    <tr><td colspan="7" class="muted">Nenhum alerta ainda.</td></tr>
+    <tr><td colspan="8" class="muted">Nenhum alerta ainda.</td></tr>
   {% endfor %}
   </tbody>
 </table>
-<p>
-  {% if page > 1 %}<a href="/alerts?page={{ page - 1 }}">Anterior</a>{% endif %}
+</div>
+<nav class="pager" aria-label="Páginas">
+  {% if page > 1 %}<a class="button border" href="/alerts?page={{ page - 1 }}"><i aria-hidden="true">chevron_left</i><span>Anterior</span></a>{% endif %}
   <span class="muted">Página {{ page }}</span>
-  {% if has_next %}<a href="/alerts?page={{ page + 1 }}">Próxima</a>{% endif %}
-</p>
+  {% if has_next %}<a class="button border" href="/alerts?page={{ page + 1 }}"><span>Próxima</span><i aria-hidden="true">chevron_right</i></a>{% endif %}
+</nav>
+</div>
 {% endblock %}
