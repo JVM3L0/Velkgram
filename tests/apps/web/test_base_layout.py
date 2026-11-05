@@ -155,3 +155,14 @@ def test_login_page_uses_base_theme(tmp_path: Path) -> None:
 def test_theme_button_is_labelled_tema(tmp_path: Path) -> None:
     page = make_client(tmp_path).get("/wishes").text
     assert 'aria-label="Tema"' in page and 'title="Tema"' in page
+
+
+def test_stylesheet_url_changes_with_its_content(tmp_path: Path) -> None:
+    import hashlib
+    import re
+
+    css = Path(__file__).parents[3] / "velkgram" / "apps" / "web" / "static" / "velkgram.css"
+    digest = hashlib.sha256(css.read_bytes()).hexdigest()[:12]
+    page = _page(make_client(tmp_path))
+    match = re.search(r'href="/static/velkgram\.css\?v=([0-9a-f]+)"', page)
+    assert match is not None and match.group(1) == digest

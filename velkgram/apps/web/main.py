@@ -1,5 +1,6 @@
 """Web app factory: `uvicorn --factory velkgram.apps.web.main:create_app`."""
 
+import hashlib
 import os
 import sqlite3
 from collections.abc import Mapping, Sequence
@@ -68,6 +69,10 @@ def _build_templates() -> Jinja2Templates:
     env.globals["theme_classes"] = theme_classes
     env.globals["nav_items"] = nav_items
     env.globals["theme_modes"] = THEME_MODES
+    # Content hash in the URL: a new stylesheet is never served from a stale browser cache.
+    env.globals["css_version"] = hashlib.sha256(
+        (_STATIC_DIR / "velkgram.css").read_bytes()
+    ).hexdigest()[:12]
     env.filters["brl"] = format_brl
     return Jinja2Templates(env=env)
 
