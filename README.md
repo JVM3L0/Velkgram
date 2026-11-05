@@ -2,7 +2,7 @@
 
 Personal app that reads Telegram deal channels and alerts you in real time when an offer matches your wishlist: required/excluded keywords plus a maximum price.
 
-> **Status: work in progress (v1, 17 of 22 plan tasks implemented, 16 fully reviewed).** The collector and the alert pipeline are implemented and covered by tests. It runs against Telegram, but there is no web UI yet to manage channels and wishes, and alerts go to the log only. See [Status](#status).
+> **Status: v1 feature-complete (all 22 plan tasks implemented).** The collector, the alert pipeline, the web UI, the usage report and the Docker packaging are done. Alerts go to the log only (WhatsApp is a separate spec). See [Status](#status).
 
 - Design spec: [docs/superpowers/specs/2026-11-04-velkgram-design.md](docs/superpowers/specs/2026-11-04-velkgram-design.md)
 - Implementation plan: [docs/superpowers/plans/2026-11-04-velkgram-v1.md](docs/superpowers/plans/2026-11-04-velkgram-v1.md)
@@ -25,7 +25,7 @@ Telegram channels ──push──▶ collector ──▶ store raw message (SQL
 
 - [uv](https://docs.astral.sh/uv/). It installs Python 3.13 for you.
 - A Telegram account, preferably a secondary one, and an `api_id`/`api_hash` from <https://my.telegram.org>.
-- The `sqlite3` CLI, or any SQLite client, to add channels and wishes until the web UI exists.
+- Optional: Docker with Compose, to run everything with `docker compose up -d`.
 
 ## Setup
 
@@ -43,7 +43,7 @@ Edit `.env`. Empty values for `NOTIFIER`, `DB_PATH` or `LOG_LEVEL` break startup
 | `DB_PATH` | `./data/velkgram.db` |
 | `NOTIFIER` | `log` (the only option in v1) |
 | `LOG_LEVEL` | `INFO` |
-| `WEB_PASSWORD_HASH`, `WEB_SECRET_KEY` | for the web UI, which isn't built yet. Remove these lines for now |
+| `WEB_PASSWORD_HASH`, `WEB_SECRET_KEY` | for the web UI. Generate the hash with `uv run velkgram hash-password`; `WEB_SECRET_KEY` is any long random string |
 
 The app reads settings from environment variables only. Export them before running:
 
@@ -68,7 +68,7 @@ uv run velkgram migrate    # creates/updates the SQLite database
 uv run velkgram collector
 ```
 
-Until the web UI exists, add channels and wishes directly in SQLite:
+Manage channels and wishes in the web UI (below). Alternatively, add them directly in SQLite:
 
 ```bash
 sqlite3 data/velkgram.db <<'SQL'
@@ -83,7 +83,31 @@ VALUES ('SSD 2TB', '["ssd", "2tb|2 tb"]', '["usado"]', 60000, 1,
 SQL
 ```
 
-Restart the collector after inserting rows. The web UI will bump the reload signal later. When a matching offer arrives, stdout shows a JSON log line with `"event": "alert_notified"` and the alert in its `text` field.
+Changes made in the web UI reach the running collector automatically; after inserting rows by hand, restart it. When a matching offer arrives, stdout shows a JSON log line with `"event": "alert_notified"` and the alert in its `text` field.
+
+## Web UI and report
+
+```bash
+uv run uvicorn --factory velkgram.apps.web.main:create_app --port 8000   # http://127.0.0.1:8000
+uv run velkgram report                                                   # usage report
+```
+
+## Docker
+
+`docker compose up -d` runs everything: a one-shot `migrate`, the `collector` (with a healthcheck and `restart: unless-stopped`) and the `web` UI.
+
+```bash
+cp .env.example .env     # fill TG_*, TG_SESSION, WEB_PASSWORD_HASH, WEB_SECRET_KEY
+docker compose up -d --build
+docker compose logs -f collector
+docker compose run --rm migrate          # apply migrations by hand
+docker compose run --rm collector velkgram report   # usage report
+```
+
+- The web UI is at <http://127.0.0.1:8000>. It is bound to localhost only. To reach it remotely, use a VPN such as Tailscale or a reverse proxy with TLS. Never expose it publicly.
+- Data lives in `./data` (mounted at `/app/data`). Compose sets `DB_PATH=/app/data/velkgram.db` inside the containers, so the `DB_PATH` in your `.env` only matters for local runs.
+- The collector healthcheck fails if the heartbeat is older than 90 s or the connection is in the `fatal` state.
+- Run the collector in one place only: do not start `uv run velkgram collector` while the container is up (same session).
 
 ## Development
 
@@ -102,8 +126,8 @@ The architecture is a modular monolith with hexagonal modules (`channels`, `wish
 | Alert pipeline (matching, price, dedup, notify with retry) | ✅ done |
 | Recovery (retry/expiry, restart without duplicates, reprocessing) | ✅ done |
 | Telethon adapter, CLI (`migrate`, `login`, `hash-password`) | ✅ done |
-| Collector runtime (`velkgram collector`) | 🟡 implemented, review fixes pending. A revoked session found at startup crashes instead of entering fatal mode |
-| Web UI (login, wishes, channels, alerts, status) | ⬜ planned |
-| Usage report (`velkgram report`) | ⬜ planned |
-| Docker / compose | ⬜ planned |
+| Collector runtime (`velkgram collector`) | ✅ done |
+| Web UI (login, wishes, channels, alerts, status) | ✅ done |
+| Usage report (`velkgram report`) | ✅ done |
+| Docker / compose, healthcheck | ✅ done |
 | WhatsApp notifier | ⬜ separate spec, after v1 |
