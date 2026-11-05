@@ -17,6 +17,8 @@ log = logging.getLogger(__name__)
 
 _MAX_AGE = timedelta(minutes=30)
 _STUCK_AFTER = timedelta(seconds=15)
+# Longest dedup window (coupon rule); `DedupCache.find` enforces each rule's own window.
+_WARM_WINDOW = timedelta(days=3)
 
 
 async def retry_failed(
@@ -67,7 +69,7 @@ async def retry_failed(
 
 def warm_cache(repo: AlertRepository, cache: DedupCache, clock: Clock) -> None:
     """Remember keys of recent alerts so a restart does not re-alert."""
-    for alert in repo.list_since(clock.now() - _MAX_AGE):
+    for alert in repo.list_since(clock.now() - _WARM_WINDOW):
         if alert.id is None:
             continue
         cache.remember([(rule_for_key(k), k) for k in alert.dedup_keys], alert.id, alert.created_at)

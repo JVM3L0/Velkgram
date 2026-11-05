@@ -2,7 +2,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
 from datetime import datetime
 
-from velkgram.alerting import Alert, AlertStatus, SuppressionRule
+from velkgram.alerting import Alert, AlertKind, AlertStatus, SuppressionRule
 from velkgram.channels import Channel, ChannelStatus
 from velkgram.ingestion import Heartbeat
 from velkgram.offers.domain.models import Offer, OfferKind, OfferMatch, OfferText, RetroRun
@@ -197,7 +197,8 @@ class InMemoryAlertRepository:
 
     def has_alert_for_message(self, channel_id: int, message_id: int) -> bool:
         return any(
-            a.channel_id == channel_id and a.message_id == message_id for a in self._alerts.values()
+            a.channel_id == channel_id and a.message_id == message_id and a.kind is AlertKind.offer
+            for a in self._alerts.values()
         )
 
 

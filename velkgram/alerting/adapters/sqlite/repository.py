@@ -5,13 +5,13 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import cast
 
-from velkgram.alerting.domain.models import Alert, AlertStatus, SuppressionRule
+from velkgram.alerting.domain.models import Alert, AlertKind, AlertStatus, SuppressionRule
 from velkgram.shared.db import transaction
 
 COLUMNS = (
     "id, wish_id, channel_id, message_id, price_cents, price_unknown, dedup_key, status, "
     "attempts, delayed_minutes, created_at, sent_at, latency_telegram_ms, "
-    "latency_internal_ms, last_error"
+    "latency_internal_ms, last_error, kind, over_max, offer_channel_id, offer_message_id, payload"
 )
 
 
@@ -44,6 +44,11 @@ def to_alert(row: sqlite3.Row) -> Alert:
         latency_telegram_ms=int(row["latency_telegram_ms"]),
         latency_internal_ms=int(row["latency_internal_ms"]),
         last_error=row["last_error"],
+        kind=AlertKind(row["kind"]),
+        over_max=bool(row["over_max"]),
+        offer_channel_id=_opt_int(row["offer_channel_id"]),
+        offer_message_id=_opt_int(row["offer_message_id"]),
+        payload=row["payload"],
     )
 
 
@@ -63,6 +68,11 @@ def _params(a: Alert) -> tuple[object, ...]:
         a.latency_telegram_ms,
         a.latency_internal_ms,
         a.last_error,
+        a.kind.value,
+        int(a.over_max),
+        a.offer_channel_id,
+        a.offer_message_id,
+        a.payload,
     )
 
 
@@ -81,8 +91,9 @@ class SqliteAlertRepository:
             cursor = self._conn.execute(
                 "INSERT INTO alerts (wish_id, channel_id, message_id, price_cents, "
                 "price_unknown, dedup_key, status, attempts, delayed_minutes, created_at, "
-                "sent_at, latency_telegram_ms, latency_internal_ms, last_error) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "sent_at, latency_telegram_ms, latency_internal_ms, last_error, kind, over_max, "
+                "offer_channel_id, offer_message_id, payload) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 _params(a),
             )
         return replace(a, id=cursor.lastrowid)
@@ -93,7 +104,8 @@ class SqliteAlertRepository:
                 "UPDATE alerts SET wish_id = ?, channel_id = ?, message_id = ?, "
                 "price_cents = ?, price_unknown = ?, dedup_key = ?, status = ?, attempts = ?, "
                 "delayed_minutes = ?, created_at = ?, sent_at = ?, latency_telegram_ms = ?, "
-                "latency_internal_ms = ?, last_error = ? WHERE id = ?",
+                "latency_internal_ms = ?, last_error = ?, kind = ?, over_max = ?, "
+                "offer_channel_id = ?, offer_message_id = ?, payload = ? WHERE id = ?",
                 (*_params(a), a.id),
             )
 
@@ -128,7 +140,8 @@ class SqliteAlertRepository:
 
     def has_alert_for_message(self, channel_id: int, message_id: int) -> bool:
         row = self._conn.execute(
-            "SELECT 1 FROM alerts WHERE channel_id = ? AND message_id = ? LIMIT 1",
+            "SELECT 1 FROM alerts WHERE channel_id = ? AND message_id = ? AND kind = 'offer' "
+            "LIMIT 1",
             (channel_id, message_id),
         ).fetchone()
         return row is not None

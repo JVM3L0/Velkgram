@@ -9,7 +9,7 @@ from datetime import timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from velkgram.alerting import Alert, AlertMessage, Notifier
+from velkgram.alerting import Alert, AlertMessage, Notifier, SuppressionRule
 from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
 from velkgram.alerting.adapters.wishlist_api import WishlistApiReader
 from velkgram.alerting.domain.dedup import DedupCache
@@ -52,6 +52,7 @@ from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 log = logging.getLogger(__name__)
 
 _DEDUP_WINDOW = timedelta(minutes=30)
+_COUPON_DEDUP_WINDOW = timedelta(days=3)
 
 
 class Collector:
@@ -87,7 +88,7 @@ class Collector:
         self._channels = ChannelCommands(self._channel_repo, clock)
         self._messages = SqliteMessageRepository(conn, clock)
         self._alerts = SqliteAlertRepository(conn)
-        self._cache = DedupCache(_DEDUP_WINDOW)
+        self._cache = DedupCache(_DEDUP_WINDOW, {SuppressionRule.wish_coupon: _COUPON_DEDUP_WINDOW})
 
         self.heartbeat = HeartbeatWriter(self._messages, clock)
         self.ingestor = Ingestor(

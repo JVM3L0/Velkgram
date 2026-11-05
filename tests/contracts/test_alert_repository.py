@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from tests.fakes.repositories import InMemoryAlertRepository
-from velkgram.alerting import Alert, AlertRepository, AlertStatus, SuppressionRule
+from velkgram.alerting import Alert, AlertKind, AlertRepository, AlertStatus, SuppressionRule
 from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
@@ -103,6 +103,36 @@ def test_round_trip_optional_fields(handle: RepoHandle) -> None:
     assert handle.repo.list_since(T0) == [stored]
     assert stored.dedup_keys == ()
     assert stored.price_cents is None
+
+
+def test_round_trip_coupon_fields(handle: RepoHandle) -> None:
+    stored = handle.repo.add(
+        _alert(
+            kind=AlertKind.coupon,
+            over_max=True,
+            offer_channel_id=200,
+            offer_message_id=9,
+            payload="texto do cupom",
+        )
+    )
+    assert handle.repo.list_since(T0) == [stored]
+    assert stored.kind is AlertKind.coupon
+    assert (stored.over_max, stored.offer_channel_id, stored.offer_message_id) == (True, 200, 9)
+    assert stored.payload == "texto do cupom"
+    plain = handle.repo.add(_alert(2))
+    assert (plain.kind, plain.over_max, plain.offer_channel_id, plain.payload) == (
+        AlertKind.offer,
+        False,
+        None,
+        None,
+    )
+
+
+def test_has_alert_for_message_ignores_coupon_alerts(handle: RepoHandle) -> None:
+    handle.repo.add(_alert(5, kind=AlertKind.coupon))
+    assert handle.repo.has_alert_for_message(100, 5) is False
+    handle.repo.add(_alert(5))
+    assert handle.repo.has_alert_for_message(100, 5) is True
 
 
 def test_ids_are_distinct(handle: RepoHandle) -> None:

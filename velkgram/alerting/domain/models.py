@@ -14,10 +14,16 @@ class AlertStatus(StrEnum):
     expired = "expired"
 
 
+class AlertKind(StrEnum):
+    offer = "offer"
+    coupon = "coupon"
+
+
 class SuppressionRule(StrEnum):
     origin = "origin"
     wish_price = "wish_price"
     wish_text = "wish_text"
+    wish_coupon = "wish_coupon"
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +43,11 @@ class Alert:
     latency_telegram_ms: int
     latency_internal_ms: int
     last_error: str | None
+    kind: AlertKind = AlertKind.offer
+    over_max: bool = False
+    offer_channel_id: int | None = None
+    offer_message_id: int | None = None
+    payload: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,8 +5,14 @@ from tests.fakes.clock import FakeClock
 from tests.fakes.messages import NOW
 from tests.fakes.notifier import FakeNotifier
 from tests.fakes.repositories import InMemoryAlertRepository
-from velkgram.alerting import Alert, AlertMessage, AlertStatus
-from velkgram.alerting.domain.dedup import DedupCache, origin_key, price_key, rule_for_key
+from velkgram.alerting import Alert, AlertMessage, AlertStatus, SuppressionRule
+from velkgram.alerting.domain.dedup import (
+    DedupCache,
+    coupon_origin_key,
+    origin_key,
+    price_key,
+    rule_for_key,
+)
 from velkgram.alerting.services.retry_failed import retry_failed, warm_cache
 
 
@@ -100,6 +106,22 @@ def test_warm_cache_prevents_duplicate_after_restart() -> None:
     keys = [(rule_for_key(k), k) for k in a.dedup_keys]
     assert cache.find(keys, NOW) is not None
     assert cache.find(keys[1:], NOW) == (keys[1][0], a.id)
+
+
+def test_warm_cache_restores_coupon_key_alerted_two_days_ago() -> None:
+    repo = InMemoryAlertRepository()
+    key = coupon_origin_key(1, 10, 5, None, None)
+    a = repo.add(replace(_alert(AlertStatus.sent, timedelta(days=2)), dedup_keys=(key,)))
+    cache = DedupCache(timedelta(minutes=30), {SuppressionRule.wish_coupon: timedelta(days=3)})
+    warm_cache(repo, cache, FakeClock(NOW))
+    assert cache.find([(SuppressionRule.wish_coupon, key)], NOW) == (
+        SuppressionRule.wish_coupon,
+        a.id,
+    )
+    price = [(SuppressionRule.wish_price, price_key(1, 100000))]
+    repo.add(replace(_alert(AlertStatus.sent, timedelta(days=2)), message_id=9))
+    warm_cache(repo, cache, FakeClock(NOW))
+    assert cache.find(price, NOW) is None
 
 
 async def test_one_bad_alert_does_not_block_others() -> None:
