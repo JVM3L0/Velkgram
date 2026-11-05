@@ -3,6 +3,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import timedelta
 
+import pytest
+
 from tests.fakes.clock import FakeClock
 from tests.fakes.messages import NOW
 from tests.fakes.notifier import FakeNotifier
@@ -48,7 +50,8 @@ def _event(*targets: CouponTargetData, **kw: object) -> CouponMatchedWish:
         coupon_origin_message_id=None,
         coupon_posted_at=NOW - timedelta(seconds=5),
         coupon_received_at=NOW - timedelta(seconds=4),
-        store="Shopee",
+        store="shopee",
+        store_title="Shopee",
         scope=None,
         link=LINK,
         targets=targets,
@@ -92,7 +95,7 @@ async def test_one_event_with_two_targets_gives_two_alerts() -> None:
     assert (a.offer_channel_id, a.offer_message_id, a.over_max) == (CH, 10, False)
     assert a.delayed_minutes is None
     assert a.latency_telegram_ms == 1000
-    assert a.dedup_keys == (f"wco:1:{CH}:50", "wcc:1:Shopee:QIP98Q1ZXO")
+    assert a.dedup_keys == (f"wco:1:{CH}:50", "wcc:1:shopee:QIP98Q1ZXO")
     assert a.payload is not None
     assert a.payload.splitlines()[1] == 'Para "SSD": oferta de R$ 99,00'
     assert h.notifier.sent[0].rendered == a.payload
@@ -138,11 +141,12 @@ async def test_forward_of_an_alerted_coupon_is_suppressed_by_origin_key() -> Non
     assert len(h.repo.suppressions) == 1
 
 
-async def test_disabled_wish_gives_no_alert() -> None:
+async def test_disabled_wish_gives_no_alert(caplog: pytest.LogCaptureFixture) -> None:
     h = Harness()
     h.wishes.enabled_ids = {2}
     await h.feed(_event(_target(1), _target(2)))
     assert [a.wish_id for a in h.alerts()] == [2]
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]  # skipped, not crashed
 
 
 async def test_over_max_target_says_so() -> None:

@@ -83,7 +83,7 @@ def test_alert_without_a_coupon_keeps_the_plain_price_line() -> None:
 
 def _coupon(**kw: object) -> str:
     args: dict[str, object] = {
-        "store": "Shopee",
+        "store_title": "Shopee",
         "codes": ("QIP98Q1ZXO",),
         "discount": "R$ 10 OFF",
         "min_cents": 4000,
@@ -125,7 +125,7 @@ def test_coupon_alert_without_discount_or_minimum() -> None:
 
 def test_coupon_alert_lists_mercado_livre_tier_codes() -> None:
     first = _coupon(
-        store="Mercado Livre", codes=("ML10", "ML10B"), discount="10% OFF", min_cents=None
+        store_title="Mercado Livre", codes=("ML10", "ML10B"), discount="10% OFF", min_cents=None
     ).splitlines()[0]
     assert first == "🎟️ Cupom Mercado Livre: ML10, ML10B — 10% OFF"
 

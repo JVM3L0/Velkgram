@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from velkgram.offers.domain.build import offer_from_message
 from velkgram.offers.domain.coupon_targets import coupon_targets
 from velkgram.offers.domain.models import MatchSource, Offer, OfferKind, OfferMatch
+from velkgram.offers.domain.title import STORE_TITLES
 from velkgram.offers.ports.messages import SourceMessage
 from velkgram.offers.ports.repository import OfferRepository
 from velkgram.offers.ports.wishes import WishReader
@@ -145,6 +146,7 @@ class OfferBuilder:
                     coupon_posted_at=offer.posted_at,
                     coupon_received_at=m.received_at,
                     store=offer.store,
+                    store_title=STORE_TITLES.get(offer.store, offer.store),
                     scope=offer.coupon_scope,
                     link=offer.redeem_link or offer.main_link,
                     targets=targets,

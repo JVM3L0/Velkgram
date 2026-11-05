@@ -334,6 +334,7 @@ async def test_live_coupon_publishes_one_event_with_every_target(
     assert isinstance(event, CouponMatchedWish)
     assert (event.coupon_channel_id, event.coupon_message_id) == (1, 50)
     assert event.store == "shopee"
+    assert event.store_title == "Shopee"
     assert event.link == "https://s.shopee.com.br/70GSVaUJxC"
     assert event.coupon_posted_at == NOW - timedelta(minutes=5)
     assert event.coupon_received_at == NOW

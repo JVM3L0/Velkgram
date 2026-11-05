@@ -79,7 +79,8 @@ class CouponMatchedWish:
     coupon_origin_message_id: int | None
     coupon_posted_at: datetime
     coupon_received_at: datetime
-    store: str
+    store: str  # slug, stable: used in dedup keys
+    store_title: str  # display name for the alert text
     scope: str | None
     link: str | None
     targets: tuple[CouponTargetData, ...]

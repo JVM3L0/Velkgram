@@ -40,7 +40,7 @@ def format_alert(msg: AlertMessage) -> str:
 
 
 def format_coupon_alert(
-    store: str,
+    store_title: str,
     codes: tuple[str, ...],
     discount: str,
     min_cents: int | None,
@@ -51,7 +51,7 @@ def format_coupon_alert(
     over_max: bool,
     link: str,
 ) -> str:
-    head = f"🎟️ Cupom {store}: {', '.join(codes)}"
+    head = f"🎟️ Cupom {store_title}: {', '.join(codes)}"
     if discount:
         head += f" — {discount}"
     if min_cents is not None:

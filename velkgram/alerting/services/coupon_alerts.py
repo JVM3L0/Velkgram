@@ -138,7 +138,7 @@ class CouponAlerter:
             return
         link = e.link or telegram_link(e.coupon_channel_id, e.coupon_message_id)
         payload = format_coupon_alert(
-            e.store,
+            e.store_title,
             target.codes,
             target.discount,
             target.min_cents,
