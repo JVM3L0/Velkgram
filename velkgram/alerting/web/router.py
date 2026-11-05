@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
-from velkgram.alerting import Alert, AlertQueries, AlertStatus, format_brl, telegram_link
+from velkgram.alerting import Alert, AlertKind, AlertQueries, AlertStatus, format_brl, telegram_link
 
 PAGE_SIZE = 50
 _STATUS_PT = {
@@ -17,6 +17,17 @@ _STATUS_PT = {
     AlertStatus.pending: "pendente",
     AlertStatus.expired: "expirado",
 }
+
+
+def _coupon_codes(alert: Alert) -> list[str]:
+    """Codes live after the third ':' of the `wcc:<wish>:<store>:<codes>` dedup key."""
+    if alert.kind is not AlertKind.coupon:
+        return []
+    for key in alert.dedup_keys:
+        if key.startswith("wcc:"):
+            parts = key.split(":", 3)
+            return [c for c in parts[3].split(",") if c] if len(parts) == 4 else []
+    return []
 
 
 def _parse_page(raw: str | None) -> int:
@@ -47,6 +58,9 @@ def build_router(
             "latency_internal_ms": alert.latency_internal_ms,
             "wish": wishes.get(alert.wish_id, f"#{alert.wish_id}"),
             "channel": channels.get(alert.channel_id, str(alert.channel_id)),
+            "is_coupon": alert.kind is AlertKind.coupon,
+            "coupon_codes": _coupon_codes(alert),
+            "over_max": alert.over_max,
             "link": telegram_link(alert.channel_id, alert.message_id),
             "created_at": alert.created_at,
         }

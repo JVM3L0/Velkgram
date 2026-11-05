@@ -8,6 +8,7 @@ import pytest
 
 from velkgram.alerting import (
     Alert,
+    AlertKind,
     AlertStatus,
     DailyAlerts,
     DailySuppressions,
@@ -139,3 +140,14 @@ def test_history_uses_stored_alert_round_trip(conn: sqlite3.Connection) -> None:
     repo = SqliteAlertRepository(conn)
     stored = repo.add(replace(_alert(1, 1, D1), dedup_keys=("a", "b")))
     assert SqliteAlertQueries(conn).history(1, 0) == [stored]
+
+
+def test_latency_samples_exclude_coupon_alerts_but_daily_counts_include_them(
+    conn: sqlite3.Connection,
+) -> None:
+    repo = SqliteAlertRepository(conn)
+    repo.add(_alert(-1001, 1, D1))
+    repo.add(replace(_alert(-1001, 2, D1), kind=AlertKind.coupon, dedup_keys=("wcc:1:s:A",)))
+    q = SqliteAlertQueries(conn)
+    assert len(q.latency_samples(D1.date(), D1.date())) == 1
+    assert q.daily_alert_counts(D1.date(), D1.date())[0].alerts == 2

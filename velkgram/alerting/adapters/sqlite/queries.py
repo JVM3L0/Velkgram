@@ -82,6 +82,7 @@ class SqliteAlertQueries:
         rows = self._conn.execute(
             "SELECT substr(created_at, 1, 10) AS day, channel_id, latency_telegram_ms, "
             "latency_internal_ms FROM alerts WHERE created_at >= ? AND created_at < ? "
+            "AND kind = 'offer' "
             "ORDER BY created_at, id",
             (start, end),
         ).fetchall()

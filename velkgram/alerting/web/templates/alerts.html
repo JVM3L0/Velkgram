@@ -20,7 +20,7 @@
       <td>{% if r.price %}<strong class="num">{{ r.price }}</strong>{% else %}<span class="muted">preço não identificado</span>{% endif %}</td>
       <td class="hide-compact">Telegram {{ r.latency_telegram_ms }} ms · interno {{ r.latency_internal_ms }} ms</td>
       <td class="hide-compact">{{ r.dedup_keys }} {{ "chave" if r.dedup_keys == 1 else "chaves" }}</td>
-      <td>{{ r.wish }}<span class="show-compact muted compact-sub">{{ r.channel }}</span><a class="show-compact compact-sub" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
+      <td>{{ r.wish }}{% if r.is_coupon %} <span class="chip small tonal-chip"><i aria-hidden="true">confirmation_number</i>cupom{% if r.coupon_codes %} {{ r.coupon_codes | join(", ") }}{% endif %}</span>{% endif %}{% if r.over_max %} <span class="chip small flag-warn">acima do limite</span>{% endif %}<span class="show-compact muted compact-sub">{{ r.channel }}</span><a class="show-compact compact-sub" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
       <td class="hide-compact">{{ r.channel }}</td>
       <td class="hide-compact"><a class="button small border" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
     </tr>
