@@ -73,9 +73,11 @@ class OfferBuilder:
         source: MatchSource = MatchSource.live,
     ) -> bool:
         now = self._clock.now()
-        offer = self._store(m, sold_out=sold_out, deleted=deleted, now=now)
+        offer, matchable = self._store(m, sold_out=sold_out, deleted=deleted, now=now)
         if offer is None:
             return False
+        if not matchable:
+            return True
         found = self._matches_for(offer, self._wishes.all, source, now)
         if found:
             self._repo.add_matches(found)
@@ -90,10 +92,14 @@ class OfferBuilder:
         built = 0
         found: list[OfferMatch] = []
         for item in items:
-            offer = self._store(item.message, sold_out=item.sold_out, deleted=item.deleted, now=now)
+            offer, matchable = self._store(
+                item.message, sold_out=item.sold_out, deleted=item.deleted, now=now
+            )
             if offer is None:
                 continue
             built += 1
+            if not matchable:
+                continue
             found.extend(self._matches_for(offer, lambda: wishes, source, now))
         if found:
             self._repo.add_matches(found)
@@ -101,8 +107,10 @@ class OfferBuilder:
 
     def _store(
         self, m: MessageData, *, sold_out: bool, deleted: bool, now: datetime
-    ) -> Offer | None:
-        """Upsert the offer for `m`; return it, or None when `m` yields no offer."""
+    ) -> tuple[Offer | None, bool]:
+        """Upsert the offer for `m`; return it (None when `m` yields no offer) and whether it
+        may be matched. A blank redelivery of an existing offer only updates flags (ruling 11).
+        """
         if not m.text.strip():
             existing = self._repo.get(m.channel_id, m.message_id)
             if existing is not None:
@@ -113,11 +121,11 @@ class OfferBuilder:
                     updated_at=now,
                 )
                 self._repo.upsert(flags_only)
-                return flags_only
+                return flags_only, False
         offer = offer_from_message(m, sold_out=sold_out, deleted=deleted, now=now)
         if offer is not None:
             self._repo.upsert(offer)
-        return offer
+        return offer, True
 
     @staticmethod
     def _matches_for(

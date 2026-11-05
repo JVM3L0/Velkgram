@@ -244,3 +244,13 @@ async def test_blank_redelivery_never_clears_flags(
     assert after is not None
     assert after.sold_out is True
     assert after.deleted is True
+
+
+async def test_blank_redelivery_of_unpurged_offer_adds_no_matches(
+    builder: OfferBuilder, repo: InMemoryOfferRepository, wishes: FakeWishReader
+) -> None:
+    builder.ingest(_msg())
+    before = len(repo._matches)
+    wishes.views = [*wishes.views, WishView(99, "x", (("ssd",),), (), 10_000_000)]
+    builder.ingest(_msg(""))
+    assert len(repo._matches) == before
