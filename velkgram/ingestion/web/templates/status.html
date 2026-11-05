@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set page_title = "Status" %}
 {% block title %}Status - Velkgram{% endblock %}
 {% block content %}
 {% set silent_count = channels | selectattr("silent") | list | length %}

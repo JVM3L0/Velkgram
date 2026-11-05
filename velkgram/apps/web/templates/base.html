@@ -19,7 +19,7 @@
   <a class="sr-only" href="#conteudo">Pular para o conteúdo</a>
   <div class="shell">
     <header class="appbar">
-      <p class="title">Velkgram</p>
+      <p class="title"><span class="brand">Velkgram</span>{% if page_title %}<span class="page-title">{{ page_title }}</span>{% endif %}</p>
       <div class="theme-menu-wrap">
         <button class="circle transparent" type="button" data-ui="#theme-menu" aria-label="Tema" title="Tema" aria-haspopup="menu">
           <i>palette</i>
@@ -51,7 +51,7 @@
     </nav>
 
     {% endif %}
-    <main id="conteudo"{% if not request.session.get("user") %} class="auth"{% endif %}>{% block content %}{% endblock %}</main>
+    <main id="conteudo"{% if not request.session.get("user") %} class="auth"{% elif page_title %} class="has-page-title"{% endif %}>{% block content %}{% endblock %}</main>
     {% if request.session.get("user") %}
     <nav class="bottom" aria-label="Navegação principal">
       {% for item in nav_items(request.url.path) %}

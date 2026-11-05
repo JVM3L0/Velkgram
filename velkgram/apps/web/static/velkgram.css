@@ -995,3 +995,28 @@ form.inline { margin: 0 !important; }
 .row-menu-wrap > button { margin: 0; }
 body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel-list { box-shadow: 0 1px 2px rgb(76 79 105 / 0.14), 0 2px 8px rgb(76 79 105 / 0.1); }
 @media (prefers-color-scheme: dark) { body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .channel-list { box-shadow: none; } }
+
+/* ---- Shell: on compact the app bar names the page, so the big H1 steps aside ---- */
+.appbar .title { display: flex; align-items: baseline; gap: 0.5rem; }
+@media (max-width: 599.98px) {
+  .appbar .title:has(.page-title) .brand { display: none; }
+  main.has-page-title h1 {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  main.has-page-title .page-head { margin: 0; }
+}
+@media (min-width: 600px) { .appbar .page-title { display: none; } }
+
+/* ---- Filters: switch, select and price fields share one height and centre line ---- */
+@media (min-width: 600px) {
+  .filters-panel > .filter-switch,
+  .filters-panel > .filter-channel,
+  .filters-panel .filter-prices .field { block-size: 3rem; min-block-size: 3rem; }
+  .filters-panel { align-items: center; }
+}

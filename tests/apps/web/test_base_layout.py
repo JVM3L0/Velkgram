@@ -166,3 +166,33 @@ def test_stylesheet_url_changes_with_its_content(tmp_path: Path) -> None:
     page = _page(make_client(tmp_path))
     match = re.search(r'href="/static/velkgram\.css\?v=([0-9a-f]+)"', page)
     assert match is not None and match.group(1) == digest
+
+
+@pytest.mark.parametrize(
+    ("path", "title"),
+    [
+        ("/", "Ofertas"),
+        ("/wishes", "Desejos"),
+        ("/channels", "Canais"),
+        ("/alerts", "Alertas"),
+        ("/status", "Status"),
+        ("/wishes/new", "Novo desejo"),
+    ],
+)
+def test_app_bar_carries_the_page_title_for_compact_screens(
+    tmp_path: Path, path: str, title: str
+) -> None:
+    page = _page(make_client(tmp_path), path)
+    assert f'<span class="page-title">{title}</span>' in page
+    assert '<main id="conteudo" class="has-page-title">' in page
+    assert f"<h1>{title}</h1>" in page  # still there for screen readers and wide screens
+
+
+def test_pages_without_a_shared_title_keep_the_plain_app_bar(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    client.post(
+        "/wishes/new",
+        data={"name": "SSD", "required_terms": "ssd", "excluded_terms": "", "max_price": "300,00"},
+    )
+    page = _page(client, "/wishes/1")
+    assert "page-title" not in page and "has-page-title" not in page
