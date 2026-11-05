@@ -90,3 +90,12 @@ def test_requires_login(tmp_path: Path) -> None:
     response = client.get("/channels")
     assert response.status_code == 303
     assert response.headers["location"] == "/login"
+
+
+def test_channel_delete_asks_for_confirmation_and_add_button_is_labelled(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    client.post("/channels", data={"ref": "@promos"})
+    page = client.get("/channels").text
+    assert "hx-confirm=" in page
+    assert "<span>Adicionar</span>" in page
+    assert "<th>Status</th>" in page and "Estado" not in page

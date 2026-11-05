@@ -9,10 +9,11 @@
   </td>
   <td class="hide-compact">{{ channel.silent_after_hours }} h</td>
   <td><div class="row-actions">
-    <button class="border" type="button" hx-post="/channels/{{ channel.id }}/toggle" hx-target="#channel-{{ channel.id }}" hx-swap="outerHTML">
-      <i aria-hidden="true">{{ "play_arrow" if paused else "pause" }}</i><span>{{ "Retomar" if paused else "Pausar" }}</span>
+    <button class="border" type="button" hx-post="/channels/{{ channel.id }}/toggle" hx-target="#channel-{{ channel.id }}" hx-swap="outerHTML" aria-label="{{ 'Retomar canal' if paused else 'Pausar canal' }}">
+      <i aria-hidden="true">{{ "play_arrow" if paused else "pause" }}</i><span class="hide-compact">{{ "Retomar" if paused else "Pausar" }}</span>
     </button>
-    <form class="inline" method="post" action="/channels/{{ channel.id }}/delete">
+    <form class="inline" method="post" action="/channels/{{ channel.id }}/delete"
+      hx-boost="true" hx-confirm="Remover o canal {{ channel.name or channel.ref }}? As ofertas já coletadas continuam no histórico." hx-target="body">
       <button class="border" type="submit" aria-label="Remover canal"><i aria-hidden="true">delete</i><span class="hide-compact">Remover</span></button>
     </form>
   </div></td>

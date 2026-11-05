@@ -108,3 +108,18 @@ def test_alerts_mark_dedup_and_latency_columns_hidden_on_compact(tmp_path: Path)
     _seed(tmp_path, [(1, 1000, "sent")])
     page = client.get("/alerts").text
     assert page.count("hide-compact") >= 2
+
+
+def test_alerts_empty_state_has_no_table_and_links_to_wishes(tmp_path: Path) -> None:
+    page = _client(tmp_path).get("/alerts").text
+    assert "Nenhum alerta ainda" in page
+    assert "<table" not in page
+    assert 'class="empty' in page
+    assert 'href="/wishes"' in page
+
+
+def test_alerts_with_rows_keep_the_table(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [(1, 100, "sent")])
+    page = client.get("/alerts").text
+    assert "<table" in page and "Nenhum alerta ainda" not in page

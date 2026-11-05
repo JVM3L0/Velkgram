@@ -65,7 +65,12 @@ def build_router(
         return templates.TemplateResponse(
             request,
             "status.html",
-            {"heartbeat": heartbeat, "channels": rows, "failures": recent_failures(conn)},
+            {
+                "heartbeat": heartbeat,
+                "channels": rows,
+                "failures": recent_failures(conn),
+                "stale_after_seconds": int(HEARTBEAT_STALE_AFTER.total_seconds()),
+            },
         )
 
     return router
