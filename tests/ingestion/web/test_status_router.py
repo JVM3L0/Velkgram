@@ -208,3 +208,27 @@ def test_status_channel_rows_show_relative_last_message(tmp_path: Path) -> None:
     client = _client(tmp_path)
     _channel(tmp_path, created_at=NOW - timedelta(days=5), last_message=NOW - timedelta(hours=2))
     assert "(há 2 h)" in client.get("/status").text
+
+
+def _enrich_state(tmp_path: Path, *, age_s: int | None) -> None:
+    from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
+
+    conn = connect(make_settings(tmp_path).db_path)
+    try:
+        if age_s is not None:
+            SqliteLinkRepository(conn).write_heartbeat(NOW - timedelta(seconds=age_s))
+    finally:
+        conn.close()
+
+
+def test_enrich_status_line_with_heartbeat(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _enrich_state(tmp_path, age_s=300)
+    html = client.get("/status").text
+    assert "Enriquecimento de links: última execução há" in html
+    assert "0 pendentes, 0 bloqueados" in html
+
+
+def test_enrich_status_line_not_run_yet(tmp_path: Path) -> None:
+    html = _client(tmp_path).get("/status").text
+    assert "Enriquecimento de links: ainda não executado" in html

@@ -28,6 +28,9 @@
   {% else %}
   <p class="status-line"><span class="chip small flag-error">coletor nunca rodou</span></p>
   {% endif %}
+  {% if enrich %}
+  <p class="status-line muted">{% if enrich.ago %}Enriquecimento de links: última execução {{ enrich.ago }}; {{ enrich.pending }} pendentes, {{ enrich.blocked }} bloqueados{% else %}Enriquecimento de links: ainda não executado{% endif %}</p>
+  {% endif %}
 </section>
 
 <section aria-labelledby="channels-title">

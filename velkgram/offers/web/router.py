@@ -22,6 +22,7 @@ from velkgram.offers.domain.models import (
     ProductStats,
     RetroStatus,
 )
+from velkgram.offers.domain.urls import is_safe_https_url
 from velkgram.offers.ports.queries import (
     CouponFilter,
     FeedCursor,
@@ -108,6 +109,10 @@ class CardView:
     anchor: str = ""
     store_key: str | None = None
     store_coupons: int = 0
+    image_url: str | None = None
+    seen_in: tuple[str, ...] = ()
+    seen_count: int = 1
+    other_product: bool = False
 
 
 def _parse_cursor(raw: str) -> FeedCursor | None:
@@ -301,6 +306,9 @@ def build_router(
             redeem_href=safe_href(card.redeem_link),
             cart_href=safe_href(card.cart_link),
             text=card.text,
+            image_url=card.image_url if is_safe_https_url(card.image_url) else None,
+            seen_in=tuple(names[c] for c in card.seen_channel_ids if c in names),
+            seen_count=len(card.seen_channel_ids),
         )
 
     def wish_or_404(conn: sqlite3.Connection, raw_id: str) -> WishInfo:
@@ -317,6 +325,7 @@ def build_router(
             card_view(m.card, now, names, counts),
             source=_SOURCE_LABELS[m.source],
             historic=m.source is MatchSource.retro,
+            other_product=m.other_product,
         )
 
     def retro_response(

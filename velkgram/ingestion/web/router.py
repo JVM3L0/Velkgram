@@ -30,6 +30,7 @@ def build_router(
     channels: Callable[[sqlite3.Connection], list[tuple[int, str, int, datetime]]],
     recent_failures: Callable[[sqlite3.Connection], list[tuple[str, str, datetime]]],
     clock: Clock,
+    enrich_status: Callable[[sqlite3.Connection], dict[str, object] | None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -72,6 +73,16 @@ def build_router(
                     "silent_after_hours": silent_after_hours,
                 }
             )
+        enrich = None
+        if enrich_status is not None:
+            raw = enrich_status(conn)
+            enrich = {"configured": True, "ago": None, "pending": 0, "blocked": 0}
+            if raw is not None:
+                last_run = raw["last_run_at"]
+                assert isinstance(last_run, datetime)
+                enrich.update(
+                    ago=ago(now - last_run), pending=raw["pending"], blocked=raw["blocked"]
+                )
         return templates.TemplateResponse(
             request,
             "status.html",
@@ -80,6 +91,7 @@ def build_router(
                 "heartbeat": heartbeat,
                 "channels": rows,
                 "failures": recent_failures(conn),
+                "enrich": enrich,
                 "stale_after_seconds": int(HEARTBEAT_STALE_AFTER.total_seconds()),
             },
         )
