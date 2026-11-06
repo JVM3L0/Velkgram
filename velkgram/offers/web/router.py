@@ -24,6 +24,7 @@ from velkgram.offers.domain.models import (
 )
 from velkgram.offers.domain.urls import is_safe_https_url
 from velkgram.offers.ports.queries import (
+    NEWS_COUNT_CAP,
     CouponFilter,
     FeedCursor,
     FeedFilter,
@@ -519,7 +520,8 @@ def build_router(
     def pill_response(request: Request, count: int, noun: tuple[str, str], url: str) -> Response:
         if count <= 0:
             return Response(status_code=204)
-        label = f"1 {noun[0]}" if count == 1 else f"{count} {noun[1]}"
+        shown = f"{NEWS_COUNT_CAP - 1}+" if count >= NEWS_COUNT_CAP else str(count)
+        label = f"1 {noun[0]}" if count == 1 else f"{shown} {noun[1]}"
         return templates.TemplateResponse(
             request, "_live_pill.html", {"count": count, "label": label, "reload_url": url}
         )

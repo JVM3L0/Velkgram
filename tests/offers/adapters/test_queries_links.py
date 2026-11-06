@@ -1,7 +1,7 @@
 """Link enrichment in the queries: card images, same-product collapse, other-product exclusion."""
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import timedelta
 from pathlib import Path
 
@@ -11,7 +11,7 @@ from tests.offers.adapters._queries_helpers import T0, add_link, match, offer, p
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
-from velkgram.offers.ports.queries import FeedCursor, FeedFilter
+from velkgram.offers.ports.queries import NEWS_COUNT_CAP, FeedCursor, FeedFilter
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
 
@@ -305,25 +305,51 @@ def test_unkeyed_matches_are_never_other_product(conn: sqlite3.Connection) -> No
     assert not any(m.other_product for m in h.matches)
 
 
+def _dominant_statements(conn: sqlite3.Connection, run: Callable[[], object]) -> int:
+    seen: list[str] = []
+    conn.set_trace_callback(seen.append)
+    try:
+        run()
+    finally:
+        conn.set_trace_callback(None)
+    return sum("GROUP BY m.wish_id, pl.store, pl.product_id" in sql for sql in seen)
+
+
 def test_dominant_key_is_computed_once_per_product_call(conn: sqlite3.Connection) -> None:
     _wish_with_keys(conn, ["A", "A", "A", "B"])
     q = SqliteOfferQueries(conn)
-    calls = 0
-    real = q._repo.dominant_key
+    assert _dominant_statements(conn, lambda: q.product(1, NOW, None, None)) == 1
 
-    def counting(wish_id: int) -> tuple[str, str] | None:
-        nonlocal calls
-        calls += 1
-        return real(wish_id)
 
-    q._repo.dominant_key = counting  # type: ignore[method-assign]
-    q.product(1, NOW, None, None)
-    assert calls == 1
-    q.summaries([1, 2])
-    assert calls == 3
+def test_summaries_compute_every_dominant_key_in_one_query(conn: sqlite3.Connection) -> None:
+    _wish_with_keys(conn, ["A", "A", "A", "B"])
+    q = SqliteOfferQueries(conn)
+    assert _dominant_statements(conn, lambda: q.summaries([1, 2, 3, 4])) == 1
+    assert SqliteOfferRepository(conn).dominant_keys([1, 2]) == {1: ("amazon", "A"), 2: None}
 
 
 def test_dominant_key_value(conn: sqlite3.Connection) -> None:
     _wish_with_keys(conn, ["A", "A", "A", "B"])
     assert SqliteOfferRepository(conn).dominant_key(1) == ("amazon", "A")
     assert SqliteOfferRepository(conn).dominant_key(2) is None
+
+
+def test_count_feed_after_is_capped(conn: sqlite3.Connection) -> None:
+    put(
+        conn,
+        *(offer(i, link=f"https://l/{i}", at=T0 + timedelta(minutes=i)) for i in range(1, 131)),
+    )
+    q = SqliteOfferQueries(conn)
+    since = FeedCursor(T0 - timedelta(days=1), 0, 0)
+    assert q.count_feed_after(NOTHING, since) == NEWS_COUNT_CAP
+    near = FeedCursor(T0 + timedelta(minutes=125), 1, 125)
+    assert q.count_feed_after(NOTHING, near) == 5
+
+
+def test_idx_offers_main_link_exists_and_the_collapse_query_runs(conn: sqlite3.Connection) -> None:
+    # The collapse EXISTS is pinned with INDEXED BY: a dropped or renamed index would make
+    # it raise "no such index", so the migration must create exactly this name.
+    assert "idx_offers_main_link" in {r[1] for r in conn.execute("PRAGMA index_list(offers)")}
+    _same(conn)
+    put(conn, offer(1, link="https://l/a1", at=T0), offer(2, link="https://l/a1", at=T0))
+    assert SqliteOfferQueries(conn).feed(NOTHING, None).cards

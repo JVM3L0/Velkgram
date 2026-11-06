@@ -255,22 +255,26 @@ class SqliteOfferRepository:
         return [(from_iso(r["posted_at"]), _opt_int(r["price_cents"])) for r in rows]
 
     def dominant_key(self, wish_id: int) -> tuple[str, str] | None:
-        rows = self._conn.execute(
-            "SELECT store, pid, n, SUM(n) OVER () AS total FROM (SELECT pl.store AS store, "
-            "pl.product_id AS pid, COUNT(*) AS n "
-            "FROM offer_matches m JOIN offers o "
-            "ON o.channel_id = m.channel_id AND o.message_id = m.message_id "
-            "JOIN product_links pl ON pl.url = o.main_link "
-            "WHERE m.wish_id = ? AND m.price_cents IS NOT NULL AND o.comparable = 1 "
-            "AND pl.store IS NOT NULL AND pl.product_id IS NOT NULL "
-            "GROUP BY pl.store, pl.product_id) "
-            "ORDER BY n DESC LIMIT 2",
-            (wish_id,),
-        ).fetchall()
-        if not rows:
-            return None
-        counts = [((str(r["store"]), str(r["pid"])), int(r["n"])) for r in rows]
-        return dominant_from_counts(counts, int(rows[0]["total"]))
+        return self.dominant_keys([wish_id])[wish_id]
+
+    def dominant_keys(self, wish_ids: Sequence[int]) -> dict[int, tuple[str, str] | None]:
+        """Dominant (store, product_id) per wish, from one GROUP BY over their matches."""
+        counts: dict[int, list[tuple[tuple[str, str], int]]] = {w: [] for w in wish_ids}
+        if wish_ids:
+            rows = self._conn.execute(
+                "SELECT m.wish_id AS wish_id, pl.store AS store, pl.product_id AS pid, "
+                "COUNT(*) AS n FROM offer_matches m JOIN offers o "
+                "ON o.channel_id = m.channel_id AND o.message_id = m.message_id "
+                "JOIN product_links pl ON pl.url = o.main_link "
+                f"WHERE m.wish_id IN ({', '.join('?' * len(wish_ids))}) "
+                "AND m.price_cents IS NOT NULL AND o.comparable = 1 "
+                "AND pl.store IS NOT NULL AND pl.product_id IS NOT NULL "
+                "GROUP BY m.wish_id, pl.store, pl.product_id",
+                tuple(wish_ids),
+            ).fetchall()
+            for r in rows:
+                counts[int(r["wish_id"])].append(((str(r["store"]), str(r["pid"])), int(r["n"])))
+        return {w: dominant_from_counts(c, sum(n for _, n in c)) for w, c in counts.items()}
 
     def recent_store_offers(self, store: str, since: datetime, limit: int = 500) -> list[Offer]:
         rows = self._conn.execute(

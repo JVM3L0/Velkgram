@@ -31,7 +31,13 @@ from tests.offers.adapters._queries_helpers import T0
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository, to_iso
-from velkgram.offers.ports.queries import CouponFilter, FeedCursor, FeedFilter, FeedPage
+from velkgram.offers.ports.queries import (
+    NEWS_COUNT_CAP,
+    CouponFilter,
+    FeedCursor,
+    FeedFilter,
+    FeedPage,
+)
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
 
@@ -313,3 +319,46 @@ def test_volume_product_summaries_and_keyed_matches(conn: sqlite3.Connection) ->
     sql = next(s for s in statements if "GROUP BY" in s)
     for row in conn.execute("EXPLAIN QUERY PLAN " + sql):
         assert not _FULL_SCAN.match(row[3]), row[3]
+
+
+@pytest.mark.slow
+def test_volume_stale_cursor_count_is_capped_and_fast(conn: sqlite3.Connection) -> None:
+    q = SqliteOfferQueries(conn)
+    stale = FeedCursor(T0 - timedelta(days=1), 0, 0)  # everything in the feed is newer
+    start = time.perf_counter()
+    count = q.count_feed_after(NOTHING, stale)
+    elapsed = time.perf_counter() - start
+    print(f"count_feed_after stale cursor: {elapsed * 1000:.1f} ms")
+    assert count == NEWS_COUNT_CAP
+    assert elapsed < BOUND_S, f"{elapsed * 1000:.1f} ms"
+
+
+@pytest.mark.slow
+def test_volume_five_hot_products_first_page(tmp_path: Path) -> None:
+    """Extreme skew: five products hold half of the offers; the collapse probe must stay fast."""
+    c = connect(tmp_path / "hot.db")
+    apply_migrations(c, MIGRATION_PACKAGES)
+    stamp = to_iso(T0)
+    rows = []
+    for i in range(ROWS):
+        at = to_iso(T0 + timedelta(seconds=30 * i))
+        link = f"https://hot.test/p{i % 5}" if i % 2 == 0 else f"https://cold.test/p{i}"
+        rows.append((i % 20, i, at, f"Produto {i}", 1000 + i % 50, "amazon", link, at))
+    with c:
+        c.executemany(
+            "INSERT INTO product_links (url, store, product_id, kind, status, created_at, "
+            "offer_posted_at, host) VALUES (?,?,?,'product','done',?,?,'hot.test')",
+            [(f"https://hot.test/p{n}", "amazon", f"H{n}", stamp, stamp) for n in range(5)],
+        )
+        c.executemany(
+            "INSERT INTO offers (channel_id, message_id, posted_at, title, price_cents, store, "
+            "main_link, has_photo, sold_out, deleted, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,0,0,0,?)",
+            rows,
+        )
+    c.execute("ANALYZE")
+    q = SqliteOfferQueries(c)
+    try:
+        _check(c, lambda: q.feed(NOTHING, None), "five hot products first page")
+    finally:
+        c.close()

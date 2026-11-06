@@ -116,3 +116,12 @@ def test_migration_006_applies_on_a_populated_database(tmp_path: Path) -> None:
     with pytest.raises(sqlite3.IntegrityError):
         c.execute("INSERT INTO link_enrich_state (id) VALUES (2)")
     c.close()
+
+
+def test_migration_007_creates_the_dominant_covering_indexes(tmp_path: Path) -> None:
+    c = connect(tmp_path / "t.db")
+    apply_migrations(c, MIGRATION_PACKAGES)
+    assert "idx_offers_key_cover" in {r[1] for r in c.execute("PRAGMA index_list(offers)")}
+    cols = [r[2] for r in c.execute("PRAGMA index_info(idx_offer_matches_wish_cover)")]
+    assert cols == ["wish_id", "channel_id", "message_id", "price_cents"]
+    c.close()

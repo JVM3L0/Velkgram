@@ -747,6 +747,14 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
     row-gap: 0.15rem;
     padding-block: 0.75rem;
   }
+  /* Cards with a link image get their own left column spanning every row, so rows keep their height. */
+  .feed-list .offer:has(> .offer-thumb) {
+    grid-template-columns: 6rem 15rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "thumb price title actions" "thumb price meta actions" "thumb price flags actions"
+      "thumb price codes actions" "thumb price post actions";
+  }
+  .feed-list .offer > .offer-thumb { grid-area: thumb; }
   .feed-list .offer-price { grid-area: price; font-size: 1.375rem; }
   .feed-list .offer-title { grid-area: title; -webkit-line-clamp: 1; line-clamp: 1; }
   .feed-list .offer-meta { grid-area: meta; }

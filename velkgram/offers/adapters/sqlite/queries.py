@@ -17,6 +17,7 @@ from velkgram.offers.domain.coupon_targets import applicable_tier
 from velkgram.offers.domain.models import MatchSource, OfferKind
 from velkgram.offers.domain.stats import product_stats
 from velkgram.offers.ports.queries import (
+    NEWS_COUNT_CAP,
     ActiveCouponView,
     CouponFilter,
     FeedCursor,
@@ -243,10 +244,11 @@ class SqliteOfferQueries:
     def _count_after(
         self, from_clause: str, where: list[str], params: list[object], since: FeedCursor
     ) -> int:
+        # Capped: a stale cursor must not walk the whole feed on every pill poll.
         row = self._conn.execute(
-            f"SELECT COUNT(*) FROM {from_clause} WHERE {' AND '.join(where)} "
-            "AND (o.posted_at, o.channel_id, o.message_id) > (?, ?, ?)",
-            (*params, to_iso(since.posted_at), since.channel_id, since.message_id),
+            f"SELECT COUNT(*) FROM (SELECT 1 FROM {from_clause} WHERE {' AND '.join(where)} "
+            "AND (o.posted_at, o.channel_id, o.message_id) > (?, ?, ?) LIMIT ?)",
+            (*params, to_iso(since.posted_at), since.channel_id, since.message_id, NEWS_COUNT_CAP),
         ).fetchone()
         return int(row[0])
 
@@ -405,12 +407,22 @@ class SqliteOfferQueries:
         return cards, (_cursor_of(cards[-1].card) if more else None)
 
     def summaries(self, wish_ids: Sequence[int]) -> dict[int, WishSummary]:
+        ids = list(wish_ids)
+        counts: dict[int, int] = {}
+        if ids:
+            marks = ", ".join("?" * len(ids))
+            counts = {
+                int(r[0]): int(r[1])
+                for r in self._conn.execute(
+                    f"SELECT wish_id, COUNT(*) FROM offer_matches WHERE wish_id IN ({marks}) "
+                    "GROUP BY wish_id",
+                    ids,
+                )
+            }
+        dominants = self._repo.dominant_keys(ids)
         out: dict[int, WishSummary] = {}
-        for wid in wish_ids:
-            count = self._conn.execute(
-                "SELECT COUNT(*) FROM offer_matches WHERE wish_id = ?", (wid,)
-            ).fetchone()[0]
-            dominant = self._repo.dominant_key(wid)
+        for wid in ids:
+            dominant = dominants[wid]
             other = "" if dominant is None else f"AND NOT {OTHER_PRODUCT_SQL} "
             rows = self._conn.execute(
                 f"SELECT m.price_cents FROM {_MATCH_JOIN} {_PL_JOIN} WHERE m.wish_id = ? "
@@ -419,7 +431,7 @@ class SqliteOfferQueries:
                 (wid, *(dominant or ()), _RECENT),
             ).fetchall()
             recent = tuple(int(r[0]) for r in reversed(rows))
-            out[wid] = WishSummary(recent[-1] if recent else None, int(count), recent)
+            out[wid] = WishSummary(recent[-1] if recent else None, counts.get(wid, 0), recent)
         return out
 
     def stores_seen(self) -> list[str]:
