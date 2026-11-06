@@ -25,10 +25,11 @@ v1 shipped only `LogNotifier`, so no alert reaches the phone. A Telegram bot tha
   - `notify_system` bounds itself to 10 s and raises `NotifierError("timeout")`, so `Collector.fatal` never waits longer than that before writing its heartbeat.
   - Any Telethon or connection error, including `FloodWaitError`, is raised as `NotifierError` with the error class name only. The existing `send_with_retry` and `retry_failed` then do what they already do.
   - `UserIsBlockedError`, `PeerIdInvalidError` and `ValueError` (the owner never pressed Start, or blocked the bot) record the state `needs_start`. Every other failure records `error` with the class name.
-  - Login is one shared background task: at most one login runs at a time, a cancelled waiter never cancels it, a login attempt is bounded to 8 s, and a new attempt starts at most once every 60 s.
+  - Login is one shared background task: at most one login runs at a time, a cancelled waiter never cancels it, a login attempt is bounded to 8 s, and a new attempt starts at most once every 60 s. `notify_system` bypasses the 60 s throttle so a fatal alert is always attempted. A failed login's disconnect is bounded to 2 s. A send that shows the bot's authorization was lost (revoked token, dead auth key) marks the bot logged out, so the next attempt logs in again.
+  - A missing chat records `error` with detail `sem chat`.
 - **Notifier state:** this is alerting-owned data.
   - A row `notifier_state(id = 1, status TEXT, detail TEXT, chat_id INTEGER, updated_at TEXT)`. The status is one of `ok`, `needs_start`, `error`, `disabled`.
-  - The status is written on startup and after each send or login attempt, but only when the status or the detail changes.
+  - The status is written on startup and after each send or login attempt, but only when the status or the detail changes. At startup with no row yet, the telegram mode records `error` with detail `iniciando` until the first login finishes.
   - `chat_id` stores the last chat resolved from `get_me()`. When the user session later dies (the case where a system alert matters most), the notifier falls back to it. Resolution order: `ALERT_CHAT_ID`, then this run's `get_me()`, then the stored id. On the very first run with a dead session and no `ALERT_CHAT_ID`, no chat is known and the system alert is only logged.
   - The Status page shows one line, read through an injected callable that takes a connection, the same pattern as the existing helpers:
     - "Bot de alertas: conectado"
@@ -40,7 +41,7 @@ v1 shipped only `LogNotifier`, so no alert reaches the phone. A Telegram bot tha
   - If the bot can't log in (a bad token or no network), the collector still starts and ingests. `TelegramBotNotifier` raises `NotifierError` on every send until it connects, and it retries the login lazily, at most once a minute. Alerts become `failed` and are retried by the existing loop.
   - Bot startup never blocks the user client's startup.
   - The token never appears in logs, errors or the state detail.
-- **CLI:** `velkgram notify-test` builds the same notifier and resolves the chat the same way. Without `ALERT_CHAT_ID`, it connects the user client (`TG_SESSION`), calls `get_me()` and disconnects, falling back to the stored chat id. It sends "Velkgram: teste de alerta ✅", prints "enviado" or "falhou: <ErrorClass>", and exits 0 or 1.
+- **CLI:** `velkgram notify-test` builds the same notifier. The chat is `ALERT_CHAT_ID`, else the stored chat id. It never connects the user session, because a second connection on the live collector's session can raise `AuthKeyDuplicatedError` and stop the collector. With no chat it prints "falhou: sem chat (defina ALERT_CHAT_ID ou rode o coletor uma vez)". Otherwise it sends "Velkgram: teste de alerta ✅", prints "enviado" or "falhou: <error>" (with the login error class when there is one), and exits 0 or 1.
 - **Compose:** no new service. The collector gets `NOTIFIER`, `ALERT_BOT_TOKEN` and `ALERT_CHAT_ID` from `.env` (already passed through `env_file`). Update `.env.example` with empty values and English comments.
 
 ## 3. Non-goals
