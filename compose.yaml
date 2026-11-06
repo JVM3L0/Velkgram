@@ -27,6 +27,15 @@ services:
       start_period: 60s
       retries: 3
 
+  enricher:
+    <<: *velkgram
+    command: ["velkgram", "enrich"]
+    restart: unless-stopped
+    stop_grace_period: 45s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   web:
     <<: *velkgram
     command:

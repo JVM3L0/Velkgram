@@ -4,7 +4,9 @@ import argparse
 import asyncio
 import getpass
 import os
+import signal
 import sys
+import threading
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import UTC, date, datetime
@@ -15,10 +17,13 @@ from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.apps.web.auth import hash_password
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.adapters.telethon.client import build_client
-from velkgram.offers import OfferBuilder, rebuild_offers
+from velkgram.offers import LinkEnricher, OfferBuilder, rebuild_offers
+from velkgram.offers.adapters.http.fetcher import HttpxFetcher, configure_fetch_logging
 from velkgram.offers.adapters.ingestion_api import IngestionApiMessageSource
+from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
+from velkgram.offers.ports.fetcher import Fetcher
 from velkgram.reporting.adapters.alerting_api import AlertingAlertStats, price_extractor
 from velkgram.reporting.adapters.ingestion_api import IngestionMessageStats
 from velkgram.reporting.services.metrics import build_report
@@ -26,6 +31,7 @@ from velkgram.reporting.services.render import render_report
 from velkgram.shared.adapters.clock_system import SystemClock
 from velkgram.shared.config import load_settings
 from velkgram.shared.db import connect
+from velkgram.shared.logging import configure_logging
 from velkgram.shared.migrate import apply_migrations
 from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 
@@ -125,6 +131,28 @@ def cmd_rebuild_offers(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _make_fetcher() -> Fetcher:
+    return HttpxFetcher()
+
+
+def cmd_enrich(args: argparse.Namespace) -> int:
+    settings = load_settings(os.environ)
+    configure_logging(settings.log_level)
+    configure_fetch_logging()
+    conn = connect(settings.db_path)
+    stop = threading.Event()
+    previous = signal.signal(signal.SIGTERM, lambda _signum, _frame: stop.set())
+    try:
+        apply_migrations(conn, MIGRATION_PACKAGES)
+        enricher = LinkEnricher(SqliteLinkRepository(conn), _make_fetcher(), SystemClock())
+        done = enricher.run(stop, limit=args.limit, until_idle=args.once)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        conn.close()
+    print(f"enriched {done} links")
+    return 0
+
+
 def _date(value: str) -> date:
     try:
         return date.fromisoformat(value)
@@ -139,6 +167,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "collector": _collector,
     "report": _report,
     "rebuild-offers": cmd_rebuild_offers,
+    "enrich": cmd_enrich,
 }
 
 
@@ -150,6 +179,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("hash-password", help="hash a web password for WEB_PASSWORD_HASH")
     sub.add_parser("collector", help="run the Telegram collector")
     sub.add_parser("rebuild-offers", help="rebuild offers and wish matches from stored messages")
+    enrich = sub.add_parser("enrich", help="follow offer links to learn store, title and image")
+    enrich.add_argument("--once", action="store_true", help="exit once nothing is due")
+    enrich.add_argument("--limit", type=int, default=None, help="stop after N links")
     report = sub.add_parser("report", help="usage report: volume, alerts, latency, token cost")
     report.add_argument("--since", type=_date, required=True, help="YYYY-MM-DD (UTC)")
     report.add_argument("--until", type=_date, default=None, help="YYYY-MM-DD (UTC), inclusive")
