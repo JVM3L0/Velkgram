@@ -36,6 +36,8 @@ _DEFAULT_BUDGET = 64 * KB
 _ALIEXPRESS_FIRST_HOP = "s.click.aliexpress.com"
 _SHOPEE_SHORT = "s.shopee.com.br"
 _MELI_SHORT = "meli.la"
+# Store-mapped shorteners: still being the final host means the link was not expanded.
+_SHORT_HOSTS = _SHORTENERS | {_ALIEXPRESS_FIRST_HOP, _SHOPEE_SHORT, _MELI_SHORT}
 
 Status = int | Literal["invalid", "error", "paused"]
 Kind = Literal["product", "not_product", "unknown"]
@@ -109,8 +111,8 @@ _SHOPEE_PATH = re.compile(r"/(\d+)/(\d+)(?:[/?#]|$)")
 _SHOPEE_SLUG = re.compile(r"-i\.(\d+)\.(\d+)")
 _MAGALU = re.compile(r"/p/(\d+)(?:[/?#]|$)")
 _KABUM = re.compile(r"/produto/(\d+)")
-_ALI_PRODUCT_ID = re.compile(r"productId=(\d{10,20})")
-_ALI_ITEM = re.compile(r"/item/(\d{10,20})\.html")
+_ALI_PRODUCT_ID = re.compile(r"productIds?=(\d{10,20})")
+_ALI_ITEM = re.compile(r"/item/(?:[^/?#]*/)?(\d{10,20})\.html")
 _ITEM_ID = re.compile(r'"item_id"\s*:\s*"(MLB\d+)"')
 
 
@@ -135,7 +137,7 @@ def _id_in_url(store: str, url: str) -> str | None:
     if store == "aliexpress":
         # The id sits in a (possibly url-encoded, nested) query string.
         text = url
-        for _ in range(3):
+        for _ in range(_UNQUOTE_ROUNDS + 1):
             m = _ALI_PRODUCT_ID.search(text) or _ALI_ITEM.search(text)
             if m:
                 return m.group(1)
@@ -146,6 +148,7 @@ def _id_in_url(store: str, url: str) -> str | None:
     return None
 
 
+_UNQUOTE_ROUNDS = 3
 _ID_STORES = frozenset({"amazon", "mercadolivre", "shopee", "magalu", "kabum", "aliexpress"})
 
 
@@ -228,7 +231,9 @@ _OLD_HIRES = re.compile(r'data-old-hires="(https:[^"]{1,2000})"')
 def _is_amazon_blocked(body: str) -> bool:
     lowered = body.lower()
     title = (_html_title(lowered) or "").strip()
-    return "robot check" in title or "captcha" in title or "/errors/validatecaptcha" in lowered
+    return (
+        "robot check" in title or "captcha" in title or 'action="/errors/validatecaptcha' in lowered
+    )
 
 
 def _amazon_page(body: str) -> tuple[str | None, str | None]:
@@ -273,10 +278,14 @@ def resolve(original_url: str, outcome: FetchOutcome) -> LinkInfo:
         title, image = _page_details(store, body)
         return LinkInfo(store, product_id, title, image, "product")
 
-    if store in _ID_STORES:
-        return LinkInfo(store, None, None, None, "not_product" if read_ok else "unknown")
-
     final_host = _bare(host_of(outcome.final_url))
+    if store in _ID_STORES:
+        # A short link that never redirected tells nothing: retry it, it is not a non-product.
+        unexpanded = final_host in _SHORT_HOSTS
+        return LinkInfo(
+            store, None, None, None, "not_product" if read_ok and not unexpanded else "unknown"
+        )
+
     if body is None or final_host in _SHORTENERS:
         return LinkInfo(store, None, None, None, "unknown")
     title, image = _og_page(body, strip_price=False)

@@ -46,6 +46,7 @@ class LinkEnricher:
         self._custom_wait = wait  # None: `run` sleeps on its stop event, so SIGTERM interrupts
         self._wait: Callable[[float], bool] = wait or threading.Event().wait
         self._paused: dict[str, datetime] = {}
+        self._pause_hit: datetime | None = None  # end of the pause that stopped the last fetch
         self._last_request: dict[str, datetime] = {}
         self._last_discover_at: datetime | None = None
         self._last_discovered = 0
@@ -116,6 +117,7 @@ class LinkEnricher:
         host = host_of(url)
         now = self._clock.now()
         if host in self._paused_hosts(now):
+            self._pause_hit = self._paused[host]
             raise HostPaused(host)
         last = self._last_request.get(host)
         if last is not None:
@@ -145,16 +147,28 @@ class LinkEnricher:
             self._links.save(reused, fix_store=True)
             log.info("link_enriched", extra={"host": host, "status": "reused", "kind": "product"})
             return
+        self._pause_hit = None
         outcome = self._fetcher.fetch(
             row.url, fetch_plan(row.url), before_request=self._throttle, budget_for=budget_for
         )
         if outcome.status == "paused":
+            self._defer_until_unpaused(row)
             return
         info = resolve(row.url, outcome)
         now = self._clock.now()
         saved = self._apply(row, outcome, info, now)
         self._links.save(saved, fix_store=info.store is not None)
         log.info("link_enriched", extra={"host": host, "status": outcome.status, "kind": info.kind})
+
+    def _defer_until_unpaused(self, row: LinkRow) -> None:
+        """A later hop's host is paused: no attempt, but do not re-pick the row until it ends.
+
+        A stop during the throttle wait also reads as paused; that leaves the row untouched.
+        """
+        until = self._pause_hit
+        if until is None:
+            return
+        self._links.save(replace(row, next_try_at=until), fix_store=False)
 
     def _reuse(self, row: LinkRow, now: datetime) -> LinkRow | None:
         info = resolve_url_only(row.url)
@@ -188,6 +202,8 @@ class LinkEnricher:
             kind=info.kind,
             fetched_at=now,
         )
+        if status == "error" or (isinstance(status, int) and status >= 500):
+            return self._after_error(base, now)  # keeps the store and id already known
         if info.kind == "product":
             return replace(base, status="done", next_try_at=None)
         if status in (403, 429):
@@ -196,8 +212,6 @@ class LinkEnricher:
             if blocks >= MAX_BLOCKS:
                 return replace(base, blocks=blocks, status="failed", next_try_at=None)
             return replace(base, blocks=blocks, status="blocked", next_try_at=now + BLOCK_RETRY)
-        if status == "error" or (isinstance(status, int) and status >= 500):
-            return self._after_error(base, now)
         return replace(base, status="done", next_try_at=None)
 
     @staticmethod

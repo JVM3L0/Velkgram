@@ -7,6 +7,8 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository, to_iso
@@ -15,7 +17,6 @@ from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
 
 T0 = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
-LIMIT_S = 0.5
 
 
 def _offer(i: int, link: str) -> Offer:
@@ -51,6 +52,15 @@ def _bulk_offers(conn: sqlite3.Connection, n: int) -> None:
 
 
 def test_upserts_and_link_saves_do_not_lock_each_other(tmp_path: Path) -> None:
+    _run_scenario(tmp_path, bulk=10_000, rounds=5, limit_s=1.0)
+
+
+@pytest.mark.slow
+def test_upserts_and_link_saves_do_not_lock_each_other_at_50k(tmp_path: Path) -> None:
+    _run_scenario(tmp_path, bulk=50_000, rounds=20, limit_s=0.5)
+
+
+def _run_scenario(tmp_path: Path, *, bulk: int, rounds: int, limit_s: float) -> None:
     db = tmp_path / "c.db"
     setup = connect(db)
     apply_migrations(setup, MIGRATION_PACKAGES)
@@ -66,7 +76,7 @@ def test_upserts_and_link_saves_do_not_lock_each_other(tmp_path: Path) -> None:
         links.save(done, fix_store=False)
         rows.append(done)
     assert len(rows) == 200
-    _bulk_offers(setup, 50_000)
+    _bulk_offers(setup, bulk)
 
     errors: list[BaseException] = []
     upsert_times: list[float] = []
@@ -104,7 +114,7 @@ def test_upserts_and_link_saves_do_not_lock_each_other(tmp_path: Path) -> None:
                 repo.save(replace(row, title="T"), fix_store=True)
                 save_times.append(time.perf_counter() - t)
             discover_phase.wait(timeout=30)
-            for _ in range(20):
+            for _ in range(rounds):
                 assert repo.discover(limit=50) == 50
         except BaseException as exc:
             errors.append(exc)
@@ -122,6 +132,6 @@ def test_upserts_and_link_saves_do_not_lock_each_other(tmp_path: Path) -> None:
     assert errors == []
     assert len(save_times) == 200 and len(upsert_times) == 200
     assert discover_phase_upserts, "discover phase must overlap with upserts"
-    assert max(save_times) < LIMIT_S
-    assert max(upsert_times) < LIMIT_S
-    assert max(discover_phase_upserts) < LIMIT_S
+    assert max(save_times) < limit_s
+    assert max(upsert_times) < limit_s
+    assert max(discover_phase_upserts) < limit_s

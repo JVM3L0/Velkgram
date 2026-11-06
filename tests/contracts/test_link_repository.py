@@ -187,6 +187,18 @@ def test_earliest_next_try_covers_due_rows_and_ignores_paused(handle: Handle) ->
     assert handle.links.earliest_next_try(T0, frozenset({"a.example", "b.example"})) is None
 
 
+def test_earliest_next_try_ignores_blocked_rows_that_ran_out_of_retries(handle: Handle) -> None:
+    handle.offers.upsert(_offer(1, "https://a.example/1"))
+    handle.links.discover()
+    row = handle.links.next_due(T0, NO_HOSTS)
+    assert row is not None
+    blocked = replace(row, status="blocked", next_try_at=T0 + timedelta(hours=24))
+    handle.links.save(replace(blocked, blocks=1), fix_store=False)
+    assert handle.links.earliest_next_try(T0, NO_HOSTS) == T0 + timedelta(hours=24)
+    handle.links.save(replace(blocked, blocks=2), fix_store=False)
+    assert handle.links.earliest_next_try(T0, NO_HOSTS) is None
+
+
 def test_known_product_returns_title_and_image_of_a_done_row(handle: Handle) -> None:
     handle.offers.upsert(_offer(1, "https://a.example/1"))
     row = _discovered(handle, "https://a.example/1")

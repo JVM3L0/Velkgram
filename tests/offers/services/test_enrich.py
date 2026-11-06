@@ -86,9 +86,22 @@ class Env:
         self.fetcher = FakeFetcher()
         self.waits: list[float] = []
         self.enricher = LinkEnricher(self.links, self.fetcher, self.clock, self._wait)
+        real_next_due = self.links.next_due
+        polls = 0
+
+        def guarded_next_due(now: datetime, paused: frozenset[str]):
+            nonlocal polls
+            polls += 1
+            if polls > 2000:  # an idle exit that never comes fails here, not by hanging
+                raise AssertionError("runaway polling loop")
+            return real_next_due(now, paused)
+
+        self.links.next_due = guarded_next_due  # type: ignore[method-assign]
 
     def _wait(self, seconds: float) -> bool:
         self.waits.append(seconds)
+        if len(self.waits) > 200:  # a loop that should have exited fails here, not by hanging
+            raise AssertionError("runaway wait loop")
         self.clock.advance(seconds)
         return False
 
@@ -362,3 +375,148 @@ def test_idle_waits_until_next_try_capped_and_writes_heartbeat() -> None:
     assert max(env.waits) <= 10
     assert len(beats) >= 2  # after the URL, then once a minute while idle
     assert env.links.heartbeat() is not None
+
+
+# --- review fixes ----------------------------------------------------------------------
+
+
+def test_5xx_with_a_product_id_follows_the_retry_schedule_and_keeps_the_store() -> None:
+    env = _env_with(KABUM)
+    env.fetcher.scripts[KABUM] = Script((KABUM,), 503)
+    env.enricher.step()
+    row = env.row(KABUM)
+    assert (row.status, row.attempts, row.kind) == ("pending", 1, "product")
+    assert (row.store, row.product_id) == ("kabum", "123456")
+    assert row.next_try_at == env.clock.now() + timedelta(minutes=5)
+    assert env.offers.all_offers()[0].store == "kabum"  # the store fix is not lost
+
+
+def test_error_with_a_product_id_follows_the_schedule_until_failed() -> None:
+    env = _env_with(KABUM)
+    env.fetcher.scripts[KABUM] = Script((KABUM,), "error")
+    for delay in (300, 1800, 21600):
+        env.enricher.step()
+        env.clock.advance(delay)
+    env.enricher.step()
+    assert (env.row(KABUM).status, env.row(KABUM).attempts) == ("failed", 4)
+
+
+@pytest.mark.parametrize("status", [403, 429])
+def test_block_with_a_product_id_is_done(status: int) -> None:
+    env = _env_with(KABUM)
+    env.fetcher.scripts[KABUM] = Script((KABUM,), status)
+    env.enricher.step()
+    assert (env.row(KABUM).status, env.row(KABUM).product_id) == ("done", "123456")
+
+
+def test_pause_is_keyed_on_the_host_that_answered_not_the_first_hop() -> None:
+    env = Env()
+    env.add(1, "https://cutt.ly/second")
+    env.add(2, CUTT)
+    env.fetcher.scripts[CUTT] = Script((CUTT, "https://www.kabum.com.br/x"), 403)
+    env.enricher.step()
+    assert set(env.enricher._paused) == {"www.kabum.com.br"}
+    assert env.enricher.step()  # cutt.ly itself is not paused
+    assert env.fetcher.calls == [CUTT, "https://cutt.ly/second"]
+
+
+def _paused_hop_env() -> Env:
+    env = _env_with(CUTT)
+    env.fetcher.scripts[CUTT] = Script((CUTT, KABUM), 200)
+    env.enricher._paused["www.kabum.com.br"] = env.clock.now() + timedelta(minutes=30)
+    return env
+
+
+def test_paused_later_hop_is_not_refetched_during_the_pause() -> None:
+    env = _paused_hop_env()
+    pause_end = env.clock.now() + timedelta(minutes=30)
+    for _ in range(5):
+        env.enricher.step()
+        env.clock.advance(3)
+    assert env.fetcher.calls == [CUTT]
+    row = env.row(CUTT)
+    assert (row.status, row.attempts, row.blocks, row.next_try_at) == ("pending", 0, 0, pause_end)
+    env.clock.advance(30 * 60)
+    assert env.enricher.step()  # the pause is over: the link is tried again
+    assert env.fetcher.calls == [CUTT, CUTT]
+    assert env.row(CUTT).status == "done"
+
+
+def test_paused_later_hop_does_not_extend_a_block_retry() -> None:
+    env = _paused_hop_env()
+    retry = env.clock.now() + timedelta(hours=24)
+    env.links.discover()
+    env.links._rows[CUTT] = replace(env.row(CUTT), status="blocked", blocks=1, next_try_at=retry)
+    env.clock.advance(24 * 3600)
+    env.enricher._paused["www.kabum.com.br"] = env.clock.now() + timedelta(minutes=30)
+    env.enricher.step()
+    assert env.row(CUTT).next_try_at == env.clock.now() + timedelta(minutes=30)
+    assert env.row(CUTT).status == "blocked"
+
+
+def test_run_until_idle_exits_when_only_paused_rows_are_left_and_burns_no_limit() -> None:
+    env = _paused_hop_env()
+    assert env.enricher.run(threading.Event(), until_idle=True) == 1
+    assert env.fetcher.calls == [CUTT]
+    env2 = _paused_hop_env()
+    assert env2.enricher.run(threading.Event(), limit=3, until_idle=True) == 1
+    assert env2.fetcher.calls == [CUTT]
+
+
+def test_until_idle_discovers_even_when_the_periodic_discovery_just_ran() -> None:
+    env = Env()
+    assert not env.enricher.step()  # discovery ran, found nothing
+    env.add(1, "https://a.example/1")
+    assert env.enricher.run(threading.Event(), until_idle=True) == 1
+
+
+def test_full_batches_discover_back_to_back_by_step_alone() -> None:
+    env = Env()
+    for i in range(120):
+        env.add(i, f"https://h{i}.example/p")
+    calls: list[int] = []
+    real = env.links.discover
+
+    def counting(limit: int = 50) -> int:
+        calls.append(real(limit))
+        return calls[-1]
+
+    env.links.discover = counting  # type: ignore[method-assign]
+    for _ in range(5):
+        env.enricher.step()
+    assert calls == [50, 50, 20]
+
+
+def test_a_url_is_followed_by_a_heartbeat() -> None:
+    env = _env_with("https://a.example/1")
+    assert env.links.heartbeat() is None
+    assert env.enricher.run(threading.Event(), limit=1) == 1
+    assert env.links.heartbeat() is not None
+
+
+def test_run_stops_when_the_stop_event_is_set_while_idle() -> None:
+    env = Env()
+    stop = threading.Event()
+    enricher = LinkEnricher(env.links, env.fetcher, env.clock)  # real stop.wait
+    result: list[int] = []
+    th = threading.Thread(target=lambda: result.append(enricher.run(stop)))
+    th.start()
+    stop.set()
+    th.join(timeout=3)  # idle sleeps up to 10 s: only an interruptible wait returns in time
+    stop.set()
+    assert not th.is_alive()
+    assert result == [0]
+
+
+def test_run_exits_on_stop_without_spinning() -> None:
+    env = Env()
+    stop = threading.Event()
+    stop.set()
+    assert env.enricher.run(stop) == 0
+    assert env.waits == []
+
+
+def test_run_until_idle_exits_when_nothing_is_left() -> None:
+    env = _env_with("https://a.example/1")
+    assert env.enricher.run(threading.Event(), until_idle=True) == 1
+    assert env.waits == []

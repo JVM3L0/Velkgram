@@ -324,3 +324,71 @@ def test_garbage_never_raises(url: str, body: str) -> None:
 )
 def test_resolve_url_only(url: str, expected: LinkInfo | None) -> None:
     assert resolve_url_only(url) == expected
+
+
+@pytest.mark.parametrize(
+    "short", ["https://amzn.to/abc", "https://meli.la/abc", "https://s.shopee.com.br/abc"]
+)
+def test_store_short_link_that_never_redirected_is_unknown(short: str) -> None:
+    for status in (200, 0):
+        out = outcome(short, hops=(short,), body="<html></html>" if status else None)
+        info = resolve(short, out)
+        assert info.kind == "unknown", short
+        assert info.store is not None
+
+
+def test_store_page_without_id_is_still_not_product() -> None:
+    url = "https://www.amazon.com.br/stores/page/abc"
+    assert resolve("https://amzn.to/abc", outcome(url, hops=("https://amzn.to/abc", url))).kind == (
+        "not_product"
+    )
+
+
+def test_error_body_on_a_block_status_is_never_read() -> None:
+    url = "https://www.kabum.com.br/produto/123456/ssd"
+    body = '<meta property="og:title" content="Blocked page title">'
+    info = resolve(url, outcome(url, status=403, body=body))
+    assert (info.product_id, info.title, info.image_url) == ("123456", None, None)
+
+
+def test_amazon_page_that_merely_links_the_captcha_path_is_not_blocked() -> None:
+    url = "https://www.amazon.com.br/dp/B0ABCDEFGH"
+    body = (
+        "<html><head><title>Fone</title></head><body>"
+        "<script>var u='/errors/validateCaptcha';</script></body></html>"
+    )
+    assert resolve(url, outcome(url, body=body)).title == "Fone"
+
+
+@pytest.mark.parametrize(
+    "first",
+    [
+        # real shape: plural productIds, inside a redirectUrl, encoded once
+        "https://star.aliexpress.com/share/share.htm?platform=AE&redirectUrl="
+        "https%3A%2F%2Fm.aliexpress.com%2Fp%2Fcoin-index%2Findex.html%3F"
+        "_immersiveMode%3Dtrue%26productIds%3D1005007453597372&sk=_c44",
+        # encoded twice
+        "https://star.aliexpress.com/share/share.htm?redirectUrl="
+        "https%253A%252F%252Fm.aliexpress.com%252Fp%252Fcoin-index%252Findex.html%253F"
+        "productIds%253D1005007453597372%2526x%253Dy",
+        # plain query
+        "https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true"
+        "&productIds=1005007453597372&aff_fsk=_c3k",
+        # three levels deep
+        "https://star.aliexpress.com/share/share.htm?redirectUrl="
+        "https%25253A%25252F%25252Fm.aliexpress.com%25252Fx%25253FproductId%25253D1005007453597372",
+        # direct item page with a slug
+        "https://www.aliexpress.com/item/Smart-Watch-ECG/1005007453597372.html?aff_fsk=_c3V",
+    ],
+)
+def test_aliexpress_product_id_in_a_possibly_nested_first_hop(first: str) -> None:
+    short = "https://s.click.aliexpress.com/e/_abc"
+    info = resolve(short, outcome(first, status=302, hops=(short, first)))
+    assert (info.store, info.product_id, info.kind) == ("aliexpress", "1005007453597372", "product")
+
+
+def test_aliexpress_first_hop_without_id_is_not_product() -> None:
+    short = "https://s.click.aliexpress.com/e/_abc"
+    first = "https://www.aliexpress.com/ssr/300003448/glo-main-venue?disableNav=YES"
+    info = resolve(short, outcome(first, status=302, hops=(short, first)))
+    assert (info.store, info.product_id, info.kind) == ("aliexpress", None, "not_product")

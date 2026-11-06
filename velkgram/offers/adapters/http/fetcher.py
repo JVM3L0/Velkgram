@@ -100,7 +100,7 @@ class HttpxFetcher:
         resolve_host: Callable[[str], list[str]] = _getaddrinfo,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
-        self._client = client or httpx.Client(follow_redirects=False)
+        self._client = client or httpx.Client(follow_redirects=False, trust_env=False)
         self._resolve = resolve_host
         self._monotonic = monotonic
 

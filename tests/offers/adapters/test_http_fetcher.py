@@ -384,3 +384,7 @@ def test_stream_is_closed_at_the_budget_over_a_real_socket(
         server.shutdown()
         server.server_close()
         client.close()
+
+
+def test_default_client_ignores_proxy_environment() -> None:
+    assert HttpxFetcher()._client.trust_env is False
