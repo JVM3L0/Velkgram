@@ -42,7 +42,7 @@ def test_feed_first_page_under_300ms_with_200k_offers(conn: sqlite3.Connection) 
                 f"Produto {i}",
                 (i * 37) % 100000 or None,
                 stores[i % 4],
-                "https://x.test/p",
+                f"https://x.test/p{i % 5000}",
                 i % 2,
                 f"Produto {i} texto de oferta",
                 f"produto {i} texto de oferta",
@@ -53,7 +53,16 @@ def test_feed_first_page_under_300ms_with_200k_offers(conn: sqlite3.Connection) 
                 at,
             )
         )
+    stamp = to_iso(T0)
     with conn:
+        conn.executemany(  # half of the links enriched, so the collapse EXISTS does real work
+            "INSERT INTO product_links (url, store, product_id, kind, status, created_at, "
+            "offer_posted_at, host) VALUES (?,?,?,'product','done',?,?,'x.test')",
+            [
+                (f"https://x.test/p{n}", stores[n % 4], f"P{n % 1250}", stamp, stamp)
+                for n in range(0, 5000, 2)
+            ],
+        )
         conn.executemany(
             "INSERT INTO offers (channel_id, message_id, posted_at, title, price_cents, store, "
             "main_link, has_photo, text, norm_text, origin_channel_id, origin_message_id, "

@@ -269,12 +269,19 @@ class InMemoryOfferRepository:
         for i in range(0, len(rows), batch_size):
             yield rows[i : i + batch_size]
 
-    def priced_points(self, wish_id: int) -> list[tuple[datetime, int | None]]:
+    def priced_points(
+        self, wish_id: int, dominant: tuple[str, str] | None = None
+    ) -> list[tuple[datetime, int | None]]:
         ms = sorted(
             (m for m in self._matches.values() if m.wish_id == wish_id),
             key=lambda m: (m.posted_at, m.channel_id, m.message_id),
         )
         return [(m.posted_at, m.price_cents) for m in ms]
+
+    def dominant_key(self, wish_id: int) -> tuple[str, str] | None:
+        # The dominant-product rule joins product_links, which only SQLite has; it is tested
+        # on SQLite alone (tests/offers/adapters/test_queries_links.py).
+        return None
 
     def recent_store_offers(self, store: str, since: datetime, limit: int = 500) -> list[Offer]:
         found = [

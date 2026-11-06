@@ -24,6 +24,7 @@ def offer(
     kind: OfferKind = OfferKind.product,
     coupon_tiers: tuple[CouponTier, ...] | None = None,
     coupon_discount: str | None = None,
+    link: str | None = "https://x.test/p",
 ) -> Offer:
     when = at or T0 + timedelta(minutes=message_id)
     return Offer(
@@ -33,7 +34,7 @@ def offer(
         title=title,
         price_cents=price,
         store=store,
-        main_link="https://x.test/p",
+        main_link=link,
         has_photo=False,
         text=text,
         norm_text=text.lower() if text else None,
@@ -74,3 +75,22 @@ def match(
         source=source,
         matched_at=o.posted_at,
     )
+
+
+def add_link(
+    conn: sqlite3.Connection,
+    url: str,
+    *,
+    store: str | None = "amazon",
+    product_id: str | None = None,
+    image_url: str | None = None,
+    kind: str = "product",
+) -> None:
+    """Insert an enriched product_links row directly (the enricher is not under test here)."""
+    stamp = T0.isoformat()
+    with conn:
+        conn.execute(
+            "INSERT INTO product_links (url, store, product_id, image_url, kind, status, "
+            "created_at, offer_posted_at, host) VALUES (?,?,?,?,?,'done',?,?,'x.test')",
+            (url, store, product_id, image_url, kind, stamp, stamp),
+        )

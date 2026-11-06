@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 
+from velkgram.offers.domain.dominant import dominant_from_counts
 from velkgram.offers.domain.models import (
     CouponTier,
     MatchSource,
@@ -18,6 +19,12 @@ from velkgram.offers.domain.models import (
 from velkgram.shared.db import transaction
 
 _MIN_INT = -(2**63)
+
+# A match whose link has a product key different from the dominant (store, product_id) given as
+# the two bound parameters. Needs `product_links pl` joined; unkeyed matches are never "other".
+OTHER_PRODUCT_SQL = (
+    "(pl.store IS NOT NULL AND pl.product_id IS NOT NULL AND (pl.store <> ? OR pl.product_id <> ?))"
+)
 
 
 def to_iso(value: datetime) -> str:
@@ -232,16 +239,38 @@ class SqliteOfferRepository:
             if len(rows) < batch_size:
                 return
 
-    def priced_points(self, wish_id: int) -> list[tuple[datetime, int | None]]:
+    def priced_points(
+        self, wish_id: int, dominant: tuple[str, str] | None = None
+    ) -> list[tuple[datetime, int | None]]:
+        other = "0" if dominant is None else OTHER_PRODUCT_SQL
         rows = self._conn.execute(
             "SELECT m.posted_at, CASE WHEN COALESCE(o.comparable, 1) = 1 "
-            "THEN m.price_cents END AS price_cents "
+            f"AND NOT ({other}) THEN m.price_cents END AS price_cents "
             "FROM offer_matches m LEFT JOIN offers o "
             "ON o.channel_id = m.channel_id AND o.message_id = m.message_id "
+            "LEFT JOIN product_links pl ON pl.url = o.main_link "
             "WHERE m.wish_id = ? ORDER BY m.posted_at, m.channel_id, m.message_id",
-            (wish_id,),
+            (*(dominant or ()), wish_id),
         ).fetchall()
         return [(from_iso(r["posted_at"]), _opt_int(r["price_cents"])) for r in rows]
+
+    def dominant_key(self, wish_id: int) -> tuple[str, str] | None:
+        rows = self._conn.execute(
+            "SELECT store, pid, n, SUM(n) OVER () AS total FROM (SELECT pl.store AS store, "
+            "pl.product_id AS pid, COUNT(*) AS n "
+            "FROM offer_matches m JOIN offers o "
+            "ON o.channel_id = m.channel_id AND o.message_id = m.message_id "
+            "JOIN product_links pl ON pl.url = o.main_link "
+            "WHERE m.wish_id = ? AND m.price_cents IS NOT NULL AND o.comparable = 1 "
+            "AND pl.store IS NOT NULL AND pl.product_id IS NOT NULL "
+            "GROUP BY pl.store, pl.product_id) "
+            "ORDER BY n DESC LIMIT 2",
+            (wish_id,),
+        ).fetchall()
+        if not rows:
+            return None
+        counts = [((str(r["store"]), str(r["pid"])), int(r["n"])) for r in rows]
+        return dominant_from_counts(counts, int(rows[0]["total"]))
 
     def recent_store_offers(self, store: str, since: datetime, limit: int = 500) -> list[Offer]:
         rows = self._conn.execute(

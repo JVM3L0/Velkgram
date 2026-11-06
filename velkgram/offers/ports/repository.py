@@ -30,8 +30,17 @@ class OfferRepository(Protocol):
         """Non-deleted offers with `norm_text` since `since`, ordered by (posted_at, ids)."""
         ...
 
-    def priced_points(self, wish_id: int) -> list[tuple[datetime, int | None]]:
-        """Every match as (posted_at, price_cents), oldest first, unknown prices included."""
+    def priced_points(
+        self, wish_id: int, dominant: tuple[str, str] | None = None
+    ) -> list[tuple[datetime, int | None]]:
+        """Every match as (posted_at, price_cents), oldest first, unknown prices included.
+
+        With `dominant` (store, product_id), matches of another keyed product get a None price.
+        """
+        ...
+
+    def dominant_key(self, wish_id: int) -> tuple[str, str] | None:
+        """The wish's dominant (store, product_id) over its comparable priced matches, if any."""
         ...
 
     def recent_store_offers(self, store: str, since: datetime, limit: int = 500) -> list[Offer]:

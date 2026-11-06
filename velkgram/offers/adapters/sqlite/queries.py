@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from velkgram.offers.adapters.sqlite.repository import (
+    OTHER_PRODUCT_SQL,
     SqliteOfferRepository,
     decode_tiers,
     from_iso,
@@ -35,12 +36,50 @@ _RECENT = 30
 _MATCH_JOIN = (
     "offer_matches m JOIN offers o ON o.channel_id = m.channel_id AND o.message_id = m.message_id"
 )
+_PL_JOIN = "LEFT JOIN product_links pl ON pl.url = o.main_link"
 _COMPARABLE_MATCH = "m.price_cents IS NOT NULL AND o.comparable = 1"
 
-_NOT_REPOST = (
-    "NOT (o.origin_channel_id IS NOT NULL AND EXISTS ("
-    "SELECT 1 FROM offers x WHERE x.channel_id = o.origin_channel_id "
-    "AND x.message_id = o.origin_message_id))"
+_FEED_FROM = "offers o LEFT JOIN product_links pl ON pl.url = o.main_link"
+_OFFERS_FROM = "offers o"
+_COLLAPSE_DAYS = 1.0  # 24 h window of the same-product collapse (julianday is in days)
+
+
+def _not_repost(outer: str, inner: str) -> str:
+    return (
+        f"NOT ({outer}.origin_channel_id IS NOT NULL AND EXISTS ("
+        f"SELECT 1 FROM offers {inner} WHERE {inner}.channel_id = {outer}.origin_channel_id "
+        f"AND {inner}.message_id = {outer}.origin_message_id))"
+    )
+
+
+_NOT_REPOST = _not_repost("o", "r")
+
+# Hides `o` when a newer visible offer of the same product and price sits within 24 h.
+# `pl.product_id IS NOT NULL` leads so unenriched rows short-circuit.
+_NOT_SAME_PRODUCT = (
+    "NOT (pl.product_id IS NOT NULL AND o.price_cents IS NOT NULL AND EXISTS ("
+    "SELECT 1 FROM product_links px "
+    "CROSS JOIN offers x INDEXED BY idx_offers_main_link ON x.main_link = px.url "
+    "WHERE px.store = pl.store AND px.product_id = pl.product_id "
+    "AND x.price_cents = o.price_cents AND x.kind = 'product' AND x.deleted = 0 "
+    f"AND {_not_repost('x', 'xr')} "
+    "AND (x.posted_at, x.channel_id, x.message_id) > (o.posted_at, o.channel_id, o.message_id) "
+    f"AND julianday(x.posted_at) - julianday(o.posted_at) <= {_COLLAPSE_DAYS}))"
+)
+
+# Channels of the offers `o` hides (same product and price, older, within 24 h, visible).
+_SEEN_CHANNELS = (
+    "(SELECT GROUP_CONCAT(DISTINCT h.channel_id) FROM product_links ph "
+    "CROSS JOIN offers h INDEXED BY idx_offers_main_link ON h.main_link = ph.url "
+    "WHERE pl.product_id IS NOT NULL AND o.price_cents IS NOT NULL "
+    "AND ph.store = pl.store AND ph.product_id = pl.product_id "
+    "AND h.price_cents = o.price_cents AND h.kind = 'product' AND h.deleted = 0 "
+    f"AND {_not_repost('h', 'hr')} "
+    "AND (h.posted_at, h.channel_id, h.message_id) < (o.posted_at, o.channel_id, o.message_id) "
+    f"AND julianday(o.posted_at) - julianday(h.posted_at) <= {_COLLAPSE_DAYS}) AS seen_channels"
+)
+_IMAGE = (
+    "CASE WHEN pl.kind = 'product' AND pl.product_id IS NOT NULL THEN pl.image_url END AS image_url"
 )
 
 _CARD_COLUMNS = (
@@ -62,7 +101,16 @@ def fts_query(q: str) -> str | None:
     return " ".join(quoted)
 
 
+def _seen_channels(row: sqlite3.Row, keys: set[str]) -> tuple[int, ...]:
+    own = int(row["channel_id"])
+    if "seen_channels" not in keys or row["seen_channels"] is None:
+        return (own,)
+    others = sorted({int(c) for c in str(row["seen_channels"]).split(",")} - {own})
+    return (own, *others)
+
+
 def _card(row: sqlite3.Row) -> OfferCard:
+    keys = set(row.keys())
     return OfferCard(
         channel_id=int(row["channel_id"]),
         message_id=int(row["message_id"]),
@@ -87,6 +135,8 @@ def _card(row: sqlite3.Row) -> OfferCard:
         cart_link=row["cart_link"],
         text=row["text"],
         coupon_tiers=decode_tiers(row["coupon_tiers"]),
+        image_url=row["image_url"] if "image_url" in keys else None,
+        seen_channel_ids=_seen_channels(row, keys),
     )
 
 
@@ -113,6 +163,16 @@ class SqliteOfferQueries:
     @staticmethod
     def _feed_where(f: FeedFilter) -> tuple[list[str], list[object]]:
         where = [_NOT_REPOST, "o.kind = 'product'"]
+        unfiltered = (
+            (f.q is None or fts_query(f.q) is None)
+            and f.min_cents is None
+            and f.max_cents is None
+            and not f.stores
+            and not f.priced_only
+            and f.channel_id is None
+        )
+        if unfiltered:
+            where.append(_NOT_SAME_PRODUCT)
         params: list[object] = []
         match = fts_query(f.q) if f.q is not None else None
         if match is not None:
@@ -160,13 +220,19 @@ class SqliteOfferQueries:
         return where, params
 
     def _page(
-        self, where: list[str], params: list[object], cursor: FeedCursor | None, limit: int
+        self,
+        from_clause: str,
+        columns: str,
+        where: list[str],
+        params: list[object],
+        cursor: FeedCursor | None,
+        limit: int,
     ) -> FeedPage:
         if cursor is not None:
             where = [*where, "(o.posted_at, o.channel_id, o.message_id) < (?, ?, ?)"]
             params = [*params, to_iso(cursor.posted_at), cursor.channel_id, cursor.message_id]
         rows = self._conn.execute(
-            f"SELECT {_CARD_COLUMNS} FROM offers o WHERE {' AND '.join(where)} "
+            f"SELECT {columns} FROM {from_clause} WHERE {' AND '.join(where)} "
             "ORDER BY o.posted_at DESC, o.channel_id DESC, o.message_id DESC LIMIT ?",
             (*params, limit + 1),
         ).fetchall()
@@ -174,9 +240,11 @@ class SqliteOfferQueries:
         more = len(rows) > limit
         return FeedPage(cards, _cursor_of(cards[-1]) if more and cards else None)
 
-    def _count_after(self, where: list[str], params: list[object], since: FeedCursor) -> int:
+    def _count_after(
+        self, from_clause: str, where: list[str], params: list[object], since: FeedCursor
+    ) -> int:
         row = self._conn.execute(
-            f"SELECT COUNT(*) FROM offers o WHERE {' AND '.join(where)} "
+            f"SELECT COUNT(*) FROM {from_clause} WHERE {' AND '.join(where)} "
             "AND (o.posted_at, o.channel_id, o.message_id) > (?, ?, ?)",
             (*params, to_iso(since.posted_at), since.channel_id, since.message_id),
         ).fetchone()
@@ -184,19 +252,21 @@ class SqliteOfferQueries:
 
     def feed(self, f: FeedFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
         where, params = self._feed_where(f)
-        return self._page(where, params, cursor, limit)
+        collapse = _NOT_SAME_PRODUCT in where
+        columns = f"{_CARD_COLUMNS}, {_IMAGE}" + (f", {_SEEN_CHANNELS}" if collapse else "")
+        return self._page(_FEED_FROM, columns, where, params, cursor, limit)
 
     def coupons(self, f: CouponFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
         where, params = self._coupon_where(f)
-        return self._page(where, params, cursor, limit)
+        return self._page(_OFFERS_FROM, _CARD_COLUMNS, where, params, cursor, limit)
 
     def count_feed_after(self, f: FeedFilter, since: FeedCursor) -> int:
         where, params = self._feed_where(f)
-        return self._count_after(where, params, since)
+        return self._count_after(_FEED_FROM, where, params, since)
 
     def count_coupons_after(self, f: CouponFilter, since: FeedCursor) -> int:
         where, params = self._coupon_where(f)
-        return self._count_after(where, params, since)
+        return self._count_after(_OFFERS_FROM, where, params, since)
 
     def active_coupons(
         self,
@@ -250,42 +320,47 @@ class SqliteOfferQueries:
         cursor: FeedCursor | None,
         limit: int = 30,
     ) -> ProductHistory:
-        stats = product_stats(self._repo.priced_points(wish_id), now)
+        dominant = self._repo.dominant_key(wish_id)
+        stats = product_stats(self._repo.priced_points(wish_id, dominant=dominant), now)
         since = None if range_days is None else to_iso(now - timedelta(days=range_days))
-        matches, next_cursor = self.matches_page(wish_id, cursor, limit)
+        matches, next_cursor = self.matches_page(wish_id, cursor, limit, dominant=dominant)
         return ProductHistory(
             stats=stats,
-            points=self._points(wish_id, since),
+            points=self._points(wish_id, since, dominant=dominant),
             matches=matches,
             next_cursor=next_cursor,
             retro=self._repo.get_retro_run(wish_id),
         )
 
-    def _points(self, wish_id: int, since: str | None) -> tuple[PricePoint, ...]:
+    def _points(
+        self, wish_id: int, since: str | None, dominant: tuple[str, str] | None = None
+    ) -> tuple[PricePoint, ...]:
         where = f"{_COMPARABLE_MATCH} AND m.wish_id = ?"
         params: list[object] = [wish_id]
+        join = _MATCH_JOIN
+        if dominant is not None:
+            join = f"{_MATCH_JOIN} {_PL_JOIN}"
+            where += f" AND NOT {OTHER_PRODUCT_SQL}"
+            params.extend(dominant)
         if since is not None:
             where += " AND m.posted_at >= ?"
             params.append(since)
-        distinct_days = self._conn.execute(
-            f"SELECT COUNT(DISTINCT substr(m.posted_at, 1, 10)) FROM {_MATCH_JOIN} WHERE {where}",
+        # One pass per-day first; only the rare few-days case needs the raw rows as well.
+        rows = self._conn.execute(
+            "SELECT substr(m.posted_at, 1, 10) AS day, MIN(m.price_cents) AS low "
+            f"FROM {join} WHERE {where} GROUP BY day ORDER BY day",
             params,
-        ).fetchone()[0]
-        if distinct_days < _MIN_DAYS_FOR_DAILY:
-            rows = self._conn.execute(
-                f"SELECT m.posted_at, m.price_cents FROM {_MATCH_JOIN} WHERE {where} "
+        ).fetchall()
+        if len(rows) < _MIN_DAYS_FOR_DAILY:
+            raw = self._conn.execute(
+                f"SELECT m.posted_at, m.price_cents FROM {join} WHERE {where} "
                 "ORDER BY m.posted_at, m.channel_id, m.message_id",
                 params,
             ).fetchall()
             return tuple(
                 PricePoint(datetime.fromisoformat(r["posted_at"]), int(r["price_cents"]))
-                for r in rows
+                for r in raw
             )
-        rows = self._conn.execute(
-            "SELECT substr(m.posted_at, 1, 10) AS day, MIN(m.price_cents) AS low "
-            f"FROM {_MATCH_JOIN} WHERE {where} GROUP BY day ORDER BY day",
-            params,
-        ).fetchall()
         days = [(datetime.fromisoformat(r["day"]).replace(tzinfo=UTC), int(r["low"])) for r in rows]
         if len(days) > _MAX_POINTS:
             n = len(days)
@@ -296,20 +371,25 @@ class SqliteOfferQueries:
         return tuple(PricePoint(d, p) for d, p in days)
 
     def matches_page(
-        self, wish_id: int, cursor: FeedCursor | None, limit: int = 30
+        self,
+        wish_id: int,
+        cursor: FeedCursor | None,
+        limit: int = 30,
+        dominant: tuple[str, str] | None = None,
     ) -> tuple[tuple[MatchCard, ...], FeedCursor | None]:
+        other = "0" if dominant is None else f"CASE WHEN {OTHER_PRODUCT_SQL} THEN 1 ELSE 0 END"
         where = "m.wish_id = ?"
         params: list[object] = [wish_id]
         if cursor is not None:
             where += " AND (m.posted_at, m.channel_id, m.message_id) < (?, ?, ?)"
             params.extend((to_iso(cursor.posted_at), cursor.channel_id, cursor.message_id))
         rows = self._conn.execute(
-            f"SELECT {_CARD_COLUMNS}, m.source AS source, m.price_cents AS matched_price "
-            "FROM offer_matches m JOIN offers o "
-            "ON o.channel_id = m.channel_id AND o.message_id = m.message_id "
+            f"SELECT {_CARD_COLUMNS}, {_IMAGE}, m.source AS source, "
+            f"m.price_cents AS matched_price, {other} AS other_product "
+            f"FROM {_MATCH_JOIN} {_PL_JOIN} "
             f"WHERE {where} ORDER BY m.posted_at DESC, m.channel_id DESC, m.message_id DESC "
             "LIMIT ?",
-            (*params, limit + 1),
+            (*(dominant or ()), *params, limit + 1),
         ).fetchall()
         page = rows[:limit]
         cards = tuple(
@@ -317,6 +397,7 @@ class SqliteOfferQueries:
                 _card(r),
                 MatchSource(r["source"]),
                 None if r["matched_price"] is None else int(r["matched_price"]),
+                bool(r["other_product"]),
             )
             for r in page
         )
@@ -329,11 +410,13 @@ class SqliteOfferQueries:
             count = self._conn.execute(
                 "SELECT COUNT(*) FROM offer_matches WHERE wish_id = ?", (wid,)
             ).fetchone()[0]
+            dominant = self._repo.dominant_key(wid)
+            other = "" if dominant is None else f"AND NOT {OTHER_PRODUCT_SQL} "
             rows = self._conn.execute(
-                f"SELECT m.price_cents FROM {_MATCH_JOIN} WHERE m.wish_id = ? "
-                f"AND {_COMPARABLE_MATCH} "
+                f"SELECT m.price_cents FROM {_MATCH_JOIN} {_PL_JOIN} WHERE m.wish_id = ? "
+                f"AND {_COMPARABLE_MATCH} {other}"
                 "ORDER BY m.posted_at DESC, m.channel_id DESC, m.message_id DESC LIMIT ?",
-                (wid, _RECENT),
+                (wid, *(dominant or ()), _RECENT),
             ).fetchall()
             recent = tuple(int(r[0]) for r in reversed(rows))
             out[wid] = WishSummary(recent[-1] if recent else None, int(count), recent)
