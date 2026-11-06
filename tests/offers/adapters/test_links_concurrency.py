@@ -52,7 +52,9 @@ def _bulk_offers(conn: sqlite3.Connection, n: int) -> None:
 
 
 def test_upserts_and_link_saves_do_not_lock_each_other(tmp_path: Path) -> None:
-    _run_scenario(tmp_path, bulk=10_000, rounds=5, limit_s=1.0)
+    # Default run: correctness only (no lock errors, real overlap); wall-clock bounds
+    # live in the slow variant so a busy machine can't flake the normal suite.
+    _run_scenario(tmp_path, bulk=10_000, rounds=5, limit_s=None)
 
 
 @pytest.mark.slow
@@ -60,7 +62,7 @@ def test_upserts_and_link_saves_do_not_lock_each_other_at_50k(tmp_path: Path) ->
     _run_scenario(tmp_path, bulk=50_000, rounds=20, limit_s=0.5)
 
 
-def _run_scenario(tmp_path: Path, *, bulk: int, rounds: int, limit_s: float) -> None:
+def _run_scenario(tmp_path: Path, *, bulk: int, rounds: int, limit_s: float | None) -> None:
     db = tmp_path / "c.db"
     setup = connect(db)
     apply_migrations(setup, MIGRATION_PACKAGES)
@@ -132,6 +134,7 @@ def _run_scenario(tmp_path: Path, *, bulk: int, rounds: int, limit_s: float) -> 
     assert errors == []
     assert len(save_times) == 200 and len(upsert_times) == 200
     assert discover_phase_upserts, "discover phase must overlap with upserts"
-    assert max(save_times) < limit_s
-    assert max(upsert_times) < limit_s
-    assert max(discover_phase_upserts) < limit_s
+    if limit_s is not None:
+        assert max(save_times) < limit_s
+        assert max(upsert_times) < limit_s
+        assert max(discover_phase_upserts) < limit_s
