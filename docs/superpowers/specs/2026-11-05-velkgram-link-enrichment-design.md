@@ -41,7 +41,7 @@ Offers carry affiliate and short links. 121 offers have an unknown store, and no
 ## 4. Architecture
 - **Owner:** the offers module. New code:
   - **`offers/domain/links.py`:** pure per-store rules.
-  - **`offers/domain/urls.py`:** pure URL helpers: normalize, strip the query, and `is_safe_https_url`. This moves the core of `safe_href` out of `offers/web/format.py`, which then imports it.
+  - **`offers/domain/urls.py`:** pure URL helpers: strip the query, `host_of`, `is_safe_url` and `is_safe_https_url`. This moves the core of `safe_href` out of `offers/web/format.py`, which then imports it.
   - **`offers/services/enrich.py`:** the loop.
   - **`offers/ports/fetcher.py`:** the `Fetcher` port.
   - **`offers/adapters/http/fetcher.py`:** an httpx-based `HttpxFetcher`, wired only by `apps/cli.py`.
@@ -72,7 +72,7 @@ Offers carry affiliate and short links. 121 offers have an unknown store, and no
 - **Reusing known products.** If the rules can tell the store and product id from the URL alone (Amazon `/dp/`, Shopee, Magalu), and another `done` row already has the same `(store, product_id)` with a title, the loop copies its title and image instead of fetching.
 
 ### 5.2 Fetching (adapter)
-- **Request.** `HttpxFetcher.fetch(url, *, follow: bool, body_budget: int) -> FetchResult(final_url, hops, status, content_type, body)`.
+- **Request.** `HttpxFetcher.fetch(url, plan, before_request, budget_for) -> FetchOutcome(final_url, hops, status, content_type, body, answered_by)`; `before_request` lets the service throttle and pause every hop's host.
   - **Client:** `follow_redirects=False`; redirects are followed manually, at most 5.
   - **Relative `Location` headers** are resolved with `urljoin`. Non-`http(s)` schemes, repeated URLs (loops) and hosts that resolve to loopback, private, link-local or unspecified IPs (checked with `ipaddress` after DNS) stop the chain, with status `invalid`.
   - **Headers:** a generic desktop User-Agent and `Accept-Language: pt-BR`.
@@ -140,7 +140,7 @@ Each URL is written in **its own short transaction**: one link-row update, plus 
 - **Image.**
   - **When:** only when the link has `kind = product`, a product id and an image.
   - **Markup:** `<img loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="">`, with fixed dimensions so nothing shifts.
-  - **Broken images** are hidden through CSS. There is no inline script.
+  - **Broken images** show an empty fixed box on the surface background (no CSS-only failure detection exists). There is no inline script.
   - **The offer's own title** is unchanged.
 - **"visto em N canais".**
   - **Hiding rule:** an SQL predicate next to `_NOT_REPOST` hides an offer `o` when a newer offer `x` exists that matches it on all of these:
@@ -151,7 +151,7 @@ Each URL is written in **its own short transaction**: one link-row update, plus 
   - **Chip:** the visible offer gets "visto em N canais". N is the number of distinct channels among the offers it hides plus itself, counted by a subquery. The chip's `title` lists them.
   - **Interactions:**
     - it composes with `_NOT_REPOST`; forwards are counted once, as reposts;
-    - it is disabled when a channel filter is active, so a channel view never loses an offer to another channel;
+    - it is applied only to the unfiltered feed (no search, price, store or channel filter, `priced_only` off), so a filtered view never loses an offer to a sibling the filter would not show; the hiding offer must itself be visible (not a repost);
     - it applies to the cursor, `count_feed_after` and paging alike, because it is part of the WHERE clause.
   - **Performance:** a test measures the feed query with the join on the volume fixture and keeps the 150 ms limit.
 
