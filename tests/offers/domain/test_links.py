@@ -60,6 +60,8 @@ def test_fixtures_are_small_and_scrubbed() -> None:
         ("https://bit.ly/abc", FetchPlan(True, False, None)),
         ("https://go.promotom.com.br/promocao/x", FetchPlan(True, False, None)),
         ("https://link.amazon/abc", FetchPlan(True, False, None)),
+        ("https://amzn.to/3abc", FetchPlan(True, False, None)),
+        ("https://amzn.divulgador.link/abc", FetchPlan(True, False, None)),
         ("https://www.pichau.com.br/x", FetchPlan(True, False, 64 * KB)),
         ("not a url", FetchPlan(True, False, 64 * KB)),
     ],

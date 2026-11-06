@@ -14,13 +14,14 @@ dependencies = [
   "jinja2",
   "python-multipart",
   "itsdangerous",
+  "httpx",
 ]
 
 [project.scripts]
 velkgram = "velkgram.apps.cli:main"
 
 [dependency-groups]
-dev = ["pytest", "pytest-asyncio", "ruff", "pyright", "import-linter", "ty", "httpx"]
+dev = ["pytest", "pytest-asyncio", "ruff", "pyright", "import-linter", "ty"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["velkgram"]

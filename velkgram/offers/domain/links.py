@@ -13,7 +13,17 @@ KB = 1024
 TITLE_MAX = 200
 _IMAGE_MAX = 2000
 
-_SHORTENERS = frozenset({"cutt.ly", "tidd.ly", "bit.ly", "go.promotom.com.br", "link.amazon"})
+_SHORTENERS = frozenset(
+    {
+        "cutt.ly",
+        "tidd.ly",
+        "bit.ly",
+        "go.promotom.com.br",
+        "link.amazon",
+        "amzn.to",
+        "amzn.divulgador.link",
+    }
+)
 _BUDGETS: dict[str, int] = {
     "amazon": 512 * KB,
     "mercadolivre": 512 * KB,
