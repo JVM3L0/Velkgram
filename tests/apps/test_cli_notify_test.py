@@ -6,7 +6,7 @@ import pytest
 from tests.fakes.bot_client import FakeBotClient
 from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.ports.notifier_state import NotifierStatus
-from velkgram.apps import cli
+from velkgram.apps import notifier_wiring
 from velkgram.apps.cli import MIGRATION_PACKAGES, main
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
@@ -40,7 +40,7 @@ def _setup(
         store.set_chat_id(stored_chat)
         conn.close()
     bot = FakeBotClient()
-    monkeypatch.setattr(cli, "_make_bot_client", lambda _settings: bot)
+    monkeypatch.setattr(notifier_wiring, "make_bot_client", lambda _settings: bot)
     return bot
 
 
@@ -103,3 +103,27 @@ def test_notify_test_requires_telegram_notifier(
     assert main(["notify-test"]) == 2
     assert capsys.readouterr().err.strip() != ""
     assert bot.start_calls == []
+
+
+def test_notify_test_needs_start_prints_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bot = _setup(tmp_path, monkeypatch)
+    bot.send_error = ValueError("peer")
+    assert main(["notify-test"]) == 1
+    out = capsys.readouterr().out.strip()
+    assert out == "falhou: abra o bot no Telegram e toque em Iniciar"
+
+
+def test_notify_test_never_writes_shared_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for failure in (None, ValueError("peer"), RuntimeError("boom")):
+        bot = _setup(tmp_path, monkeypatch, stored_chat=55)
+        bot.send_error = failure
+        conn = connect(tmp_path / "v.db")
+        before = SqliteNotifierStateStore(conn).get()
+        main(["notify-test"])
+        after = SqliteNotifierStateStore(conn).get()
+        conn.close()
+        assert before == after

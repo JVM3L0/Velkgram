@@ -22,7 +22,8 @@ from velkgram.alerting.ports.notifier_state import NotifierStatus
 from velkgram.apps.cli import MIGRATION_PACKAGES, build_parser
 from velkgram.apps.collector import main as collector_main
 from velkgram.apps.collector.collector import Collector
-from velkgram.apps.collector.main import ChatHolder, build_notifier, remember_chat, run, run_loops
+from velkgram.apps.collector.main import build_notifier, remember_chat, run, run_loops
+from velkgram.apps.notifier_wiring import ChatHolder
 from velkgram.ingestion import TelegramDeferred
 from velkgram.shared.config import Settings
 from velkgram.shared.events import ChannelsChanged, MessageData, WishlistChanged
@@ -460,3 +461,52 @@ async def test_run_with_telegram_closes_bot_on_shutdown(tmp_path: Path) -> None:
     assert bot.disconnects >= 1
     store = SqliteNotifierStateStore(_conn(tmp_path))
     assert store.get_chat_id() == 5
+
+
+def test_build_notifier_telegram_without_token_raises(tmp_path: Path) -> None:
+    conn = _conn(tmp_path)
+    settings = Settings(db_path=tmp_path / "v.db", notifier="telegram", alert_bot_token=None)
+    with pytest.raises(ValueError, match="ALERT_BOT_TOKEN is required when NOTIFIER=telegram"):
+        build_notifier(settings, conn, FakeClock(NOW), FakeBotClient())
+    assert SqliteNotifierStateStore(conn).get() is None
+
+
+async def test_run_does_not_wait_for_bot_login(tmp_path: Path) -> None:
+    client = _client()
+    client.get_me = AsyncMock(return_value=MagicMock(id=5))
+    client.run_until_disconnected.side_effect = RuntimeError("stop")
+    bot = FakeBotClient()
+    bot.start_gate = asyncio.Event()  # never released: the login hangs
+    async with asyncio.timeout(5):
+        with pytest.raises(RuntimeError, match="stop"):
+            await run(_tg_settings(tmp_path), client, bot_client=bot)
+    client.run_until_disconnected.assert_awaited_once()
+    assert bot.start_calls == ["tok:SECRET"]
+
+
+@pytest.mark.parametrize("me", [None, MagicMock(id=None, spec=["id"])])
+async def test_remember_chat_without_user_id_is_harmless(
+    me: object, caplog: pytest.LogCaptureFixture
+) -> None:
+    state, holder = _state_with_row(), ChatHolder(None)
+    user = _user()
+    user.get_me = AsyncMock(return_value=me)
+    await remember_chat(user, holder, state)
+    assert holder.current is None and state.get_chat_id() is None
+    assert any(r.message == "get_me_failed" for r in caplog.records)
+
+
+async def test_run_closes_bot_even_if_stop_offer_worker_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def boom(self: Collector) -> None:
+        raise OSError("stop failed")
+
+    monkeypatch.setattr(Collector, "stop_offer_worker", boom)
+    client = _client()
+    client.get_me = AsyncMock(return_value=MagicMock(id=5))
+    client.run_until_disconnected.side_effect = RuntimeError("stop")
+    bot = FakeBotClient()
+    with pytest.raises(OSError, match="stop failed"):
+        await run(_tg_settings(tmp_path), client, bot_client=bot)
+    assert bot.disconnects >= 1

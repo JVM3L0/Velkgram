@@ -14,11 +14,13 @@ from datetime import UTC, date, datetime
 
 from telethon.sessions import StringSession
 
-from velkgram.alerting.adapters.notify_telegram import BotClient, TelegramBotNotifier
+from velkgram.alerting.adapters.notify_telegram import TelegramBotNotifier
 from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.alerting.ports.notifier import NotifierError
 from velkgram.alerting.ports.notifier_state import NotifierStatus
+from velkgram.apps import notifier_wiring
+from velkgram.apps.notifier_wiring import ChatHolder, MemoryNotifierStateStore
 from velkgram.apps.web.auth import hash_password
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.adapters.telethon.client import build_client
@@ -158,29 +160,22 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     return 0
 
 
-def _make_bot_client(settings: Settings) -> BotClient:
-    from velkgram.ingestion.adapters.telethon.client import build_bot_client
-
-    return build_bot_client(settings)
-
-
 async def _notify_test(settings: Settings, conn: sqlite3.Connection) -> int:
     # Never connects the user session: a second connection on the collector's TG_SESSION can
-    # raise AuthKeyDuplicatedError and stop the live collector.
-    from velkgram.apps.collector.main import ChatHolder
-
-    state = SqliteNotifierStateStore(conn)
+    # raise AuthKeyDuplicatedError and stop the live collector. Status writes go to a throwaway
+    # in-memory store so a diagnostic never changes what the Status page shows.
     clock = SystemClock()
-    holder = ChatHolder(settings.alert_chat_id)
+    holder = ChatHolder(settings.alert_chat_id, SqliteNotifierStateStore(conn).get_chat_id())
+    state = MemoryNotifierStateStore()
     if holder.resolve(state) is None:
         print("falhou: sem chat (defina ALERT_CHAT_ID ou rode o coletor uma vez)")
         return 1
     token = settings.alert_bot_token
-    assert token is not None  # load_settings requires it when NOTIFIER=telegram
-    if state.get() is None:
-        state.set(NotifierStatus.ERROR, "iniciando", clock.now())
+    if token is None:
+        raise ValueError("ALERT_BOT_TOKEN is required when NOTIFIER=telegram")
+    state.set(NotifierStatus.ERROR, "iniciando", clock.now())
     bot = TelegramBotNotifier(
-        _make_bot_client(settings),
+        notifier_wiring.make_bot_client(settings),
         token,
         chat_id=lambda: holder.resolve(state),
         state=state,
@@ -190,6 +185,9 @@ async def _notify_test(settings: Settings, conn: sqlite3.Connection) -> int:
         await bot.notify_system("Velkgram: teste de alerta ✅")
     except NotifierError as exc:
         row = state.get()
+        if row is not None and row[0] is NotifierStatus.NEEDS_START:
+            print("falhou: abra o bot no Telegram e toque em Iniciar")
+            return 1
         detail = row[1] if row is not None else None
         suffix = f" ({detail})" if detail and detail != str(exc) else ""
         print(f"falhou: {exc}{suffix}")

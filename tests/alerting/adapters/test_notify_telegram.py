@@ -34,8 +34,8 @@ class Boom(Exception): ...
 
 
 class Env:
-    def __init__(self, chat: int | None = 42) -> None:
-        self.mono = FakeMonotonic()
+    def __init__(self, chat: int | None = 42, mono_start: float = 0.0) -> None:
+        self.mono = FakeMonotonic(mono_start)
         self.client = FakeBotClient(self.mono)
         self.state = InMemoryNotifierStateStore()
         self.chat = chat
@@ -88,7 +88,7 @@ async def test_send_error_becomes_notifier_error_with_class_name(env: Env) -> No
     with pytest.raises(NotifierError, match="Boom") as info:
         await env.notifier.notify(MSG)
     assert info.value.__cause__ is None
-    assert info.value.__suppress_context__
+    assert info.value.__context__ is None
     assert env.status() == (NotifierStatus.ERROR, "Boom")
 
 
@@ -113,6 +113,20 @@ async def test_failed_login_is_throttled_for_60s(env: Env) -> None:
     await env.notifier.notify(MSG)
     assert len(env.client.start_calls) == 2
     assert len(env.client.sent) == 1
+
+
+@pytest.mark.parametrize("via", ["notify", "notify_system", "begin_login"])
+async def test_first_login_is_not_throttled_with_small_monotonic(via: str) -> None:
+    env = Env(mono_start=5.0)
+    if via == "notify":
+        await env.notifier.notify(MSG)
+    elif via == "notify_system":
+        await env.notifier.notify_system("parou")
+    else:
+        env.notifier.begin_login()
+        await asyncio.sleep(0.01)
+    assert len(env.client.start_calls) == 1
+    await env.notifier.aclose()
 
 
 async def test_system_alert_bypasses_login_throttle(env: Env) -> None:
@@ -171,11 +185,12 @@ async def test_hung_disconnect_does_not_block_next_login(env: Env) -> None:
     env.client.start_error = Boom()
     env.client.disconnect_gate = asyncio.Event()
     env.notifier.DISCONNECT_TIMEOUT_S = 0.05
-    with pytest.raises(NotifierError):
+    async with asyncio.timeout(2):
+        with pytest.raises(NotifierError):
+            await env.notifier.notify(MSG)
+        env.mono.value = 60.0
+        env.client.start_error = None
         await env.notifier.notify(MSG)
-    env.mono.value = 60.0
-    env.client.start_error = None
-    await env.notifier.notify(MSG)
     assert len(env.client.start_calls) == 2
 
 
@@ -205,9 +220,13 @@ async def test_no_chat_records_error() -> None:
     assert env.status() == (NotifierStatus.ERROR, "sem chat")
 
 
-async def test_token_never_leaks(env: Env, caplog: pytest.LogCaptureFixture) -> None:
+@pytest.mark.parametrize("path", ["login", "send"])
+async def test_token_never_leaks(env: Env, caplog: pytest.LogCaptureFixture, path: str) -> None:
     caplog.set_level(logging.DEBUG)
-    env.client.start_error = RuntimeError(f"bad {TOKEN}")
+    if path == "login":
+        env.client.start_error = RuntimeError(f"bad {TOKEN}")
+    else:
+        env.client.send_error = RuntimeError(f"x {TOKEN}")
     with pytest.raises(NotifierError) as info:
         await env.notifier.notify(MSG)
     with pytest.raises(NotifierError):
@@ -215,10 +234,15 @@ async def test_token_never_leaks(env: Env, caplog: pytest.LogCaptureFixture) -> 
     assert TOKEN not in caplog.text
     for record in caplog.records:
         assert all(TOKEN not in str(v) for v in record.__dict__.values())
-    exc: BaseException | None = info.value
-    while exc is not None:
+    seen: set[int] = set()
+    pending: list[BaseException] = [info.value]
+    while pending:
+        exc = pending.pop()
+        if id(exc) in seen:
+            continue
+        seen.add(id(exc))
         assert TOKEN not in str(exc)
-        exc = exc.__cause__ or exc.__context__
+        pending += [e for e in (exc.__cause__, exc.__context__) if e is not None]
     row = env.state.get()
     assert row is not None
     assert TOKEN not in str(row[1])

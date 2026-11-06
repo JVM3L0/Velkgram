@@ -5,7 +5,6 @@ import logging
 import os
 import sqlite3
 from collections.abc import Awaitable, Callable, Coroutine
-from dataclasses import dataclass
 from typing import Any
 
 from telethon import TelegramClient
@@ -17,8 +16,8 @@ from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierState
 from velkgram.alerting.ports.notifier_state import NotifierStateStore, NotifierStatus
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
+from velkgram.apps.notifier_wiring import ChatHolder, make_bot_client
 from velkgram.ingestion.adapters.telethon.client import (
-    build_bot_client,
     build_client,
     is_auth_fatal,
 )
@@ -108,21 +107,6 @@ async def _notify_start_failure(notifier: Notifier, exc: Exception) -> None:
         log.exception("start_failure_notify_failed")
 
 
-@dataclass
-class ChatHolder:
-    """Where alerts go: ALERT_CHAT_ID, else this run's get_me(), else the stored chat id."""
-
-    override: int | None
-    current: int | None = None
-
-    def resolve(self, state: NotifierStateStore) -> int | None:
-        if self.override is not None:
-            return self.override
-        if self.current is not None:
-            return self.current
-        return state.get_chat_id()
-
-
 def build_notifier(
     settings: Settings,
     conn: sqlite3.Connection,
@@ -130,15 +114,18 @@ def build_notifier(
     bot_client: BotClient | None = None,
 ) -> tuple[Notifier, TelegramBotNotifier | None, ChatHolder | None]:
     state = SqliteNotifierStateStore(conn)
-    if settings.notifier != "telegram" or settings.alert_bot_token is None:
+    if settings.notifier != "telegram":
         state.set(NotifierStatus.DISABLED, None, clock.now())
         return LogNotifier(), None, None
+    token = settings.alert_bot_token
+    if token is None:
+        raise ValueError("ALERT_BOT_TOKEN is required when NOTIFIER=telegram")
     if state.get() is None:
         state.set(NotifierStatus.ERROR, "iniciando", clock.now())  # set_chat_id needs a row
     holder = ChatHolder(settings.alert_chat_id)
     bot = TelegramBotNotifier(
-        bot_client or build_bot_client(settings),
-        settings.alert_bot_token,
+        bot_client or make_bot_client(settings),
+        token,
         chat_id=lambda: holder.resolve(state),
         state=state,
         clock=clock,
@@ -157,8 +144,12 @@ async def remember_chat(
     except Exception as exc:
         log.warning("get_me_failed", extra={"error": type(exc).__name__})
         return
-    holder.current = me.id  # type: ignore[union-attr]
-    state.set_chat_id(me.id)  # type: ignore[union-attr]
+    chat_id = getattr(me, "id", None)
+    if not isinstance(chat_id, int):
+        log.warning("get_me_failed", extra={"error": "no_user"})
+        return
+    holder.current = chat_id
+    state.set_chat_id(chat_id)
 
 
 async def run(
@@ -221,9 +212,11 @@ async def run(
     finally:
         for t in tasks:
             t.cancel()
-        await collector.stop_offer_worker()  # also the coupon alerter
-        if bot is not None:
-            await bot.aclose()
+        try:
+            await collector.stop_offer_worker()  # also the coupon alerter
+        finally:
+            if bot is not None:
+                await bot.aclose()
     await _idle_forever()
 
 

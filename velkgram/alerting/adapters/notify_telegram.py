@@ -139,17 +139,20 @@ class TelegramBotNotifier:
                 if wait > 0:
                     await self._sleep(wait)
             self._last_send_at = self._monotonic()
+            failure: str | None = None
             try:
                 await self._client.send_message(chat_id, text, link_preview=True)
             except Exception as exc:
-                name = type(exc).__name__
-                if name in self.NEEDS_START:
+                failure = type(exc).__name__
+            if failure is not None:
+                if failure in self.NEEDS_START:
                     self._record(NotifierStatus.NEEDS_START, None)
                 else:
-                    self._record(NotifierStatus.ERROR, name)
-                if name in self.LOGIN_LOST:
+                    self._record(NotifierStatus.ERROR, failure)
+                if failure in self.LOGIN_LOST:
                     self._started = False
-                raise NotifierError(name) from None
+                # Raised outside the except block: no __context__ keeps the raw exception.
+                raise NotifierError(failure)
             self._record(NotifierStatus.OK, None)
 
     async def aclose(self) -> None:

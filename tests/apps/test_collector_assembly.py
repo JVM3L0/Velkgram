@@ -20,7 +20,7 @@ from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
 from velkgram.alerting.ports.notifier_state import NotifierStatus
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
-from velkgram.apps.collector.main import ChatHolder
+from velkgram.apps.notifier_wiring import ChatHolder
 from velkgram.channels import ChannelCommands, ChannelStatus
 from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.ingestion import ResolvedChannel, TelegramDeferred
