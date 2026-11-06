@@ -91,3 +91,28 @@ def test_coupon_migration_adds_columns_and_marks_coupon_titles(tmp_path: Path) -
         (1, "coupon", None, None, None, None, None, None, None, None),
         (2, "product", 1000, None, None, None, None, None, None, None),
     ]
+
+
+def test_migration_006_applies_on_a_populated_database(tmp_path: Path) -> None:
+    c = connect(tmp_path / "pop.db")
+    pass
+    for name in sorted(
+        p.name for p in (files("velkgram.offers") / "migrations").iterdir() if p.name < "006"
+    ):
+        if name.endswith(".sql"):
+            c.executescript((files("velkgram.offers") / "migrations" / name).read_text())
+    c.execute(
+        "INSERT INTO offers (channel_id, message_id, posted_at, title, has_photo, sold_out, "
+        "deleted, updated_at, main_link) VALUES (1, 1, '2026-01-01T00:00:00Z', 't', 0, 0, 0, "
+        "'2026-01-01T00:00:00Z', 'https://a.example/1')"
+    )
+    c.executescript((files("velkgram.offers") / "migrations" / "006_product_links.sql").read_text())
+    cols = {r[1] for r in c.execute("PRAGMA table_info(product_links)")}
+    assert {"offer_posted_at", "host", "final_host", "blocks", "url", "status"} <= cols
+    indexes = {r[1] for r in c.execute("PRAGMA index_list(offers)")}
+    assert "idx_offers_main_link" in indexes
+    assert c.execute("SELECT COUNT(*) FROM offers").fetchone()[0] == 1
+    c.execute("INSERT INTO link_enrich_state (id) VALUES (1)")
+    with pytest.raises(sqlite3.IntegrityError):
+        c.execute("INSERT INTO link_enrich_state (id) VALUES (2)")
+    c.close()

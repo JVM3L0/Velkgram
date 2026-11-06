@@ -112,7 +112,8 @@ _UPSERT = (
     "main_link, has_photo, text, norm_text, origin_channel_id, origin_message_id, sold_out, "
     "deleted, updated_at, comparable, kind, coupons, coupon_discount, coupon_min_cents, "
     "coupon_scope, redeem_link, cart_link, coupon_tiers) VALUES "
-    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+    "(?, ?, ?, ?, ?, COALESCE(?, (SELECT pl.store FROM product_links pl WHERE pl.url = ?)), "
+    "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
     "ON CONFLICT(channel_id, message_id) DO UPDATE SET "
     "posted_at = excluded.posted_at, title = excluded.title, "
     "price_cents = excluded.price_cents, store = excluded.store, "
@@ -140,6 +141,7 @@ class SqliteOfferRepository:
             o.title,
             o.price_cents,
             o.store,
+            o.main_link,  # bound twice: the store fallback looks the link up
             o.main_link,
             int(o.has_photo),
             o.text,
