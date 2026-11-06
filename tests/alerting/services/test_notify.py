@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import pytest
@@ -76,3 +77,28 @@ async def test_log_notifier_logs_alert_and_system(caplog: pytest.LogCaptureFixtu
     assert "system_notified" in messages
     alert = next(r for r in caplog.records if r.getMessage() == "alert_notified")
     assert "RTX 4060" in alert.text  # type: ignore[attr-defined]
+
+
+class _SlowNotifier:
+    def __init__(self, attempt_timeout: float | None) -> None:
+        if attempt_timeout is not None:
+            self.attempt_timeout = attempt_timeout
+
+    async def notify(self, message: AlertMessage) -> None:
+        await asyncio.sleep(0.05)
+
+    async def notify_system(self, text: str) -> None:
+        return None
+
+
+async def test_notifier_attempt_timeout_is_honored() -> None:
+    ok, attempts, error = await send_with_retry(_SlowNotifier(0.01), MSG, sleep=Sleeps(), delays=())
+    assert (ok, attempts, error) == (False, 1, "timeout after 0.01s")
+
+
+async def test_without_attribute_uses_default_timeout() -> None:
+    ok, _, error = await send_with_retry(
+        _SlowNotifier(None), MSG, sleep=Sleeps(), delays=(), attempt_timeout=0.02
+    )
+    assert not ok
+    assert error == "timeout after 0.02s"

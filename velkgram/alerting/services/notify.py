@@ -20,13 +20,15 @@ async def send_with_retry(
     """Return (ok, attempts, last_error); never raises."""
     last_error: str | None = None
     total = len(delays) + 1
+    own = getattr(notifier, "attempt_timeout", None)
+    timeout = own if isinstance(own, int | float) and not isinstance(own, bool) else attempt_timeout
     for attempt in range(1, total + 1):
         try:
-            async with asyncio.timeout(attempt_timeout):
+            async with asyncio.timeout(timeout):
                 await notifier.notify(message)
             return True, attempt, None
         except TimeoutError:
-            last_error = f"timeout after {attempt_timeout}s"
+            last_error = f"timeout after {timeout}s"
         except NotifierError as exc:
             last_error = str(exc) or type(exc).__name__
         except Exception as exc:
