@@ -205,6 +205,14 @@ async def test_lost_authorization_triggers_new_login(env: Env) -> None:
     assert len(env.client.start_calls) == 2
 
 
+async def test_lost_authorization_disconnects_client(env: Env) -> None:
+    await env.notifier.notify(MSG)
+    env.client.send_error = AuthKeyUnregisteredError()
+    with pytest.raises(NotifierError, match="AuthKeyUnregisteredError"):
+        await env.notifier.notify(MSG)
+    assert env.client.disconnects == 1
+
+
 async def test_system_alert_with_hung_send_times_out(env: Env) -> None:
     env.client.send_gate = asyncio.Event()
     env.notifier.SYSTEM_TIMEOUT_S = 0.05

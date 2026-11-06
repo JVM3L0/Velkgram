@@ -151,6 +151,7 @@ class TelegramBotNotifier:
                     self._record(NotifierStatus.ERROR, failure)
                 if failure in self.LOGIN_LOST:
                     self._started = False
+                    await self._disconnect()
                 # Raised outside the except block: no __context__ keeps the raw exception.
                 raise NotifierError(failure)
             self._record(NotifierStatus.OK, None)
