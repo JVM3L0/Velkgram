@@ -24,7 +24,7 @@ def test_cli_help_lists_subcommands(capsys: pytest.CaptureFixture[str]) -> None:
         main(["--help"])
     assert exc.value.code == 0
     out = capsys.readouterr().out
-    for cmd in ("migrate", "login", "hash-password"):
+    for cmd in ("migrate", "login", "hash-password", "notify-test"):
         assert cmd in out
 
 

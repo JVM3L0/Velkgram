@@ -1,6 +1,8 @@
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.apps.web_support import make_client, make_settings
@@ -232,3 +234,80 @@ def test_enrich_status_line_with_heartbeat(tmp_path: Path) -> None:
 def test_enrich_status_line_not_run_yet(tmp_path: Path) -> None:
     html = _client(tmp_path).get("/status").text
     assert "Enriquecimento de links: ainda não executado" in html
+
+
+def _notifier_row(tmp_path: Path, status: str, detail: str | None = None) -> None:
+    conn = connect(make_settings(tmp_path).db_path)
+    try:
+        conn.execute(
+            "INSERT INTO notifier_state (id, status, detail, updated_at) VALUES (1, ?, ?, ?)",
+            (status, detail, _iso(NOW)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize(
+    ("status", "detail", "line"),
+    [
+        ("ok", None, "Bot de alertas: conectado"),
+        (
+            "needs_start",
+            None,
+            "Bot de alertas: abra o bot no Telegram e toque em Iniciar",
+        ),
+        ("error", "AccessTokenInvalidError", "Bot de alertas: erro (AccessTokenInvalidError)"),
+        ("disabled", None, "Bot de alertas: desativado (NOTIFIER=log)"),
+    ],
+)
+def test_status_shows_exactly_one_bot_line(
+    tmp_path: Path, status: str, detail: str | None, line: str
+) -> None:
+    client = _client(tmp_path)
+    _notifier_row(tmp_path, status, detail)
+    page = client.get("/status").text
+    assert line in page
+    assert page.count("Bot de alertas:") == 1
+
+
+def test_status_has_no_bot_line_without_a_row(tmp_path: Path) -> None:
+    assert "Bot de alertas" not in _client(tmp_path).get("/status").text
+
+
+def test_status_has_no_bot_line_when_the_callable_is_not_wired(tmp_path: Path) -> None:
+    from collections.abc import Iterator
+
+    from fastapi import FastAPI
+    from starlette.middleware.sessions import SessionMiddleware
+
+    from velkgram.apps.web.main import _build_templates  # pyright: ignore[reportPrivateUsage]
+    from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
+    from velkgram.ingestion.web.router import build_router
+
+    make_client(tmp_path)  # migrates the temp DB
+    _notifier_row(tmp_path, "ok")
+    conn = connect(make_settings(tmp_path).db_path)
+
+    def get_conn() -> Iterator[sqlite3.Connection]:
+        yield conn
+
+    app = FastAPI()
+    app.add_middleware(SessionMiddleware, secret_key="k")
+    app.include_router(
+        build_router(
+            get_conn=get_conn,
+            templates=_build_templates(),
+            make_queries=SqliteIngestionQueries,
+            channels=lambda _c: [],
+            recent_failures=lambda _c: [],
+            clock=FakeClock(NOW),
+        ),
+        prefix="/status",
+    )
+    try:
+        page = TestClient(app).get("/status")
+        assert page.status_code == 200
+        assert "Bot de alertas" not in page.text
+    finally:
+        conn.close()

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sqlite3
 from collections.abc import AsyncIterator
 from dataclasses import replace
@@ -7,14 +8,19 @@ from pathlib import Path
 
 import pytest
 
+from tests.fakes.bot_client import FakeBotClient, FakeMonotonic
 from tests.fakes.clock import FakeClock
 from tests.fakes.messages import NOW, msg
 from tests.fakes.notifier import FakeNotifier
 from tests.fakes.telegram import FakeTelegramGateway
 from velkgram.alerting import Alert, AlertKind, AlertStatus
+from velkgram.alerting.adapters.notify_telegram import TelegramBotNotifier
+from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
+from velkgram.alerting.ports.notifier_state import NotifierStatus
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
+from velkgram.apps.collector.main import ChatHolder
 from velkgram.channels import ChannelCommands, ChannelStatus
 from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.ingestion import ResolvedChannel, TelegramDeferred
@@ -511,3 +517,63 @@ async def test_retry_of_an_over_max_alert_keeps_the_suffix(env: Env) -> None:
     assert rebuilt is not None
     assert rebuilt.over_max_cents == 50000
     assert rebuilt.coupon_lines == ()
+
+
+# --- telegram bot notifier end to end -----------------------------------------------------
+
+
+def _bot_env(env: Env, bot: FakeBotClient, chat: int | None = 777) -> TelegramBotNotifier:
+    mono = FakeMonotonic()
+    state = SqliteNotifierStateStore(env.conn)
+    state.set(NotifierStatus.ERROR, "iniciando", env.clock.now())
+    holder = ChatHolder(chat)
+    notifier = TelegramBotNotifier(
+        bot,
+        "tok:SECRET",
+        chat_id=lambda: holder.resolve(state),
+        state=state,
+        clock=env.clock,
+        monotonic=mono,
+        sleep=mono.sleep,
+    )
+    env.notifier = notifier  # type: ignore[assignment]
+    env.build()
+    return notifier
+
+
+async def _post_offer(env: Env) -> None:
+    env.channel()
+    env.wish()
+    await env.collector.start()
+    await env.collector.ingestor.on_new(msg(1, CH, "Teclado mecanico R$ 200"))
+    await env.bus.drain()
+    await env.collector.evaluator.wait_idle()
+
+
+async def test_offer_alert_reaches_the_fake_bot_at_the_resolved_chat(env: Env) -> None:
+    bot = FakeBotClient()
+    _bot_env(env, bot, chat=777)
+    await _post_offer(env)
+    assert env.count("alerts", "status='sent'") == 1
+    assert [c for c, _t, _p in bot.sent] == [777]
+    assert "Teclado" in bot.sent[0][1]
+    row = SqliteNotifierStateStore(env.conn).get()
+    assert row is not None and row[0] is NotifierStatus.OK
+
+
+async def test_failing_bot_login_fails_the_alert_without_leaking_the_token(
+    env: Env, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    bot = FakeBotClient()
+    bot.start_error = RuntimeError("login rejected tok:SECRET")
+    _bot_env(env, bot)
+    await _post_offer(env)
+    assert env.count("alerts", "status='failed'") == 1
+    row = SqliteNotifierStateStore(env.conn).get()
+    assert row is not None and row[:2] == (NotifierStatus.ERROR, "RuntimeError")
+    assert bot.sent == []
+    for r in caplog.records:
+        assert "SECRET" not in r.getMessage()
+        assert "SECRET" not in str(r.__dict__)
+        assert "SECRET" not in (caplog.handler.format(r) if caplog.handler else "")

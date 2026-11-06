@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
@@ -8,12 +9,20 @@ import pytest
 from telethon import errors
 
 from tests.apps.test_collector_assembly import CH, RES, Env
-from tests.fakes.messages import msg
+from tests.fakes.bot_client import FakeBotClient
+from tests.fakes.clock import FakeClock
+from tests.fakes.messages import NOW, msg
 from tests.fakes.notifier import FakeNotifier
+from tests.fakes.notifier_state import InMemoryNotifierStateStore
 from tests.fakes.telegram import FakeTelegramGateway
-from velkgram.apps.cli import build_parser
+from velkgram.alerting.adapters.notify_log import LogNotifier
+from velkgram.alerting.adapters.notify_telegram import TelegramBotNotifier
+from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
+from velkgram.alerting.ports.notifier_state import NotifierStatus
+from velkgram.apps.cli import MIGRATION_PACKAGES, build_parser
+from velkgram.apps.collector import main as collector_main
 from velkgram.apps.collector.collector import Collector
-from velkgram.apps.collector.main import run, run_loops
+from velkgram.apps.collector.main import ChatHolder, build_notifier, remember_chat, run, run_loops
 from velkgram.ingestion import TelegramDeferred
 from velkgram.shared.config import Settings
 from velkgram.shared.events import ChannelsChanged, MessageData, WishlistChanged
@@ -313,3 +322,141 @@ async def test_startup_order(tmp_path: Path) -> None:
 
 def test_cli_has_collector_subcommand() -> None:
     assert build_parser().parse_args(["collector"]).command == "collector"
+
+
+# --- notifier wiring ---------------------------------------------------------------------
+
+
+def _tg_settings(tmp_path: Path, chat: int | None = None) -> Settings:
+    return Settings(
+        db_path=tmp_path / "v.db",
+        notifier="telegram",
+        alert_bot_token="tok:SECRET",
+        alert_chat_id=chat,
+    )
+
+
+def _conn(tmp_path: Path) -> sqlite3.Connection:
+    from velkgram.shared.db import connect
+    from velkgram.shared.migrate import apply_migrations
+
+    conn = connect(tmp_path / "v.db")
+    apply_migrations(conn, MIGRATION_PACKAGES)
+    return conn
+
+
+def test_build_notifier_log_records_disabled(tmp_path: Path) -> None:
+    conn = _conn(tmp_path)
+    notifier, bot, holder = build_notifier(
+        Settings(db_path=tmp_path / "v.db"), conn, FakeClock(NOW)
+    )
+    assert isinstance(notifier, LogNotifier)
+    assert bot is None and holder is None
+    row = SqliteNotifierStateStore(conn).get()
+    assert row is not None and row[0] is NotifierStatus.DISABLED
+
+
+def test_build_notifier_telegram_records_starting_on_empty_table(tmp_path: Path) -> None:
+    conn = _conn(tmp_path)
+    notifier, bot, holder = build_notifier(
+        _tg_settings(tmp_path), conn, FakeClock(NOW), FakeBotClient()
+    )
+    assert notifier is bot and isinstance(bot, TelegramBotNotifier)
+    assert holder is not None and holder.override is None
+    row = SqliteNotifierStateStore(conn).get()
+    assert row is not None and row[:2] == (NotifierStatus.ERROR, "iniciando")
+
+
+def test_build_notifier_telegram_keeps_existing_row(tmp_path: Path) -> None:
+    conn = _conn(tmp_path)
+    SqliteNotifierStateStore(conn).set(NotifierStatus.OK, None, NOW)
+    build_notifier(_tg_settings(tmp_path), conn, FakeClock(NOW), FakeBotClient())
+    row = SqliteNotifierStateStore(conn).get()
+    assert row is not None and row[:2] == (NotifierStatus.OK, None)
+
+
+def test_chat_holder_resolution_order() -> None:
+    state = InMemoryNotifierStateStore()
+    state.set(NotifierStatus.OK, None, NOW)
+    state.set_chat_id(3)
+    assert ChatHolder(None).resolve(state) == 3
+    assert ChatHolder(None, 2).resolve(state) == 2
+    assert ChatHolder(1, 2).resolve(state) == 1
+
+
+def _user(me_id: int = 42) -> MagicMock:
+    user = MagicMock()
+    user.get_me = AsyncMock(return_value=MagicMock(id=me_id))
+    return user
+
+
+def _state_with_row() -> InMemoryNotifierStateStore:
+    state = InMemoryNotifierStateStore()
+    state.set(NotifierStatus.ERROR, "iniciando", NOW)
+    return state
+
+
+async def test_remember_chat_stores_me_id() -> None:
+    state, holder = _state_with_row(), ChatHolder(None)
+    await remember_chat(_user(42), holder, state)
+    assert holder.current == 42 and state.get_chat_id() == 42
+
+
+async def test_remember_chat_override_never_calls_get_me() -> None:
+    user, state = _user(), _state_with_row()
+    await remember_chat(user, ChatHolder(7), state)
+    user.get_me.assert_not_called()
+    assert state.get_chat_id() is None
+
+
+async def test_remember_chat_failure_logs_and_keeps_stored_chat(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    state, holder = _state_with_row(), ChatHolder(None)
+    state.set_chat_id(9)
+    user = _user()
+    user.get_me.side_effect = ConnectionError("down")
+    await remember_chat(user, holder, state)
+    assert holder.current is None and holder.resolve(state) == 9
+    rec = [r for r in caplog.records if r.message == "get_me_failed"]
+    assert rec and rec[0].__dict__["error"] == "ConnectionError"
+
+
+async def test_remember_chat_hang_times_out(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(collector_main, "GET_ME_TIMEOUT_S", 0.01)
+    state, holder = _state_with_row(), ChatHolder(None)
+    state.set_chat_id(9)
+    user = _user()
+
+    async def hang() -> None:
+        await asyncio.Event().wait()
+
+    user.get_me = hang
+    await remember_chat(user, holder, state)
+    assert holder.resolve(state) == 9
+    assert any(r.message == "get_me_failed" for r in caplog.records)
+
+
+async def test_run_with_log_notifier_records_disabled(tmp_path: Path) -> None:
+    client = _client()
+    task = asyncio.create_task(run(_settings(tmp_path), client))
+    await _settle()
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    row = SqliteNotifierStateStore(_conn(tmp_path)).get()
+    assert row is not None and row[0] is NotifierStatus.DISABLED
+
+
+async def test_run_with_telegram_closes_bot_on_shutdown(tmp_path: Path) -> None:
+    client = _client()
+    client.get_me = AsyncMock(return_value=MagicMock(id=5))
+    client.run_until_disconnected.side_effect = RuntimeError("stop")
+    bot = FakeBotClient()
+    with pytest.raises(RuntimeError):
+        await run(_tg_settings(tmp_path), client, bot_client=bot)
+    assert bot.start_calls == ["tok:SECRET"]
+    assert bot.disconnects >= 1
+    store = SqliteNotifierStateStore(_conn(tmp_path))
+    assert store.get_chat_id() == 5

@@ -19,6 +19,7 @@ import velkgram.channels.web as channels_web
 import velkgram.ingestion.web as ingestion_web
 import velkgram.offers.web as offers_web
 import velkgram.wishlist.web as wishlist_web
+from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.alerting.web.router import build_router as build_alerts_router
 from velkgram.apps.web.auth import verify_password
@@ -162,6 +163,16 @@ def _enrich_status(conn: sqlite3.Connection) -> dict[str, object] | None:
     return {"last_run_at": beat.last_run_at, "pending": beat.pending, "blocked": beat.blocked}
 
 
+def _notifier_status(conn: sqlite3.Connection) -> dict[str, object] | None:
+    try:
+        row = SqliteNotifierStateStore(conn).get()
+    except sqlite3.OperationalError:
+        return None
+    if row is None:
+        return None
+    return {"status": row[0].value, "detail": row[1]}
+
+
 def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
     settings = settings or load_settings(os.environ)
     if not settings.web_secret_key:
@@ -272,6 +283,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             recent_failures=_recent_failures,
             clock=clock,
             enrich_status=_enrich_status,
+            notifier_status=_notifier_status,
         ),
         prefix="/status",
         dependencies=[Depends(require_user)],

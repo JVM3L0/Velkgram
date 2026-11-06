@@ -5,6 +5,7 @@ import asyncio
 import getpass
 import os
 import signal
+import sqlite3
 import sys
 import threading
 from collections.abc import Callable, Sequence
@@ -13,7 +14,11 @@ from datetime import UTC, date, datetime
 
 from telethon.sessions import StringSession
 
+from velkgram.alerting.adapters.notify_telegram import BotClient, TelegramBotNotifier
+from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
+from velkgram.alerting.ports.notifier import NotifierError
+from velkgram.alerting.ports.notifier_state import NotifierStatus
 from velkgram.apps.web.auth import hash_password
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.adapters.telethon.client import build_client
@@ -29,7 +34,7 @@ from velkgram.reporting.adapters.ingestion_api import IngestionMessageStats
 from velkgram.reporting.services.metrics import build_report
 from velkgram.reporting.services.render import render_report
 from velkgram.shared.adapters.clock_system import SystemClock
-from velkgram.shared.config import load_settings
+from velkgram.shared.config import Settings, load_settings
 from velkgram.shared.db import connect
 from velkgram.shared.logging import configure_logging
 from velkgram.shared.migrate import apply_migrations
@@ -153,6 +158,63 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     return 0
 
 
+def _make_bot_client(settings: Settings) -> BotClient:
+    from velkgram.ingestion.adapters.telethon.client import build_bot_client
+
+    return build_bot_client(settings)
+
+
+async def _notify_test(settings: Settings, conn: sqlite3.Connection) -> int:
+    # Never connects the user session: a second connection on the collector's TG_SESSION can
+    # raise AuthKeyDuplicatedError and stop the live collector.
+    from velkgram.apps.collector.main import ChatHolder
+
+    state = SqliteNotifierStateStore(conn)
+    clock = SystemClock()
+    holder = ChatHolder(settings.alert_chat_id)
+    if holder.resolve(state) is None:
+        print("falhou: sem chat (defina ALERT_CHAT_ID ou rode o coletor uma vez)")
+        return 1
+    token = settings.alert_bot_token
+    assert token is not None  # load_settings requires it when NOTIFIER=telegram
+    if state.get() is None:
+        state.set(NotifierStatus.ERROR, "iniciando", clock.now())
+    bot = TelegramBotNotifier(
+        _make_bot_client(settings),
+        token,
+        chat_id=lambda: holder.resolve(state),
+        state=state,
+        clock=clock,
+    )
+    try:
+        await bot.notify_system("Velkgram: teste de alerta ✅")
+    except NotifierError as exc:
+        row = state.get()
+        detail = row[1] if row is not None else None
+        suffix = f" ({detail})" if detail and detail != str(exc) else ""
+        print(f"falhou: {exc}{suffix}")
+        return 1
+    finally:
+        await bot.aclose()
+    print("enviado")
+    return 0
+
+
+def cmd_notify_test(_args: argparse.Namespace) -> int:
+    settings = load_settings(os.environ)
+    configure_logging(settings.log_level)
+    if settings.notifier != "telegram":
+        print("NOTIFIER is not telegram; nothing to test", file=sys.stderr)
+        return 2
+    settings.db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = connect(settings.db_path)
+    try:
+        apply_migrations(conn, MIGRATION_PACKAGES)
+        return asyncio.run(_notify_test(settings, conn))
+    finally:
+        conn.close()
+
+
 def _date(value: str) -> date:
     try:
         return date.fromisoformat(value)
@@ -168,6 +230,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "report": _report,
     "rebuild-offers": cmd_rebuild_offers,
     "enrich": cmd_enrich,
+    "notify-test": cmd_notify_test,
 }
 
 
@@ -179,6 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("hash-password", help="hash a web password for WEB_PASSWORD_HASH")
     sub.add_parser("collector", help="run the Telegram collector")
     sub.add_parser("rebuild-offers", help="rebuild offers and wish matches from stored messages")
+    sub.add_parser("notify-test", help="send a test alert through the Telegram bot")
     enrich = sub.add_parser("enrich", help="follow offer links to learn store, title and image")
     enrich.add_argument("--once", action="store_true", help="exit once nothing is due")
     enrich.add_argument("--limit", type=int, default=None, help="stop after N links")
