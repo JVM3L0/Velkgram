@@ -22,6 +22,19 @@ _STATE_PT: dict[ConnectionState, str] = {
 }
 
 
+def _bot_line(raw: dict[str, object] | None) -> str | None:
+    if raw is None:
+        return None
+    status, detail = raw["status"], raw["detail"]
+    if status == "ok":
+        return "Bot de alertas: conectado"
+    if status == "needs_start":
+        return "Bot de alertas: abra o bot no Telegram e toque em Iniciar"
+    if status == "disabled":
+        return "Bot de alertas: desativado (NOTIFIER=log)"
+    return f"Bot de alertas: erro ({detail})" if detail else "Bot de alertas: erro"
+
+
 def build_router(
     *,
     get_conn: Callable[..., Iterator[sqlite3.Connection]],
@@ -31,6 +44,7 @@ def build_router(
     recent_failures: Callable[[sqlite3.Connection], list[tuple[str, str, datetime]]],
     clock: Clock,
     enrich_status: Callable[[sqlite3.Connection], dict[str, object] | None] | None = None,
+    notifier_status: Callable[[sqlite3.Connection], dict[str, object] | None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -83,6 +97,7 @@ def build_router(
                 enrich.update(
                     ago=ago(now - last_run), pending=raw["pending"], blocked=raw["blocked"]
                 )
+        bot_line = _bot_line(notifier_status(conn)) if notifier_status is not None else None
         return templates.TemplateResponse(
             request,
             "status.html",
@@ -92,6 +107,7 @@ def build_router(
                 "channels": rows,
                 "failures": recent_failures(conn),
                 "enrich": enrich,
+                "bot_line": bot_line,
                 "stale_after_seconds": int(HEARTBEAT_STALE_AFTER.total_seconds()),
             },
         )

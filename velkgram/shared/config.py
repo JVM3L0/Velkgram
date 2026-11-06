@@ -13,7 +13,9 @@ class Settings:
     tg_api_hash: str | None = None
     tg_session: str | None = None
     db_path: Path = Path("./data/velkgram.db")
-    notifier: Literal["log"] = "log"
+    notifier: Literal["log", "telegram"] = "log"
+    alert_bot_token: str | None = None
+    alert_chat_id: int | None = None
     web_password_hash: str | None = None
     web_secret_key: str | None = None
     log_level: str = "INFO"
@@ -27,7 +29,9 @@ class Settings:
         return (
             f"Settings(tg_api_id={self.tg_api_id!r}, tg_api_hash={mask(self.tg_api_hash)}, "
             f"tg_session={mask(self.tg_session)}, db_path={self.db_path!r}, "
-            f"notifier={self.notifier!r}, web_password_hash={mask(self.web_password_hash)}, "
+            f"notifier={self.notifier!r}, alert_bot_token={mask(self.alert_bot_token)}, "
+            f"alert_chat_id={self.alert_chat_id!r}, "
+            f"web_password_hash={mask(self.web_password_hash)}, "
             f"web_secret_key={mask(self.web_secret_key)}, log_level={self.log_level!r}, "
             f"retention_days={self.retention_days}, app_timezone={self.app_timezone.key!r})"
         )
@@ -57,10 +61,28 @@ def _app_timezone(env: Mapping[str, str]) -> ZoneInfo:
         raise ValueError(f"unknown APP_TIMEZONE: {name}") from exc
 
 
+def _alert_chat_id(env: Mapping[str, str]) -> int | None:
+    raw = _value(env, "ALERT_CHAT_ID", "")
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError("ALERT_CHAT_ID must be an integer") from None
+
+
 def load_settings(env: Mapping[str, str]) -> Settings:
-    notifier = _value(env, "NOTIFIER", "log")
-    if notifier != "log":
-        raise ValueError(f"unknown NOTIFIER: {notifier}")
+    raw_notifier = _value(env, "NOTIFIER", "log")
+    notifier: Literal["log", "telegram"]
+    if raw_notifier == "log":
+        notifier = "log"
+    elif raw_notifier == "telegram":
+        notifier = "telegram"
+    else:
+        raise ValueError(f"unknown NOTIFIER: {raw_notifier}")
+    token = _value(env, "ALERT_BOT_TOKEN", "") or None
+    if notifier == "telegram" and token is None:
+        raise ValueError("ALERT_BOT_TOKEN is required when NOTIFIER=telegram")
     api_id = env.get("TG_API_ID")
     return Settings(
         tg_api_id=int(api_id) if api_id else None,
@@ -68,6 +90,8 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         tg_session=env.get("TG_SESSION") or None,
         db_path=Path(_value(env, "DB_PATH", "./data/velkgram.db")),
         notifier=notifier,
+        alert_bot_token=token,
+        alert_chat_id=_alert_chat_id(env),
         web_password_hash=env.get("WEB_PASSWORD_HASH") or None,
         web_secret_key=env.get("WEB_SECRET_KEY") or None,
         log_level=_value(env, "LOG_LEVEL", "INFO"),

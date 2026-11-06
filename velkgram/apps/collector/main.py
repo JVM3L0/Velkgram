@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import sqlite3
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 
@@ -10,9 +11,16 @@ from telethon import TelegramClient
 
 from velkgram.alerting import Notifier
 from velkgram.alerting.adapters.notify_log import LogNotifier
+from velkgram.alerting.adapters.notify_telegram import BotClient, TelegramBotNotifier
+from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
+from velkgram.alerting.ports.notifier_state import NotifierStateStore, NotifierStatus
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
-from velkgram.ingestion.adapters.telethon.client import build_client, is_auth_fatal
+from velkgram.apps.notifier_wiring import ChatHolder, make_bot_client
+from velkgram.ingestion.adapters.telethon.client import (
+    build_client,
+    is_auth_fatal,
+)
 from velkgram.ingestion.adapters.telethon.gateway import TelethonGateway
 from velkgram.ingestion.adapters.telethon.listener import register_handlers
 from velkgram.shared.adapters.bus_memory import MemoryBus
@@ -23,7 +31,7 @@ from velkgram.shared.db import connect
 from velkgram.shared.events import ChannelsChanged, WishlistChanged
 from velkgram.shared.logging import configure_logging
 from velkgram.shared.migrate import apply_migrations
-from velkgram.shared.ports import ChangeSignal
+from velkgram.shared.ports import ChangeSignal, Clock
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +39,7 @@ SIGNAL_INTERVAL_S = 3.0
 GAP_CHECK_INTERVAL_S = 600.0
 RETRY_INTERVAL_S = 60.0
 HOUSEKEEPING_INTERVAL_S = 30.0
+GET_ME_TIMEOUT_S = 5.0
 
 Sleep = Callable[[float], Awaitable[None]]
 
@@ -98,17 +107,69 @@ async def _notify_start_failure(notifier: Notifier, exc: Exception) -> None:
         log.exception("start_failure_notify_failed")
 
 
+def build_notifier(
+    settings: Settings,
+    conn: sqlite3.Connection,
+    clock: Clock,
+    bot_client: BotClient | None = None,
+) -> tuple[Notifier, TelegramBotNotifier | None, ChatHolder | None]:
+    state = SqliteNotifierStateStore(conn)
+    if settings.notifier != "telegram":
+        state.set(NotifierStatus.DISABLED, None, clock.now())
+        return LogNotifier(), None, None
+    token = settings.alert_bot_token
+    if token is None:
+        raise ValueError("ALERT_BOT_TOKEN is required when NOTIFIER=telegram")
+    if state.get() is None:
+        state.set(NotifierStatus.ERROR, "iniciando", clock.now())  # set_chat_id needs a row
+    holder = ChatHolder(settings.alert_chat_id)
+    bot = TelegramBotNotifier(
+        bot_client or make_bot_client(settings),
+        token,
+        chat_id=lambda: holder.resolve(state),
+        state=state,
+        clock=clock,
+    )
+    return bot, bot, holder
+
+
+async def remember_chat(
+    client: TelegramClient, holder: ChatHolder, state: NotifierStateStore
+) -> None:
+    if holder.override is not None:
+        return
+    try:
+        async with asyncio.timeout(GET_ME_TIMEOUT_S):
+            me = await client.get_me()  # type: ignore[misc]
+    except Exception as exc:
+        log.warning("get_me_failed", extra={"error": type(exc).__name__})
+        return
+    chat_id = getattr(me, "id", None)
+    if not isinstance(chat_id, int):
+        log.warning("get_me_failed", extra={"error": "no_user"})
+        return
+    holder.current = chat_id
+    state.set_chat_id(chat_id)
+
+
 async def run(
     settings: Settings,
     client: TelegramClient,
     notifier: Notifier | None = None,
     sleep: Sleep = asyncio.sleep,
+    *,
+    bot_client: BotClient | None = None,
 ) -> None:
     clock = SystemClock()
     conn = connect(settings.db_path)
     apply_migrations(conn, MIGRATION_PACKAGES)  # fatal() writes a heartbeat row
     gateway = TelethonGateway(client, clock)
-    notifier_ = notifier or LogNotifier()
+    bot: TelegramBotNotifier | None = None
+    holder: ChatHolder | None = None
+    if notifier is None:
+        notifier_, bot, holder = build_notifier(settings, conn, clock, bot_client)
+    else:
+        notifier_ = notifier
     collector = Collector(
         conn,
         gateway,
@@ -121,11 +182,15 @@ async def run(
     )
     tasks: list[asyncio.Task[None]] = []
     try:
+        if bot is not None:
+            bot.begin_login()  # background; never blocks the user client's startup
         await client.connect()  # type: ignore[misc]
         await client.catch_up()  # type: ignore[misc]
         if not await client.is_user_authorized():
             await collector.fatal("session not authorized")
         else:
+            if holder is not None:
+                await remember_chat(client, holder, SqliteNotifierStateStore(conn))
             await gateway.warm_entity_cache()
             register_handlers(client, collector.ingestor, clock)
             # Baseline before start(): web changes made during startup are still published.
@@ -147,7 +212,11 @@ async def run(
     finally:
         for t in tasks:
             t.cancel()
-        await collector.stop_offer_worker()  # also the coupon alerter
+        try:
+            await collector.stop_offer_worker()  # also the coupon alerter
+        finally:
+            if bot is not None:
+                await bot.aclose()
     await _idle_forever()
 
 

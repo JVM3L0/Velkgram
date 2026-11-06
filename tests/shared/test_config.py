@@ -72,3 +72,40 @@ def test_blank_retention_and_timezone_mean_default(blank: str) -> None:
     s = load_settings({"RETENTION_DAYS": blank, "APP_TIMEZONE": blank})
     assert s.retention_days == 90
     assert s.app_timezone == ZoneInfo("America/Sao_Paulo")
+
+
+def test_notifier_default_and_blank_are_log() -> None:
+    assert load_settings({}).notifier == "log"
+    assert load_settings({"NOTIFIER": ""}).notifier == "log"
+
+
+def test_telegram_without_token_is_rejected() -> None:
+    with pytest.raises(ValueError, match="ALERT_BOT_TOKEN is required when NOTIFIER=telegram"):
+        load_settings({"NOTIFIER": "telegram"})
+
+
+@pytest.mark.parametrize("chat", ["42", "-1001234567890"])
+def test_telegram_with_token_and_chat_id(chat: str) -> None:
+    s = load_settings({"NOTIFIER": "telegram", "ALERT_BOT_TOKEN": "1:tok", "ALERT_CHAT_ID": chat})
+    assert s.notifier == "telegram"
+    assert s.alert_bot_token == "1:tok"
+    assert s.alert_chat_id == int(chat)
+
+
+def test_chat_id_is_optional() -> None:
+    s = load_settings({"NOTIFIER": "telegram", "ALERT_BOT_TOKEN": "1:tok"})
+    assert s.alert_chat_id is None
+
+
+def test_bad_chat_id_is_rejected() -> None:
+    with pytest.raises(ValueError, match="ALERT_CHAT_ID"):
+        load_settings({"ALERT_CHAT_ID": "abc"})
+
+
+def test_repr_masks_bot_token_and_shows_chat_id() -> None:
+    s = load_settings(
+        {"NOTIFIER": "telegram", "ALERT_BOT_TOKEN": "123:SECRET", "ALERT_CHAT_ID": "-5"}
+    )
+    text = repr(s)
+    assert "SECRET" not in text
+    assert "alert_chat_id=-5" in text

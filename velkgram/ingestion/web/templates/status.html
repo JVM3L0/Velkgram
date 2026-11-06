@@ -31,6 +31,9 @@
   {% if enrich %}
   <p class="status-line muted">{% if enrich.ago %}Enriquecimento de links: última execução {{ enrich.ago }}; {{ enrich.pending }} pendentes, {{ enrich.blocked }} bloqueados{% else %}Enriquecimento de links: ainda não executado{% endif %}</p>
   {% endif %}
+  {% if bot_line %}
+  <p class="status-line muted">{{ bot_line }}</p>
+  {% endif %}
 </section>
 
 <section aria-labelledby="channels-title">
