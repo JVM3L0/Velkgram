@@ -57,7 +57,7 @@ Offers carry affiliate and short links. 121 offers have an unknown store, and no
 ## 5. Behavior
 
 ### 5.1 Link identity and discovery
-- **The link table is keyed by URL.** A `product_links` row is keyed by `url`: the offer's `main_link`, normalized with a lowercase host, trimmed, and the fragment removed. Offers join links by `offers.main_link = product_links.url`.
+- **The link table is keyed by URL.** A `product_links` row is keyed by `url`: the offer's `main_link` exactly as stored (it is already extracted and trimmed), so every join compares equal strings. Offers join links by `offers.main_link = product_links.url`.
   - Offers get **no `link_id` column**, so an edit that changes `main_link` points to the right row automatically.
   - Coupon offers join on `main_link` as well.
 - **`OfferBuilder` is untouched.** The enricher discovers work itself, in small batches.
