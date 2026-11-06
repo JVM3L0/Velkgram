@@ -14,13 +14,14 @@ dependencies = [
   "jinja2",
   "python-multipart",
   "itsdangerous",
+  "httpx",
 ]
 
 [project.scripts]
 velkgram = "velkgram.apps.cli:main"
 
 [dependency-groups]
-dev = ["pytest", "pytest-asyncio", "ruff", "pyright", "import-linter", "ty", "httpx"]
+dev = ["pytest", "pytest-asyncio", "ruff", "pyright", "import-linter", "ty"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["velkgram"]
@@ -138,7 +139,7 @@ forbidden_modules = ["velkgram.channels", "velkgram.wishlist", "velkgram.ingesti
 name = "domain is pure (rule 1)"
 type = "forbidden"
 source_modules = ["velkgram.*.domain"]
-forbidden_modules = ["sqlite3", "telethon", "fastapi", "starlette", "jinja2",
+forbidden_modules = ["sqlite3", "httpx", "telethon", "fastapi", "starlette", "jinja2",
   "velkgram.*.ports", "velkgram.*.services", "velkgram.*.adapters", "velkgram.*.web",
   "velkgram.shared.db", "velkgram.shared.config", "velkgram.shared.adapters", "velkgram.shared.logging",
   "velkgram.shared.migrate", "velkgram.shared.ports", "velkgram.apps"]
@@ -148,7 +149,7 @@ allow_indirect_imports = true
 name = "services do no I/O (rule 2)"
 type = "forbidden"
 source_modules = ["velkgram.*.services"]
-forbidden_modules = ["sqlite3", "telethon", "fastapi", "starlette", "jinja2",
+forbidden_modules = ["sqlite3", "httpx", "telethon", "fastapi", "starlette", "jinja2",
   "velkgram.*.adapters", "velkgram.*.web", "velkgram.shared.db", "velkgram.shared.adapters", "velkgram.apps"]
 allow_indirect_imports = true
 

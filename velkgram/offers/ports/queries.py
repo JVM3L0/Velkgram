@@ -59,6 +59,9 @@ class OfferCard:
     cart_link: str | None = None
     text: str | None = None
     coupon_tiers: tuple[CouponTier, ...] = ()
+    image_url: str | None = None
+    seen_channel_ids: tuple[int, ...] = ()
+    """Channels that posted this product at this price within 24 h (feed collapse); newest first."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +81,7 @@ class MatchCard:
     card: OfferCard
     source: MatchSource
     matched_price_cents: int | None
+    other_product: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +113,10 @@ class ActiveCouponView:
     codes: tuple[str, ...]
 
 
+NEWS_COUNT_CAP = 100
+"""`count_*_after` stops counting here; the live pill shows it as \"99+\"."""
+
+
 class OfferQueries(Protocol):
     def feed(self, f: FeedFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage: ...
 
@@ -117,7 +125,7 @@ class OfferQueries(Protocol):
         ...
 
     def count_feed_after(self, f: FeedFilter, since: FeedCursor) -> int:
-        """Feed rows strictly newer than `since` (same ordering as `feed`) under the filters."""
+        """Feed rows strictly newer than `since` under the filters, capped at NEWS_COUNT_CAP."""
         ...
 
     def count_coupons_after(self, f: CouponFilter, since: FeedCursor) -> int:

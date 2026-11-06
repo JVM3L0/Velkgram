@@ -22,7 +22,9 @@ from velkgram.offers.domain.models import (
     ProductStats,
     RetroStatus,
 )
+from velkgram.offers.domain.urls import is_safe_https_url
 from velkgram.offers.ports.queries import (
+    NEWS_COUNT_CAP,
     CouponFilter,
     FeedCursor,
     FeedFilter,
@@ -108,6 +110,10 @@ class CardView:
     anchor: str = ""
     store_key: str | None = None
     store_coupons: int = 0
+    image_url: str | None = None
+    seen_in: tuple[str, ...] = ()
+    seen_count: int = 1
+    other_product: bool = False
 
 
 def _parse_cursor(raw: str) -> FeedCursor | None:
@@ -301,6 +307,9 @@ def build_router(
             redeem_href=safe_href(card.redeem_link),
             cart_href=safe_href(card.cart_link),
             text=card.text,
+            image_url=card.image_url if is_safe_https_url(card.image_url) else None,
+            seen_in=tuple(names[c] for c in card.seen_channel_ids if c in names),
+            seen_count=len(card.seen_channel_ids),
         )
 
     def wish_or_404(conn: sqlite3.Connection, raw_id: str) -> WishInfo:
@@ -317,6 +326,7 @@ def build_router(
             card_view(m.card, now, names, counts),
             source=_SOURCE_LABELS[m.source],
             historic=m.source is MatchSource.retro,
+            other_product=m.other_product,
         )
 
     def retro_response(
@@ -510,7 +520,8 @@ def build_router(
     def pill_response(request: Request, count: int, noun: tuple[str, str], url: str) -> Response:
         if count <= 0:
             return Response(status_code=204)
-        label = f"1 {noun[0]}" if count == 1 else f"{count} {noun[1]}"
+        shown = f"{NEWS_COUNT_CAP - 1}+" if count >= NEWS_COUNT_CAP else str(count)
+        label = f"1 {noun[0]}" if count == 1 else f"{shown} {noun[1]}"
         return templates.TemplateResponse(
             request, "_live_pill.html", {"count": count, "label": label, "reload_url": url}
         )

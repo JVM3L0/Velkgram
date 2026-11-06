@@ -1,11 +1,13 @@
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
-from datetime import datetime
+from datetime import UTC, datetime
 
 from velkgram.alerting import Alert, AlertKind, AlertStatus, SuppressionRule
 from velkgram.channels import Channel, ChannelStatus
 from velkgram.ingestion import Heartbeat
 from velkgram.offers.domain.models import Offer, OfferKind, OfferMatch, OfferText, RetroRun
+from velkgram.offers.domain.urls import host_of
+from velkgram.offers.ports.links import EnrichHeartbeat, LinkRow
 from velkgram.offers.ports.messages import SourceMessage
 from velkgram.shared.deals import WishView
 from velkgram.shared.events import MessageData
@@ -203,13 +205,28 @@ class InMemoryAlertRepository:
 
 
 class InMemoryOfferRepository:
-    def __init__(self) -> None:
+    def __init__(self, links: "InMemoryLinkRepository | None" = None) -> None:
         self._offers: dict[tuple[int, int], Offer] = {}
         self._matches: dict[tuple[int, int, int], OfferMatch] = {}
         self._runs: dict[int, RetroRun] = {}
+        self.links = links
 
     def upsert(self, o: Offer) -> None:
+        if o.store is None and o.main_link is not None and self.links is not None:
+            o = replace(o, store=self.links.store_of(o.main_link))  # same as the SQL COALESCE
         self._offers[(o.channel_id, o.message_id)] = o
+
+    def all_offers(self) -> list[Offer]:
+        return list(self._offers.values())
+
+    def fix_store(self, main_link: str, store: str) -> int:
+        """Give `store` to offers of this link that have none; `updated_at` is untouched."""
+        n = 0
+        for k, o in list(self._offers.items()):
+            if o.main_link == main_link and o.store is None:
+                self._offers[k] = replace(o, store=store)
+                n += 1
+        return n
 
     def get(self, channel_id: int, message_id: int) -> Offer | None:
         return self._offers.get((channel_id, message_id))
@@ -252,12 +269,19 @@ class InMemoryOfferRepository:
         for i in range(0, len(rows), batch_size):
             yield rows[i : i + batch_size]
 
-    def priced_points(self, wish_id: int) -> list[tuple[datetime, int | None]]:
+    def priced_points(
+        self, wish_id: int, dominant: tuple[str, str] | None = None
+    ) -> list[tuple[datetime, int | None]]:
         ms = sorted(
             (m for m in self._matches.values() if m.wish_id == wish_id),
             key=lambda m: (m.posted_at, m.channel_id, m.message_id),
         )
         return [(m.posted_at, m.price_cents) for m in ms]
+
+    def dominant_key(self, wish_id: int) -> tuple[str, str] | None:
+        # The dominant-product rule joins product_links, which only SQLite has; it is tested
+        # on SQLite alone (tests/offers/adapters/test_queries_links.py).
+        return None
 
     def recent_store_offers(self, store: str, since: datetime, limit: int = 500) -> list[Offer]:
         found = [
@@ -296,6 +320,103 @@ class InMemoryOfferRepository:
 
     def delete_retro_run(self, wish_id: int) -> None:
         self._runs.pop(wish_id, None)
+
+
+class InMemoryLinkRepository:
+    def __init__(self, offers: InMemoryOfferRepository) -> None:
+        self._offers = offers
+        if offers.links is None:
+            offers.links = self
+        self._rows: dict[str, LinkRow] = {}
+        self._next_id = 1
+        self._heartbeat: EnrichHeartbeat | None = None
+
+    def store_of(self, url: str) -> str | None:
+        row = self._rows.get(url)
+        return row.store if row is not None else None
+
+    def _live(self, url: str) -> bool:
+        return any(o.main_link == url and not o.deleted for o in self._offers.all_offers())
+
+    def discover(self, limit: int = 50) -> int:
+        newest: dict[str, datetime] = {}
+        for o in self._offers.all_offers():
+            if o.main_link is None or o.deleted or o.main_link in self._rows:
+                continue
+            newest[o.main_link] = max(o.posted_at, newest.get(o.main_link, o.posted_at))
+        ordered = sorted(newest.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+        for url, posted_at in ordered:
+            self._rows[url] = LinkRow(
+                url=url,
+                host=host_of(url),
+                offer_posted_at=posted_at,
+                created_at=datetime.now(UTC),
+                id=self._next_id,
+            )
+            self._next_id += 1
+        return len(ordered)
+
+    def _candidates(self, paused: frozenset[str]) -> list[LinkRow]:
+        return [
+            r
+            for r in self._rows.values()
+            if r.host not in paused
+            and (r.final_host is None or r.final_host not in paused)
+            and self._live(r.url)
+        ]
+
+    def next_due(self, now: datetime, paused_hosts: frozenset[str]) -> LinkRow | None:
+        due = [
+            r
+            for r in self._candidates(paused_hosts)
+            if (r.status == "pending" and (r.next_try_at is None or r.next_try_at <= now))
+            or (
+                r.status == "blocked"
+                and r.next_try_at is not None
+                and r.next_try_at <= now
+                and r.blocks < 2
+            )
+        ]
+        due.sort(key=lambda r: (-r.offer_posted_at.timestamp(), r.id or 0))
+        return due[0] if due else None
+
+    def earliest_next_try(self, now: datetime, paused_hosts: frozenset[str]) -> datetime | None:
+        times = [
+            r.next_try_at or now
+            for r in self._candidates(paused_hosts)
+            if r.status == "pending" or (r.status == "blocked" and r.blocks < 2)
+        ]
+        return min(times) if times else None
+
+    def known_product(self, store: str, product_id: str) -> tuple[str | None, str | None] | None:
+        for r in sorted(self._rows.values(), key=lambda r: r.id or 0):
+            if (
+                r.store == store
+                and r.product_id == product_id
+                and r.status == "done"
+                and r.title is not None
+            ):
+                return (r.title, r.image_url)
+        return None
+
+    def save(self, row: LinkRow, *, fix_store: bool) -> int:
+        old = self._rows[row.url]
+        final_host = host_of(row.final_url) if row.final_url else None
+        self._rows[row.url] = replace(row, id=old.id, final_host=final_host)
+        if fix_store and row.store:
+            return self._offers.fix_store(row.url, row.store)
+        return 0
+
+    def write_heartbeat(self, now: datetime) -> None:
+        def count(status: str) -> int:
+            return sum(1 for r in self._rows.values() if r.status == status)
+
+        self._heartbeat = EnrichHeartbeat(
+            now, count("pending"), count("done"), count("failed"), count("blocked")
+        )
+
+    def heartbeat(self) -> EnrichHeartbeat | None:
+        return self._heartbeat
 
 
 class FakeWishReader:

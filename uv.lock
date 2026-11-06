@@ -901,6 +901,7 @@ version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "itsdangerous" },
     { name = "jinja2" },
     { name = "python-multipart" },
@@ -910,7 +911,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "import-linter" },
     { name = "pyright" },
     { name = "pytest" },
@@ -922,6 +922,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "itsdangerous" },
     { name = "jinja2" },
     { name = "python-multipart" },
@@ -931,7 +932,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx" },
     { name = "import-linter" },
     { name = "pyright" },
     { name = "pytest" },

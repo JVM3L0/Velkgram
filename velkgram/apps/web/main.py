@@ -37,6 +37,7 @@ from velkgram.channels.web.router import build_router as build_channels_router
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.web.router import build_router as build_status_router
 from velkgram.offers import sparkline_svg
+from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.web.format import linkify
@@ -154,6 +155,13 @@ def _recent_failures(conn: sqlite3.Connection) -> list[tuple[str, str, datetime]
     ]
 
 
+def _enrich_status(conn: sqlite3.Connection) -> dict[str, object] | None:
+    beat = SqliteLinkRepository(conn).heartbeat()
+    if beat is None:
+        return None
+    return {"last_run_at": beat.last_run_at, "pending": beat.pending, "blocked": beat.blocked}
+
+
 def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
     settings = settings or load_settings(os.environ)
     if not settings.web_secret_key:
@@ -263,6 +271,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             channels=_active_channels,
             recent_failures=_recent_failures,
             clock=clock,
+            enrich_status=_enrich_status,
         ),
         prefix="/status",
         dependencies=[Depends(require_user)],

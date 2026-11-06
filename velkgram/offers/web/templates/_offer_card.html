@@ -2,6 +2,7 @@
 <article class="offer{% if row.sold_out or row.deleted %} offer-gone{% endif %}{% if not row.priced or not row.comparable %} offer-quiet{% endif %}">
   <p class="offer-price{% if not row.priced %} offer-price-unknown{% endif %}">{{ row.price }}{% if row.coupons %} <span class="offer-with-coupon">· com cupom</span>{% endif %}</p>
   {% with codes = row.coupons %}{% include "_coupon_codes.html" %}{% endwith %}
+  {% if row.image_url %}<img class="offer-thumb" src="{{ row.image_url }}" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" width="96" height="96">{% endif %}
   <h2 class="offer-title">{{ row.title }}</h2>
   <p class="offer-meta">
     {% if row.store %}<span class="chip small tonal-chip">{{ row.store }}</span>{% endif %}
@@ -11,10 +12,12 @@
     {% if row.channel %}<span class="offer-channel">{{ row.channel }}</span>{% endif %}
     <time datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
   </p>
-  {% if row.sold_out or row.deleted or row.reposts %}
+  {% if row.sold_out or row.deleted or row.reposts or row.seen_count >= 2 or row.other_product %}
   <p class="offer-flags">
     {% if row.sold_out %}<span class="chip small flag-warn">esgotado</span>{% endif %}
     {% if row.deleted %}<span class="chip small flag-error">removida</span>{% endif %}
+    {% if row.seen_count >= 2 %}<span class="chip small" title="{{ row.seen_in | join(', ') }}">visto em {{ row.seen_count }} canais</span>{% endif %}
+    {% if row.other_product %}<span class="chip small chip-muted" title="Produto diferente do mais frequente deste desejo — fora do gráfico e das estatísticas">outro produto</span>{% endif %}
     {% if row.reposts %}<span class="chip small">+{{ row.reposts }} {{ "repostagem" if row.reposts == 1 else "repostagens" }}</span>{% endif %}
   </p>
   {% endif %}

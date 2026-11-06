@@ -9,6 +9,11 @@ page 0.3 ms, 100th page 0.3 ms, store+since 0.3 ms; FTS search "raro" 3.3 ms, "m
 "produto" 5.5 ms; one channel 0.2 ms (50th page 0.2 ms), channel+store 0.2 ms, narrow price band
 2.3 ms; product matches page (one wish, ~21k matches) first 0.3 ms, 100th 0.3 ms. The first call on
 a fresh connection takes 0.3-0.4 ms (narrow price 3.1 ms).
+
+With link enrichment (migration 006; 5,000 links, half enriched): feed first/100th page 0.7 ms,
+product() on a wish with ~21k matches ~140 ms (the dominant GROUP BY, priced_points and the points
+query each walk those matches), summaries() for 20 wishes ~110 ms, keyed matches page 0.4 ms.
+The collapse EXISTS needs `INDEXED BY idx_offers_main_link`, otherwise SQLite scans offers by time.
 """
 
 import json
@@ -25,18 +30,25 @@ import pytest
 from tests.offers.adapters._queries_helpers import T0
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
-from velkgram.offers.adapters.sqlite.repository import to_iso
-from velkgram.offers.ports.queries import CouponFilter, FeedCursor, FeedFilter, FeedPage
+from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository, to_iso
+from velkgram.offers.ports.queries import (
+    NEWS_COUNT_CAP,
+    CouponFilter,
+    FeedCursor,
+    FeedFilter,
+    FeedPage,
+)
 from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
 
 ROWS = 50_000
+LINKS = 5_000  # distinct main links; the even ones are enriched in product_links
 BOUND_S = 0.150
 DEEP_PAGE = 100
 STORES = ("amazon", "kabum", "magalu", "shopee", None)
 NOTHING = FeedFilter(None, None, None, (), False, None)
 
-_FULL_SCAN = re.compile(r"^SCAN (offers|o|r|x)\b(?!.*\bINDEX\b)")
+_FULL_SCAN = re.compile(r"^SCAN (offers|o|r|x|pl|px|xo)\b(?!.*\bINDEX\b)")
 
 
 @pytest.fixture(scope="module")
@@ -67,7 +79,7 @@ def conn(db_path: Path) -> Iterator[sqlite3.Connection]:
                 title,
                 None if coupon else (i * 37) % 100000 or None,
                 store,
-                "https://x.test/p",
+                f"https://x.test/p{i % LINKS}",
                 i % 2,
                 text,
                 text.lower(),
@@ -85,7 +97,26 @@ def conn(db_path: Path) -> Iterator[sqlite3.Connection]:
         messages.append((channel, i, at, at, text, "[]", i % 2, "live"))
         if i % 2 == 0 and not coupon:  # one wish with ~21k matches
             matches.append((1, channel, i, offers[-1][4], at, "live", at))
+        if i % 3 == 0 and not coupon:  # wishes 2..20, a few thousand matches each
+            matches.append((i % 19 + 2, channel, i, offers[-1][4], at, "live", at))
+    stamp = to_iso(T0)
+    links = [
+        (
+            f"https://x.test/p{n}",
+            STORES[n % 5],
+            f"P{n % 1250}",
+            f"https://img.test/{n}.jpg",
+            stamp,
+            stamp,
+        )
+        for n in range(0, LINKS, 2)
+    ]
     with c:
+        c.executemany(
+            "INSERT INTO product_links (url, store, product_id, image_url, kind, status, "
+            "created_at, offer_posted_at, host) VALUES (?,?,?,?,'product','done',?,?,'x.test')",
+            links,
+        )
         c.executemany(
             "INSERT INTO offers (channel_id, message_id, posted_at, title, price_cents, store, "
             "main_link, has_photo, text, norm_text, origin_channel_id, origin_message_id, "
@@ -237,3 +268,97 @@ def test_volume_matches_page_with_20k_matches_on_one_wish(conn: sqlite3.Connecti
     _check(conn, lambda: page_of(None), "matches first page")
     cursor = _deep(page_of)
     _check(conn, lambda: page_of(cursor), "matches 100th page")
+
+
+@pytest.mark.slow
+def test_volume_feed_collapse_uses_indexes_and_enriched_cards(conn: sqlite3.Connection) -> None:
+    q = SqliteOfferQueries(conn)
+    statements: list[str] = []
+    conn.set_trace_callback(statements.append)
+    try:
+        page = q.feed(NOTHING, None)
+    finally:
+        conn.set_trace_callback(None)
+    assert page.cards
+    feed_sql = next(s for s in statements if "px.store" in s)
+    plan = [row[3] for row in conn.execute("EXPLAIN QUERY PLAN " + feed_sql)]
+    assert any(line.startswith("SEARCH px") and "INDEX" in line for line in plan), plan
+    assert any(line.startswith("SEARCH x") and "INDEX" in line for line in plan), plan
+    deep = _deep(lambda cur: q.feed(NOTHING, cur))
+    page = q.feed(NOTHING, deep)
+    assert page.cards
+    assert any(c.image_url for c in q.feed(NOTHING, None, 200).cards)
+
+
+@pytest.mark.slow
+def test_volume_product_summaries_and_keyed_matches(conn: sqlite3.Connection) -> None:
+    q = SqliteOfferQueries(conn)
+    now = T0 + timedelta(days=400)
+    timings = []
+    for name, run in (
+        ("product()", lambda: q.product(1, now, None, None)),
+        ("summaries x20", lambda: q.summaries(list(range(1, 21)))),
+        ("matches_page keyed", lambda: q.matches_page(1, None, 30, dominant=("amazon", "P0"))),
+    ):
+        run()  # warm-up
+        runs = []
+        for _ in range(3):
+            start = time.perf_counter()
+            run()
+            runs.append(time.perf_counter() - start)
+        median = statistics.median(runs)
+        timings.append(median)
+        print(f"{name}: {median * 1000:.1f} ms")
+        assert median < BOUND_S, f"{name}: {median * 1000:.1f} ms"
+    statements: list[str] = []
+    conn.set_trace_callback(statements.append)
+    try:
+        SqliteOfferRepository(conn).dominant_key(1)
+    finally:
+        conn.set_trace_callback(None)
+    sql = next(s for s in statements if "GROUP BY" in s)
+    for row in conn.execute("EXPLAIN QUERY PLAN " + sql):
+        assert not _FULL_SCAN.match(row[3]), row[3]
+
+
+@pytest.mark.slow
+def test_volume_stale_cursor_count_is_capped_and_fast(conn: sqlite3.Connection) -> None:
+    q = SqliteOfferQueries(conn)
+    stale = FeedCursor(T0 - timedelta(days=1), 0, 0)  # everything in the feed is newer
+    start = time.perf_counter()
+    count = q.count_feed_after(NOTHING, stale)
+    elapsed = time.perf_counter() - start
+    print(f"count_feed_after stale cursor: {elapsed * 1000:.1f} ms")
+    assert count == NEWS_COUNT_CAP
+    assert elapsed < BOUND_S, f"{elapsed * 1000:.1f} ms"
+
+
+@pytest.mark.slow
+def test_volume_five_hot_products_first_page(tmp_path: Path) -> None:
+    """Extreme skew: five products hold half of the offers; the collapse probe must stay fast."""
+    c = connect(tmp_path / "hot.db")
+    apply_migrations(c, MIGRATION_PACKAGES)
+    stamp = to_iso(T0)
+    rows = []
+    for i in range(ROWS):
+        at = to_iso(T0 + timedelta(seconds=30 * i))
+        link = f"https://hot.test/p{i % 5}" if i % 2 == 0 else f"https://cold.test/p{i}"
+        rows.append((i % 20, i, at, f"Produto {i}", 1000 + i % 50, "amazon", link, at))
+    with c:
+        c.executemany(
+            "INSERT INTO product_links (url, store, product_id, kind, status, created_at, "
+            "offer_posted_at, host) VALUES (?,?,?,'product','done',?,?,'hot.test')",
+            [(f"https://hot.test/p{n}", "amazon", f"H{n}", stamp, stamp) for n in range(5)],
+        )
+        c.executemany(
+            "INSERT INTO offers (channel_id, message_id, posted_at, title, price_cents, store, "
+            "main_link, has_photo, sold_out, deleted, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,0,0,0,?)",
+            rows,
+        )
+    c.execute("ANALYZE")
+    q = SqliteOfferQueries(c)
+    try:
+        _check(c, lambda: q.feed(NOTHING, None), "five hot products first page")
+    finally:
+        c.close()

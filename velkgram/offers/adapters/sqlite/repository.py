@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 
+from velkgram.offers.domain.dominant import dominant_from_counts
 from velkgram.offers.domain.models import (
     CouponTier,
     MatchSource,
@@ -18,6 +19,12 @@ from velkgram.offers.domain.models import (
 from velkgram.shared.db import transaction
 
 _MIN_INT = -(2**63)
+
+# A match whose link has a product key different from the dominant (store, product_id) given as
+# the two bound parameters. Needs `product_links pl` joined; unkeyed matches are never "other".
+OTHER_PRODUCT_SQL = (
+    "(pl.store IS NOT NULL AND pl.product_id IS NOT NULL AND (pl.store <> ? OR pl.product_id <> ?))"
+)
 
 
 def to_iso(value: datetime) -> str:
@@ -112,7 +119,8 @@ _UPSERT = (
     "main_link, has_photo, text, norm_text, origin_channel_id, origin_message_id, sold_out, "
     "deleted, updated_at, comparable, kind, coupons, coupon_discount, coupon_min_cents, "
     "coupon_scope, redeem_link, cart_link, coupon_tiers) VALUES "
-    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+    "(?, ?, ?, ?, ?, COALESCE(?, (SELECT pl.store FROM product_links pl WHERE pl.url = ?)), "
+    "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
     "ON CONFLICT(channel_id, message_id) DO UPDATE SET "
     "posted_at = excluded.posted_at, title = excluded.title, "
     "price_cents = excluded.price_cents, store = excluded.store, "
@@ -140,6 +148,7 @@ class SqliteOfferRepository:
             o.title,
             o.price_cents,
             o.store,
+            o.main_link,  # bound twice: the store fallback looks the link up
             o.main_link,
             int(o.has_photo),
             o.text,
@@ -230,16 +239,42 @@ class SqliteOfferRepository:
             if len(rows) < batch_size:
                 return
 
-    def priced_points(self, wish_id: int) -> list[tuple[datetime, int | None]]:
+    def priced_points(
+        self, wish_id: int, dominant: tuple[str, str] | None = None
+    ) -> list[tuple[datetime, int | None]]:
+        other = "0" if dominant is None else OTHER_PRODUCT_SQL
         rows = self._conn.execute(
             "SELECT m.posted_at, CASE WHEN COALESCE(o.comparable, 1) = 1 "
-            "THEN m.price_cents END AS price_cents "
+            f"AND NOT ({other}) THEN m.price_cents END AS price_cents "
             "FROM offer_matches m LEFT JOIN offers o "
             "ON o.channel_id = m.channel_id AND o.message_id = m.message_id "
+            "LEFT JOIN product_links pl ON pl.url = o.main_link "
             "WHERE m.wish_id = ? ORDER BY m.posted_at, m.channel_id, m.message_id",
-            (wish_id,),
+            (*(dominant or ()), wish_id),
         ).fetchall()
         return [(from_iso(r["posted_at"]), _opt_int(r["price_cents"])) for r in rows]
+
+    def dominant_key(self, wish_id: int) -> tuple[str, str] | None:
+        return self.dominant_keys([wish_id])[wish_id]
+
+    def dominant_keys(self, wish_ids: Sequence[int]) -> dict[int, tuple[str, str] | None]:
+        """Dominant (store, product_id) per wish, from one GROUP BY over their matches."""
+        counts: dict[int, list[tuple[tuple[str, str], int]]] = {w: [] for w in wish_ids}
+        if wish_ids:
+            rows = self._conn.execute(
+                "SELECT m.wish_id AS wish_id, pl.store AS store, pl.product_id AS pid, "
+                "COUNT(*) AS n FROM offer_matches m JOIN offers o "
+                "ON o.channel_id = m.channel_id AND o.message_id = m.message_id "
+                "JOIN product_links pl ON pl.url = o.main_link "
+                f"WHERE m.wish_id IN ({', '.join('?' * len(wish_ids))}) "
+                "AND m.price_cents IS NOT NULL AND o.comparable = 1 "
+                "AND pl.store IS NOT NULL AND pl.product_id IS NOT NULL "
+                "GROUP BY m.wish_id, pl.store, pl.product_id",
+                tuple(wish_ids),
+            ).fetchall()
+            for r in rows:
+                counts[int(r["wish_id"])].append(((str(r["store"]), str(r["pid"])), int(r["n"])))
+        return {w: dominant_from_counts(c, sum(n for _, n in c)) for w, c in counts.items()}
 
     def recent_store_offers(self, store: str, since: datetime, limit: int = 500) -> list[Offer]:
         rows = self._conn.execute(

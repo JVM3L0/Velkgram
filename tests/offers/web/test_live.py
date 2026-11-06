@@ -72,6 +72,15 @@ def test_feed_news_singular(tmp_path: Path) -> None:
     assert "1 nova oferta" in client.get(url).text
 
 
+def test_feed_news_pill_shows_99_plus_at_the_cap(tmp_path: Path) -> None:
+    client = feed_client(tmp_path, offer(1, at=NOW - timedelta(hours=2)))
+    url = _since(client.get("/").text)
+    _add(tmp_path, *[offer(i, title=f"N{i}", at=NOW) for i in range(2, 130)])
+    res = client.get(url)
+    assert "99+ novas ofertas" in res.text
+    assert "100 novas" not in res.text
+
+
 def test_feed_news_pill_reloads_the_first_page_with_the_filters(tmp_path: Path) -> None:
     client = feed_client(tmp_path, offer(1, store="kabum", at=NOW - timedelta(hours=1)))
     url = _since(client.get("/", params={"store": "kabum", "priced": "1"}).text)

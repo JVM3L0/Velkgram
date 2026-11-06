@@ -2,13 +2,14 @@
 
 import re
 from datetime import datetime, timedelta
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from markupsafe import Markup, escape
 
 from velkgram.offers.domain.suggest import suggest_terms
 from velkgram.offers.domain.title import STORE_TITLES
+from velkgram.offers.domain.urls import is_safe_url
 from velkgram.offers.ports.queries import OfferCard
 
 STORE_NAMES = STORE_TITLES
@@ -87,13 +88,7 @@ def relative_time(at: datetime, now: datetime, tz: ZoneInfo) -> str:
 
 def safe_href(url: str | None) -> str | None:
     """The URL only when its scheme is http or https (never javascript:, tg:, data:)."""
-    if url is None:
-        return None
-    try:
-        scheme = urlsplit(url).scheme.lower()
-    except ValueError:  # e.g. "http://[::1" — a garbled link must not break the page
-        return None
-    return url if scheme in ("http", "https") else None
+    return url if is_safe_url(url) else None
 
 
 _NAME_MAX = 60
