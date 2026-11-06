@@ -80,7 +80,6 @@ Spec §3, §4 (module rules), §5.3, §5.5 (the function).
   - `tests/offers/domain/test_dominant.py`
 
 **Interfaces (produces)**
-- `normalize_url(url: str) -> str`: strips whitespace, lowercases the scheme and host, and drops the fragment. The query is kept.
 - `strip_query(url: str) -> str`: drops the query and the fragment.
 - `is_safe_url(url: str | None) -> bool`: true only for http and https URLs. This is the current `safe_href` rule.
 - `is_safe_https_url(url: str | None) -> bool`: https only.
@@ -158,7 +157,7 @@ Spec §5.1, §5.4 (writes), §6, §7 (locks).
   - `write_heartbeat(now: datetime) -> None`: recomputes the counts by status into `link_enrich_state`.
   - `heartbeat() -> EnrichHeartbeat | None`
 - **The offers upsert** becomes `store = COALESCE(excluded.store, (SELECT pl.store FROM product_links pl WHERE pl.url = excluded.main_link))`. The insert path uses the same COALESCE.
-- **The join key is `offers.main_link` exactly as stored.** `discover` writes `url = main_link` unchanged, so the store-fix `UPDATE`, the upsert lookup and every query join compare equal strings. There is no normalization on the key; `normalize_url` from Task 1 is not used for it.
+- **The join key is `offers.main_link` exactly as stored.** `discover` writes `url = main_link` unchanged, so the store-fix `UPDATE`, the upsert lookup and every query join compare equal strings. There is no normalization on the key.
 
 **Steps**
 - [ ] **Write the failing contract tests** (fake and SQLite):
