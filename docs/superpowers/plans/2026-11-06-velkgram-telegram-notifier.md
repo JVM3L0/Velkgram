@@ -70,7 +70,7 @@ Spec §2 (Config, Adapter, Notifier state), §4.
   - `get() -> tuple[NotifierStatus, str | None, datetime] | None`;
   - `set_chat_id(chat_id: int) -> None` and `get_chat_id() -> int | None`.
 
-  `set_chat_id` updates only the `chat_id` column. On a missing row it is a no-op, so callers always `set` a status first (the collector and `notify-test` do: the login or send records one before any `set_chat_id` matters, and the collector records `disabled`/login state at startup). `get_chat_id` returns `None` without a row.
+  `set_chat_id` updates only the `chat_id` column. On a missing row it is a no-op, so callers always `set` a status first. The collector and `notify-test` both record `set(error, "starting", now)` right after building the notifier, before `begin_login()`, unless a row already exists. `get_chat_id` returns `None` without a row.
 
   It has an SQLite implementation and a fake. The migration creates `notifier_state(id INTEGER PRIMARY KEY CHECK (id = 1), status TEXT NOT NULL CHECK (status IN ('ok','needs_start','error','disabled')), detail TEXT, chat_id INTEGER, updated_at TEXT NOT NULL)`, with no BEGIN or COMMIT. `set` never clears `chat_id`.
 - **`BotClient` (Protocol, in the adapter module):**
