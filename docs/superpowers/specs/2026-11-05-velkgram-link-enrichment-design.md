@@ -46,7 +46,7 @@ Offers carry affiliate and short links. 121 offers have an unknown store, and no
   - **`offers/ports/fetcher.py`:** the `Fetcher` port.
   - **`offers/adapters/http/fetcher.py`:** an httpx-based `HttpxFetcher`, wired only by `apps/cli.py`.
 - **Process:** a new compose service, `enricher`, runs `velkgram enrich` from the same image and DB volume.
-  - **Restart and startup:** `restart: unless-stopped`; `depends_on: migrate: service_completed_successfully`; `stop_grace_period: 30s`.
+  - **Restart and startup:** `restart: unless-stopped`; `depends_on: migrate: service_completed_successfully`; `stop_grace_period: 45s`.
   - **Healthcheck:** none in this version. The status page shows the enricher's last run (§5.7).
   - **SIGTERM:** the loop stops between URLs.
 - **Dependency:** `httpx` moves from the dev group to `[project].dependencies`, and `uv.lock` is refreshed. No brotli: requests send `Accept-Encoding: gzip, deflate`.
@@ -181,6 +181,7 @@ Each URL is written in **its own short transaction**: one link-row update, plus 
   - `product_links (status, next_try_at)`;
   - `product_links (store, product_id)`;
   - `offers (main_link)`.
+- **Extra columns (from plan review):** `offer_posted_at` (discovery priority), `host` and `final_host` (paused-host filtering in SQL) and `blocks` (403/429 count, separate from `attempts`). A row is `failed` after the 4th error or the 2nd block.
 - **Heartbeat:** a `link_enrich_state` single-row table for §5.7.
 - **Retention:** link rows are kept forever and never deleted, including rows with no offers left. Text purge doesn't touch them, and `rebuild-offers` doesn't either.
 

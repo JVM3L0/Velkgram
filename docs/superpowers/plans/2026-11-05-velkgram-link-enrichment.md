@@ -84,18 +84,18 @@ Spec §3, §4 (module rules), §5.3, §5.5 (the function).
   - `host_of(url: str) -> str` returns the lowercase host, or `""`.
 - **Data types** (`links.py`), all frozen dataclasses:
   - `FetchPlan(follow: bool, first_hop_only: bool, body_budget: int | None)`. A budget of `None` means the per-host budget is decided at the final hop through `budget_for`.
-  - `FetchOutcome(final_url: str, hops: tuple[str, ...], status: int | Literal["invalid", "error"], content_type: str | None, body: str | None, answered_by: str)`. `answered_by` is the host that gave the final status.
+  - `FetchOutcome(final_url: str, hops: tuple[str, ...], status: int | Literal["invalid", "error", "paused"], content_type: str | None, body: str | None, answered_by: str)`. `answered_by` is the host that gave the final status.
   - `LinkInfo(store: str | None, product_id: str | None, title: str | None, image_url: str | None, kind: Literal["product", "not_product", "unknown"])`.
 - **`fetch_plan(url: str) -> FetchPlan`:**
 
   | URL | `follow` | `first_hop_only` | `body_budget` |
   |---|---|---|---|
   | Amazon `/dp/` or `/gp/…` (direct) | False | False | 512 KB |
-  | `s.click.aliexpress.com` | | True | 0 |
-  | `s.shopee.com.br` | True | | 0 |
-  | `meli.la` | True | | 512 KB |
-  | `cutt.ly`, `tidd.ly`, `bit.ly`, `go.promotom.com.br`, `link.amazon` | True | | None |
-  | anything else | True | | 64 KB |
+  | `s.click.aliexpress.com` | False | True | 0 |
+  | `s.shopee.com.br` | True | False | 0 |
+  | `meli.la` | True | False | 512 KB |
+  | `cutt.ly`, `tidd.ly`, `bit.ly`, `go.promotom.com.br`, `link.amazon` | True | False | None |
+  | anything else | True | False | 64 KB |
 
 - **`budget_for(url: str) -> int`** gives the per-host budget from the constants table, by final host.
 - **`resolve(original_url: str, outcome: FetchOutcome) -> LinkInfo`** implements spec §5.3.
@@ -150,16 +150,16 @@ Spec §5.1, §5.4 (writes), §5.7 (heartbeat), §6, §7 (locks).
 
 **Interfaces (produces)**
 - **Migration**, with no BEGIN or COMMIT:
-  - `product_links`, as in spec §6, plus a column `offer_posted_at TEXT NOT NULL`: the newest posting time of its offers, set by discovery and refreshed on re-discovery.
+  - `product_links`, as in spec §6, plus the columns `offer_posted_at TEXT NOT NULL` (the newest posting time of its offers when discovered; it is not refreshed later, which is accepted), `host TEXT NOT NULL` (`host_of(url)`), `final_host TEXT` (set on save) and `blocks INTEGER NOT NULL DEFAULT 0` (403/429 count, separate from `attempts`).
   - Indexes on `product_links (status, next_try_at)`, `product_links (offer_posted_at)`, `product_links (store, product_id)` and `offers (main_link)`.
   - The table `link_enrich_state(id INTEGER PRIMARY KEY CHECK (id = 1), last_run_at TEXT, pending INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, blocked INTEGER NOT NULL DEFAULT 0)`.
 - **Types** (`ports/links.py`), both frozen dataclasses:
   - `LinkRow`, mirroring the table;
   - `EnrichHeartbeat(last_run_at: datetime, pending: int, done: int, failed: int, blocked: int)`.
 - **`LinkRepository` (Protocol):**
-  - **`discover(limit: int = 50) -> int`.** For the `main_link` values of non-deleted offers that have no row, it inserts `pending` rows with `url = main_link` unchanged and `offer_posted_at = MAX(posted_at)`, newest first. It returns the number of rows inserted.
-  - **`next_due(now: datetime, paused_hosts: frozenset[str]) -> LinkRow | None`.** The predicate is `(status = 'pending' AND (next_try_at IS NULL OR next_try_at <= :now)) OR (status = 'blocked' AND next_try_at <= :now AND attempts < 2)`, plus `EXISTS (SELECT 1 FROM offers WHERE main_link = url AND deleted = 0)`. Rows are ordered by `offer_posted_at DESC`.
-    - The paused-host filter runs in Python over a small window: the 20 best rows. A row is skipped when `host_of(url)` or `host_of(final_url)` is paused.
+  - **`discover(limit: int = 50) -> int`.** It runs the `SELECT` (offers with `main_link IS NOT NULL`, `deleted = 0`, `GROUP BY main_link`, `NOT EXISTS` a row) **outside** any transaction, then `INSERT OR IGNORE`s the at most 50 rows in one short transaction. For the `main_link` values of non-deleted offers that have no row, it inserts `pending` rows with `url = main_link` unchanged and `offer_posted_at = MAX(posted_at)`, newest first. It returns the number of rows inserted.
+  - **`next_due(now: datetime, paused_hosts: frozenset[str]) -> LinkRow | None`.** The predicate is `(status = 'pending' AND (next_try_at IS NULL OR next_try_at <= :now)) OR (status = 'blocked' AND next_try_at <= :now AND blocks < 2)`, plus `EXISTS (SELECT 1 FROM offers WHERE main_link = url AND deleted = 0)`. Rows are ordered by `offer_posted_at DESC`.
+    - Paused hosts are filtered **in SQL**: `host NOT IN (...) AND (final_host IS NULL OR final_host NOT IN (...))`, so a paused big store never starves the others.
   - **`earliest_next_try(now: datetime, paused_hosts: frozenset[str]) -> datetime | None`** covers the same row set as `next_due` and ignores `done`, `failed` and paused rows.
   - **`known_product(store: str, product_id: str) -> tuple[str | None, str | None] | None`** returns `(title, image_url)` from a `done` row that has a title.
   - **`save(row: LinkRow, *, fix_store: bool) -> int`** runs one short transaction:
@@ -167,9 +167,9 @@ Spec §5.1, §5.4 (writes), §5.7 (heartbeat), §6, §7 (locks).
     - if `fix_store` is set and the row has a store, it runs `UPDATE offers SET store = ? WHERE main_link = ? AND store IS NULL`, without touching `updated_at`;
     - it returns the number of offers fixed.
   - **`write_heartbeat(now: datetime) -> None`** and **`heartbeat() -> EnrichHeartbeat | None`.** This is the only heartbeat reader.
-- **Offers upsert.** In `VALUES`, the store is `COALESCE(?, (SELECT pl.store FROM product_links pl WHERE pl.url = ?))`, with `main_link` bound twice. `DO UPDATE` keeps `store = excluded.store`, which already carries the fixed store.
+- **Offers upsert.** In `VALUES`, the store is `COALESCE(?, (SELECT pl.store FROM product_links pl WHERE pl.url = ?))`, with `main_link` bound twice; the extra bound value goes directly after the store parameter in the params tuple. `DO UPDATE` keeps `store = excluded.store`, which already carries the fixed store.
 - **Join key.** `offers.main_link` is used exactly as stored, and every comparison is between equal strings.
-- **Fake repository.** It implements `LinkRepository` over dicts and receives the offers it needs through the shared in-memory offer fake.
+- **Fake repository.** `InMemoryLinkRepository(offers: InMemoryOfferRepository)` implements `LinkRepository` over dicts. The fake offer repository takes an optional `links: InMemoryLinkRepository | None`; with it set, its `upsert` applies the same store COALESCE, and `save(fix_store=True)` rewrites the fake's offers. The survival tests run on both.
 
 **Steps**
 - [ ] **Failing contract tests**, run on the fake and on SQLite:
@@ -181,8 +181,9 @@ Spec §5.1, §5.4 (writes), §5.7 (heartbeat), §6, §7 (locks).
   - an upsert of the same message;
   - an edit;
   - `rebuild_offers`;
-  - a blank redelivery.
-- [ ] **Failing concurrency test.** Two threads, each with its own real `connect()` connection (WAL, `busy_timeout`): 200 offer upserts against 200 `save` calls. Assert no `OperationalError`, and the longest single `save` takes under 0.5 s.
+  - a blank redelivery;
+  - `purge_text_before` (link rows and the fixed store stay).
+- [ ] **Failing concurrency test.** Two threads, each with its own real `connect()` connection (WAL, `busy_timeout`): 200 offer upserts against 200 `save` calls. A third phase runs `discover` on 50k offers while the upserts continue. Assert no `OperationalError`, the longest single `save` and the longest upsert during `discover` each take under 0.5 s.
 - [ ] **Migration test** on a populated DB.
 - [ ] Run red, implement, run green, run the full checks.
 - [ ] Commit `feat(offers): product_links table, link repository and store-preserving upsert`.
@@ -200,14 +201,14 @@ Spec §5.2.
 
 **Interfaces (produces)**
 - **`Fetcher` (Protocol)** has one method: `fetch(url: str, plan: FetchPlan, before_request: Callable[[str], None], budget_for: Callable[[str], int]) -> FetchOutcome`.
-  - `before_request(url)` is called **before every request, on every hop**. The service throttles there and raises `HostPaused` when the host is paused; the fetcher then returns `status="error"`.
+  - `before_request(url)` is called **before every request, on every hop**. The service throttles there and raises `HostPaused` when the host is paused; the fetcher then returns `status="paused"`.
   - `budget_for(final_url)` is evaluated when `plan.body_budget is None`.
   - There is no refetch.
 - **`HttpxFetcher(client: httpx.Client | None = None, resolve_host: Callable[[str], list[str]] = _getaddrinfo, monotonic: Callable[[], float] = time.monotonic)`** implements spec §5.2:
   - `follow_redirects=False`, with a manual loop of at most 5 hops;
   - each `Location` is resolved with `urljoin`;
   - a set of visited URLs catches loops;
-  - non-`http(s)` schemes, and hosts whose IPs are loopback, private, link-local or unspecified, give `invalid`. The DNS-rebinding gap between this check and the connect is accepted;
+  - non-`http(s)` schemes, and hosts with any IP that is `not ip.is_global` (after unwrapping `ipv4_mapped`; this covers loopback, private, link-local, CGNAT and multicast), give `invalid`. Scheme and IP checks run **before** `before_request`, so an invalid hop never touches the throttle. The DNS-rebinding gap between this check and the connect is accepted;
   - headers: `Accept-Encoding: gzip, deflate`, a desktop User-Agent, and `Accept-Language: pt-BR`;
   - a 10 s timeout per request, and a 30 s chain deadline checked with `monotonic` inside the redirect and stream loops;
   - `first_hop_only` returns after the first `Location`;
@@ -226,7 +227,7 @@ Spec §5.2.
   - `127.0.0.1` and `10.0.0.5` give `invalid`;
   - `first_hop_only`;
   - `before_request` is called once per hop, with that hop's URL;
-  - `HostPaused` gives `error`;
+  - `HostPaused` gives `paused`;
   - `budget_for` is applied at the final host;
   - a non-HTML response has no body;
   - a multibyte character cut at the budget doesn't raise;
@@ -272,11 +273,11 @@ Spec §4 (process), §5.1, §5.2 (throttle), §5.4, §5.7 (heartbeat write), §7
   - from Task 3: `Fetcher` and `HostPaused`. `HostPaused` is defined in `ports/fetcher.py`.
 - **Produces:** `LinkEnricher(links: LinkRepository, fetcher: Fetcher, clock: Clock, wait: Callable[[float], bool])`. `wait` defaults to the stop event's `wait`, so sleeps are interruptible.
   - **`step() -> bool`:**
-    - runs `discover(50)` when 60 s have passed since the last discovery, or when `next_due` found nothing on the previous step;
+    - runs `discover(50)` on the first step, again immediately while the previous call inserted a full batch of 50, and otherwise at most every 60 s;
     - then processes one due URL;
     - returns whether it processed a URL.
   - **`run(stop: threading.Event, limit: int | None = None, until_idle: bool = False) -> int`:**
-    - loops until `stop` is set, or `limit` is reached, or — with `until_idle` — `step()` finds nothing due;
+    - loops until `stop` is set, or `limit` is reached, or — with `until_idle` — `step()` finds nothing due **and** the last `discover` returned 0;
     - when idle, waits `min(10 s, earliest_next_try − now)`;
     - writes the heartbeat after each URL, and at most once a minute while idle;
     - returns the number of URLs processed.
@@ -287,10 +288,10 @@ Spec §4 (process), §5.1, §5.2 (throttle), §5.4, §5.7 (heartbeat write), §7
        - It then waits until 2 s have passed since the last request to that host, and records the time.
     3. Run `resolve`.
     4. Map the status:
-       - **2xx, `invalid`, and any response where `resolve` gives `kind = "product"` (including a 403 when the id came from the URL):** `done`.
+       - **`paused`:** the row is left unchanged (no attempt).
+       - **2xx, 3xx left after 5 hops, `invalid`, 404, 410, any other 4xx except 403/429, and any response where `resolve` gives `kind = "product"` (including a 403 when the id came from the URL):** `done`.
        - **`error` or 5xx:** `attempts += 1`, then `next_try_at` = now + 5 min, 30 min, then 6 h. The 4th failed attempt sets `failed`.
-       - **`error` caused by `HostPaused`:** the row is left unchanged.
-       - **403 or 429 without an id:** `blocked`, `attempts += 1`, `next_try_at = now + 24 h`. The host `outcome.answered_by` is paused for 30 min, in memory; it is forgotten on restart, which is accepted. A second block, at `attempts` = 2, sets `failed`.
+       - **403 or 429 without an id:** `blocks += 1`, `next_try_at = now + 24 h`, status `blocked`; when `blocks` reaches 2 the status is `failed`. The host `outcome.answered_by` is paused for 30 min, in memory; it is forgotten on restart, which is accepted. `attempts` counts only errors.
     5. Save with `final_url = strip_query(outcome.final_url)`, and `fix_store=True` whenever a store is known.
   - **Logging:**
     - per URL: `log.info("link_enriched", extra={"host": host_of(url), "status": s, "kind": k})`;
@@ -310,11 +311,14 @@ Spec §4 (process), §5.1, §5.2 (throttle), §5.4, §5.7 (heartbeat write), §7
   - reuse skips the fetch;
   - the store fix applies only to unknown stores;
   - an exception for one URL is logged without its URL and counted;
-  - discovery is bounded: at most 2 `discover` calls over 100 steps within 60 s of fake time;
+  - discovery is bounded: with fewer than 50 new links, at most 2 `discover` calls over 100 steps within 60 s of fake time; with 120 new links, it runs back-to-back until a call returns fewer than 50;
+  - `run(until_idle=True)` processes all 120 links before exiting;
+  - 3xx after 5 hops, 404 and 410 give `done`; a paused host gives no attempt;
+  - one error followed by a 403 still gets its single 24 h block retry (`blocks` separate from `attempts`);
   - `run(limit=3)`, `run(until_idle=True)` and `stop` all stop it;
   - the heartbeat is written while idle.
 - [ ] **Failing redaction test.** URLs with `?tag=SECRET&ref=TOKEN`; no log record contains them, and the stored `final_url` has no `?`.
-- [ ] **Failing CLI test.** Monkeypatch `cli._make_fetcher` to return the fake. `velkgram enrich --once --limit 2` on a temp DB processes 2 rows and exits 0. `--once` alone exits once it is idle.
+- [ ] **Failing CLI test.** Monkeypatch `cli._make_fetcher` to return the fake. `velkgram enrich --once --limit 2` on a temp DB processes 2 rows and exits 0. `--once` alone exits once it is idle. Calling the installed SIGTERM handler sets the stop event; the test restores the previous handler.
 - [ ] Run red, implement, run green, then run the full checks and `docker compose config -q`.
 - [ ] Commit `feat(offers): link enrichment loop, enrich command and compose service`.
 
@@ -347,10 +351,11 @@ Spec §5.5, §5.6.
   - `x` joins `px` on `px.url = x.main_link`, with `px.store = pl.store`, `px.product_id = pl.product_id` and `pl.product_id IS NOT NULL`;
   - `x.price_cents = o.price_cents` and `o.price_cents IS NOT NULL`;
   - `x.kind = 'product'` and `x.deleted = 0`;
-  - **`x` is itself visible**: the `_NOT_REPOST` condition is repeated for `x`, with alias `xo`;
+  - **`x` is itself visible**: `_NOT_REPOST` becomes a function `_not_repost(outer: str, inner: str) -> str`; the feed uses `_not_repost("o", "r")` and the hiding offer uses `_not_repost("x", "xr")`;
+  - `pl.product_id IS NOT NULL` comes first in the EXISTS, so unenriched rows short-circuit;
   - `(x.posted_at, x.channel_id, x.message_id) > (o.posted_at, o.channel_id, o.message_id)`;
   - `julianday(x.posted_at) - julianday(o.posted_at) <= 1.0`.
-- **`seen_channel_ids`** is a `GROUP_CONCAT(DISTINCT channel_id)` over the visible offer and the offers it hides: same key and price, `posted_at` at or before the visible one, and at most 1 day earlier. Reposts are excluded, and the result is parsed in Python. When collapse is off, it is `(o.channel_id,)`.
+- **`seen_channel_ids`** is a `GROUP_CONCAT(DISTINCT h.channel_id)` over the visible offer and the offers it hides, with its own aliases `h`, `ph`, `hr`: same key and price, `(h.posted_at, h.channel_id, h.message_id) < (o.posted_at, o.channel_id, o.message_id)`, `julianday(o.posted_at) - julianday(h.posted_at) <= 1.0`, and `_not_repost("h", "hr")`. The result is parsed in Python. Chains longer than 24 h under-count the oldest offers; this is accepted. When collapse is off, it is `(o.channel_id,)`.
 - **`count_feed_after`** uses the same FROM and WHERE, so it agrees with the list.
 - **`OfferRepository.dominant_key(wish_id: int) -> tuple[str, str] | None`.** One SQL `GROUP BY pl.store, pl.product_id` over the wish's comparable priced matches gives the top 2 plus the keyed total, which go to `dominant_from_counts`.
   - `SqliteOfferQueries.product()` calls it **once** and passes the key into:
@@ -358,7 +363,8 @@ Spec §5.5, §5.6.
     - `_points(..., dominant=key)`;
     - `matches_page(..., dominant=key)`, which sets `other_product`.
   - `summaries(wish_ids)` calls `dominant_key` once per wish.
-  - An "other product" match is one with a non-null key that differs from the dominant key, when a dominant key exists.
+  - An "other product" match is one with a non-null key that differs from the dominant key, when a dominant key exists. The SQL, with a `LEFT JOIN product_links pl` in `priced_points`, `_points` and `summaries`, is `NOT (pl.store IS NOT NULL AND pl.product_id IS NOT NULL AND (pl.store <> ? OR pl.product_id <> ?))`.
+  - The fake's `priced_points` accepts the `dominant` keyword and ignores it; `dominant_key` returns None in the fake. This is a documented exception to the every-method-on-both-fakes rule: the dominant rule is tested on SQLite only, in `tests/offers/adapters/test_queries_product.py`.
 
 **Steps**
 - [ ] **Failing query tests:**
@@ -381,8 +387,9 @@ Spec §5.5, §5.6.
     - `dominant_key` runs once per `product()`, checked by counting calls.
 
     A wish with `[A,B]` excludes nothing.
-- [ ] **Extend the non-slow `test_feed_perf.py`** with the join and the collapse.
-- [ ] **Rebuild the slow volume fixture.** About 5k distinct links over 50k offers, half of them enriched in `product_links`. Assert the first page, the 100th page and the filtered feed each take ≤ 150 ms. Extend the full-scan regex to `pl|px|xo`, and assert that the collapse EXISTS uses `SEARCH … USING INDEX`.
+- [ ] **Add a non-slow EXPLAIN-shape test**: the collapse EXISTS uses `SEARCH … USING INDEX` and the feed has no `SCAN o`. Timing stays in the slow volume test.
+- [ ] **Add a three-offers-at-one-instant test** that checks each card's chip count.
+- [ ] **Rebuild the slow volume fixture.** About 5k distinct links over 50k offers, half of them enriched in `product_links`. Assert the first page, the 100th page and the filtered feed each take ≤ 150 ms. Extend the full-scan regex to `pl|px|xo`, and assert that the collapse EXISTS uses `SEARCH … USING INDEX`. Also time `product()`, `summaries()` for 20 wishes, and `matches_page` with keyed matches, each ≤ 150 ms, and assert the dominant `GROUP BY` plan has no `SCAN o`.
 - [ ] Run red, implement, run green, run the full checks, and run `uv run pytest -q -m slow -k volume`.
 - [ ] Commit `feat(offers): link images, same-product collapse and other-product exclusion in queries`.
 
@@ -395,7 +402,7 @@ Spec §5.5 (chip), §5.6 (markup), §5.7 (status line).
   - `velkgram/offers/web/router.py` (map `seen_channel_ids` to names with the existing `names` dict);
   - the match row partial `velkgram/offers/web/templates/_product_matches.html`;
   - `velkgram/apps/web/static/velkgram.css`;
-  - `velkgram/ingestion/web/router.py`: `build_router(..., enrich_status: Callable[[], dict[str, object] | None] | None = None)`, so ingestion imports nothing from offers;
+  - `velkgram/ingestion/web/router.py`: `build_router(..., enrich_status: Callable[[sqlite3.Connection], dict[str, object] | None] | None = None)`, called with the per-request connection like the existing `recent_failures` helper, so ingestion imports nothing from offers;
   - `velkgram/ingestion/web/templates/status.html`;
   - `velkgram/apps/web/main.py`: wire a helper that turns `LinkRepository.heartbeat()` into the plain dict `{"last_run_at", "pending", "blocked"}`.
 - Test: the offers web tests, `tests/ingestion/web/test_status_router.py` and an apps web wiring test.
