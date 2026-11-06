@@ -105,7 +105,7 @@ Offers carry affiliate and short links. 121 of them have an unknown store, and p
 - **Store chip:** it shows the fixed store.
 
 ## 6. Data
-- **Offers migration `005_product_links.sql`** (the number follows the existing offers migrations):
+- **Offers migration `006_product_links.sql`** (the number follows the existing offers migrations):
   - **new table `product_links`:**
     - `id INTEGER PRIMARY KEY`;
     - `url TEXT NOT NULL UNIQUE`;
