@@ -17,6 +17,7 @@ from velkgram.alerting import Alert, AlertKind, AlertStatus
 from velkgram.alerting.adapters.notify_telegram import TelegramBotNotifier
 from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
+from velkgram.alerting.domain.format import format_alert
 from velkgram.alerting.ports.notifier_state import NotifierStatus
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
@@ -393,7 +394,8 @@ async def test_live_coupon_after_a_matching_offer_produces_one_coupon_alert(env:
     [sent] = [m for m in env.notifier.sent if m.rendered is not None]
     assert sent.rendered is not None
     assert sent.rendered.startswith("🎟️ Cupom Shopee: QIP98Q1ZXO")
-    assert 'Para "Teclado": oferta de R$ 99,00' in sent.rendered
+    assert 'Para "Teclado"' in sent.rendered
+    assert "💰 R$ 99,00" in sent.rendered
 
 
 async def test_stopping_the_collector_leaves_no_pending_workers(env: Env) -> None:
@@ -441,6 +443,14 @@ async def test_same_coupon_two_days_later_is_suppressed_by_the_three_day_window(
     await _seed_product_and_coupon(env)
     assert env.count("alerts", "kind='coupon'") == 1
     env.clock.advance(2 * 24 * 3600)
+    fresh = replace(
+        msg(4, CH, "Teclado mecanico por R$ 99"),
+        date=env.clock.now() - timedelta(hours=2),
+        links=("https://s.shopee.com.br/prod2",),
+        source="backfill",
+    )
+    await env.collector.ingestor.on_new(fresh)
+    await _settle(env)
     await _post_coupon(env, 3)
     assert env.count("alerts", "kind='coupon'") == 1
     assert env.count("alert_suppressions", "rule='wish_coupon'") == 1
@@ -517,6 +527,22 @@ async def test_retry_of_an_over_max_alert_keeps_the_suffix(env: Env) -> None:
     assert rebuilt is not None
     assert rebuilt.over_max_cents == 50000
     assert rebuilt.coupon_lines == ()
+
+
+async def test_retried_offer_alert_has_the_title_line_and_the_store(env: Env) -> None:
+    await _over_max_alert_with_active_coupon(env)
+    [alert] = [
+        a
+        for a in SqliteAlertRepository(env.conn).list_since(NOW - timedelta(days=1))
+        if a.kind is AlertKind.offer
+    ]
+    rebuilt = env.collector.build_message(alert)
+    assert rebuilt is not None
+    assert rebuilt.title == "Teclado mecanico por R$ 600"
+    assert rebuilt.store_title == "Shopee"
+    text = format_alert(rebuilt)
+    assert text.splitlines()[1] == "Teclado mecanico por R$ 600"
+    assert " · Shopee" in text.splitlines()[2]
 
 
 # --- telegram bot notifier end to end -----------------------------------------------------

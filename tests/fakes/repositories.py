@@ -210,6 +210,10 @@ class InMemoryOfferRepository:
         self._matches: dict[tuple[int, int, int], OfferMatch] = {}
         self._runs: dict[int, RetroRun] = {}
         self.links = links
+        self.product_url_map: dict[str, str] = {}
+
+    def product_urls(self, main_links: Sequence[str]) -> dict[str, str]:
+        return {u: self.product_url_map[u] for u in main_links if u in self.product_url_map}
 
     def upsert(self, o: Offer) -> None:
         if o.store is None and o.main_link is not None and self.links is not None:

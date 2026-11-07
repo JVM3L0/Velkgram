@@ -25,6 +25,7 @@ class OffersActiveCoupons:
                 discount=v.discount,
                 min_cents=v.min_cents,
                 codes=v.codes,
+                cap_cents=v.cap_cents,
             )
             for v in self._queries.active_coupons(store, since, price_cents, exclude)
         ]

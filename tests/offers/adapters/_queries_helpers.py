@@ -85,12 +85,13 @@ def add_link(
     product_id: str | None = None,
     image_url: str | None = None,
     kind: str = "product",
+    final_url: str | None = None,
 ) -> None:
     """Insert an enriched product_links row directly (the enricher is not under test here)."""
     stamp = T0.isoformat()
     with conn:
         conn.execute(
-            "INSERT INTO product_links (url, store, product_id, image_url, kind, status, "
-            "created_at, offer_posted_at, host) VALUES (?,?,?,?,?,'done',?,?,'x.test')",
-            (url, store, product_id, image_url, kind, stamp, stamp),
+            "INSERT INTO product_links (url, store, product_id, image_url, kind, final_url, "
+            "status, created_at, offer_posted_at, host) VALUES (?,?,?,?,?,?,'done',?,?,'x.test')",
+            (url, store, product_id, image_url, kind, final_url, stamp, stamp),
         )

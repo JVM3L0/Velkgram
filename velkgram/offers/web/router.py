@@ -111,6 +111,7 @@ class CardView:
     store_key: str | None = None
     store_coupons: int = 0
     image_url: str | None = None
+    product_href: str | None = None
     seen_in: tuple[str, ...] = ()
     seen_count: int = 1
     other_product: bool = False
@@ -308,6 +309,7 @@ def build_router(
             cart_href=safe_href(card.cart_link),
             text=card.text,
             image_url=card.image_url if is_safe_https_url(card.image_url) else None,
+            product_href=safe_href(card.product_url),
             seen_in=tuple(names[c] for c in card.seen_channel_ids if c in names),
             seen_count=len(card.seen_channel_ids),
         )

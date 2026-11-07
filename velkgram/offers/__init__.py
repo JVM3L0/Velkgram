@@ -2,6 +2,7 @@
 
 from velkgram.offers.domain.build import MessageClass, classify_message
 from velkgram.offers.domain.models import MatchSource
+from velkgram.offers.domain.title import split_title, store_title
 from velkgram.offers.ports.fetcher import HostPaused
 from velkgram.offers.ports.links import EnrichHeartbeat, LinkRepository, LinkRow
 from velkgram.offers.ports.messages import MessageSource, SourceMessage
@@ -56,4 +57,6 @@ __all__ = [
     "purge_offer_text_before",
     "rebuild_offers",
     "sparkline_svg",
+    "split_title",
+    "store_title",
 ]

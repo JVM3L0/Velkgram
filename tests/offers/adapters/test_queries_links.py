@@ -353,3 +353,47 @@ def test_idx_offers_main_link_exists_and_the_collapse_query_runs(conn: sqlite3.C
     _same(conn)
     put(conn, offer(1, link="https://l/a1", at=T0), offer(2, link="https://l/a1", at=T0))
     assert SqliteOfferQueries(conn).feed(NOTHING, None).cards
+
+
+# --- real product urls ----------------------------------------------------------------------
+
+
+def _seed_product_links(conn: sqlite3.Connection) -> None:
+    add_link(conn, "https://l/a", store="amazon", product_id="B0C8814GKB")
+    add_link(conn, "https://l/b", store="amazon", product_id=None, kind="not_product")
+    put(conn, offer(1, link="https://l/a"), offer(2, link="https://l/b"), offer(3, link=None))
+
+
+def test_repository_product_urls_only_for_real_products(conn: sqlite3.Connection) -> None:
+    _seed_product_links(conn)
+    repo = SqliteOfferRepository(conn)
+    got = repo.product_urls(["https://l/a", "https://l/b", "https://l/unknown"])
+    assert got == {"https://l/a": "https://www.amazon.com.br/dp/B0C8814GKB"}
+    assert repo.product_urls([]) == {}
+
+
+def test_queries_product_links_keyed_by_offer_pair(conn: sqlite3.Connection) -> None:
+    _seed_product_links(conn)
+    q = SqliteOfferQueries(conn)
+    got = q.product_links([(1, 1), (1, 2), (1, 3), (1, 99)])
+    assert got == {(1, 1): "https://www.amazon.com.br/dp/B0C8814GKB"}
+    assert q.product_links([]) == {}
+
+
+def test_feed_card_product_url(conn: sqlite3.Connection) -> None:
+    _seed_product_links(conn)
+    cards = {c.message_id: c for c in SqliteOfferQueries(conn).feed(NOTHING, None, 50).cards}
+    assert cards[1].product_url == "https://www.amazon.com.br/dp/B0C8814GKB"
+    assert cards[2].product_url is None
+    assert cards[3].product_url is None
+
+
+def test_match_card_product_url(conn: sqlite3.Connection) -> None:
+    add_link(
+        conn, "https://l/a", store="magalu", product_id="abc", final_url="https://m.test/p/abc"
+    )
+    o = offer(1, link="https://l/a")
+    put(conn, o)
+    SqliteOfferRepository(conn).add_match(match(1, o))
+    cards, _ = SqliteOfferQueries(conn).matches_page(1, None)
+    assert cards[0].card.product_url == "https://m.test/p/abc"

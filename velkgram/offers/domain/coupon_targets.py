@@ -5,10 +5,16 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from velkgram.offers.domain.models import CouponTier, Offer, OfferKind
-from velkgram.shared.deals import WishView, matches_terms, within_over_max
+from velkgram.shared.deals import (
+    WishView,
+    coupon_saving,
+    matches_terms,
+    min_not_met,
+    within_over_max,
+)
 from velkgram.shared.events import CouponTargetData
 
-_LOOKBACK = timedelta(days=3)
+_LOOKBACK = timedelta(hours=24)
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +22,7 @@ class AppliedTier:
     discount: str
     min_cents: int | None
     codes: tuple[str, ...]
+    cap_cents: int | None = None
 
 
 def applicable_tier(
@@ -25,17 +32,21 @@ def applicable_tier(
     codes: tuple[str, ...],
     price_cents: int,
 ) -> AppliedTier | None:
-    """The tier with the highest minimum the price reaches (first wins ties), else None."""
+    """The tier saving the most at the price (ties: highest minimum, then first), else None."""
     if not tiers:
         tiers = (CouponTier(discount, min_cents, None, codes),)
     best: CouponTier | None = None
+    best_key = (-1, -1)
     for tier in tiers:
-        floor = tier.min_cents or 0
-        if floor <= price_cents and (best is None or floor > (best.min_cents or 0)):
-            best = tier
+        if min_not_met(tier.min_cents, price_cents):
+            continue
+        saving = coupon_saving(tier.discount, tier.min_cents, tier.cap_cents, price_cents)
+        key = (saving.cents if saving else 0, tier.min_cents or 0)
+        if key > best_key:
+            best, best_key = tier, key
     if best is None:
         return None
-    return AppliedTier(best.discount, best.min_cents, best.codes or codes)
+    return AppliedTier(best.discount, best.min_cents, best.codes or codes, best.cap_cents)
 
 
 def _is_candidate(offer: Offer, coupon: Offer, now: datetime) -> bool:
@@ -43,6 +54,7 @@ def _is_candidate(offer: Offer, coupon: Offer, now: datetime) -> bool:
         offer.kind == OfferKind.product
         and offer.store == coupon.store
         and offer.price_cents is not None
+        and not offer.coupons
         and not offer.deleted
         and not offer.sold_out
         and offer.norm_text is not None
@@ -96,6 +108,10 @@ def coupon_targets(
                     discount=tier.discount,
                     min_cents=tier.min_cents,
                     codes=tier.codes,
+                    cap_cents=tier.cap_cents,
+                    offer_title=offer.title,
+                    offer_link=offer.main_link,
+                    offer_posted_at=offer.posted_at,
                 )
             )
     return tuple(targets)

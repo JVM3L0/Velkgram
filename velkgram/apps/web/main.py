@@ -270,6 +270,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             make_queries=SqliteAlertQueries,
             wish_names=_wish_names,
             channel_names=_channel_names,
+            product_links=lambda conn, pairs: SqliteOfferQueries(conn).product_links(pairs),
         ),
         prefix="/alerts",
         dependencies=[Depends(require_user)],

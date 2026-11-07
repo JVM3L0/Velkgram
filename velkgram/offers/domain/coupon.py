@@ -13,8 +13,9 @@ from velkgram.shared.text import URL_PATTERN
 _MONEY = r"R\$\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?"
 _DISCOUNT = re.compile(rf"(?:{_MONEY}|(\d+)\s*%)\s*OFF\b", re.IGNORECASE)
 _MIN_SPEND = re.compile(rf"\b(?:em|acima\s+de|a\s+partir\s+de)\s+{_MONEY}", re.IGNORECASE)
-_CAP = re.compile(rf"\bLimite\s+de\s+{_MONEY}\s*OFF", re.IGNORECASE)
-_SCOPE = re.compile(r"\bOFF\s+em\s+(?!R\$)([^:\n,;-]+)", re.IGNORECASE)
+_CAP_MONEY = r"R\$\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2})|\.(\d{2})(?!\d))?"
+_CAP = re.compile(rf"\b(?:limite\s+de|limitado\s+a)\s+{_CAP_MONEY}(?:\s*OFF)?", re.IGNORECASE)
+_SCOPE = re.compile(r"\bOFF\s+em\s+(?!R\$)([^:\n,;(-]+)", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +55,10 @@ def _cents(reais: str, cents: str | None) -> int:
     return int(reais.replace(".", "")) * 100 + (int(cents) if cents else 0)
 
 
+def _cap_cents(match: re.Match[str]) -> int:
+    return _cents(match.group(1), match.group(2) or match.group(3))
+
+
 def _discount_text(match: re.Match[str]) -> str:
     if match.group(3) is not None:
         return f"{match.group(3)}% OFF"
@@ -72,7 +77,7 @@ def _tiers(text: str) -> tuple[CouponTier, ...]:
         tier = CouponTier(
             _discount_text(discount),
             _cents(minimum.group(1), minimum.group(2)) if minimum else None,
-            _cents(cap.group(1), cap.group(2)) if cap else None,
+            _cap_cents(cap) if cap else None,
             line_coupons(line),
         )
         tiers[tier] = None

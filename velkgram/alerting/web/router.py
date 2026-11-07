@@ -1,7 +1,8 @@
 """Alerts web routes (read-only history). Built by `build_router`."""
 
+import logging
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
@@ -9,6 +10,8 @@ from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
 from velkgram.alerting import Alert, AlertKind, AlertQueries, AlertStatus, format_brl, telegram_link
+
+logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 50
 _STATUS_PT = {
@@ -45,10 +48,38 @@ def build_router(
     make_queries: Callable[[sqlite3.Connection], AlertQueries],
     wish_names: Callable[[sqlite3.Connection], dict[int, str]],
     channel_names: Callable[[sqlite3.Connection], dict[int, str]],
+    product_links: (
+        Callable[[sqlite3.Connection, Sequence[tuple[int, int]]], dict[tuple[int, int], str]] | None
+    ) = None,
 ) -> APIRouter:
     router = APIRouter()
 
-    def row(alert: Alert, wishes: dict[int, str], channels: dict[int, str]) -> dict[str, object]:
+    def offer_pair(alert: Alert) -> tuple[int, int]:
+        if (
+            alert.kind is AlertKind.coupon
+            and alert.offer_channel_id is not None
+            and alert.offer_message_id is not None
+        ):
+            return alert.offer_channel_id, alert.offer_message_id
+        return alert.channel_id, alert.message_id
+
+    def lookup_links(
+        conn: sqlite3.Connection, alerts: Sequence[Alert]
+    ) -> dict[tuple[int, int], str]:
+        if product_links is None or not alerts:
+            return {}
+        try:
+            return product_links(conn, [offer_pair(a) for a in alerts])
+        except Exception:
+            logger.exception("product_links_failed")
+            return {}
+
+    def row(
+        alert: Alert,
+        wishes: dict[int, str],
+        channels: dict[int, str],
+        links: dict[tuple[int, int], str],
+    ) -> dict[str, object]:
         return {
             "status": alert.status.value,
             "status_label": _STATUS_PT[alert.status],
@@ -61,6 +92,7 @@ def build_router(
             "is_coupon": alert.kind is AlertKind.coupon,
             "coupon_codes": _coupon_codes(alert),
             "over_max": alert.over_max,
+            "product_href": links.get(offer_pair(alert)),
             "link": telegram_link(alert.channel_id, alert.message_id),
             "created_at": alert.created_at,
         }
@@ -74,11 +106,13 @@ def build_router(
         number = _parse_page(page)
         fetched = make_queries(conn).history(PAGE_SIZE + 1, (number - 1) * PAGE_SIZE)
         wishes, channels = wish_names(conn), channel_names(conn)
+        shown = fetched[:PAGE_SIZE]
+        links = lookup_links(conn, shown)
         return templates.TemplateResponse(
             request,
             "alerts.html",
             {
-                "rows": [row(a, wishes, channels) for a in fetched[:PAGE_SIZE]],
+                "rows": [row(a, wishes, channels, links) for a in shown],
                 "page": number,
                 "has_next": len(fetched) > PAGE_SIZE,
             },

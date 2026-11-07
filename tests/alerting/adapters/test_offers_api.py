@@ -20,7 +20,7 @@ class _Queries:
         limit: int = 3,
     ) -> list[ActiveCouponView]:
         self.args = (store, since, price_cents, exclude, limit)
-        return [ActiveCouponView(1, 2, NOW, "R$ 10 OFF", 4000, ("AAA", "BBB"))]
+        return [ActiveCouponView(1, 2, NOW, "R$ 10 OFF", 4000, ("AAA", "BBB"), 3000)]
 
 
 def test_adapter_forwards_the_query_and_maps_field_by_field() -> None:
@@ -28,4 +28,4 @@ def test_adapter_forwards_the_query_and_maps_field_by_field() -> None:
     since = NOW - timedelta(hours=24)
     out = OffersActiveCoupons(cast(OfferQueries, q)).for_store("shopee", since, 9900, (1, 9))
     assert q.args == ("shopee", since, 9900, (1, 9), 3)
-    assert out == [ActiveCoupon(1, 2, NOW, "R$ 10 OFF", 4000, ("AAA", "BBB"))]
+    assert out == [ActiveCoupon(1, 2, NOW, "R$ 10 OFF", 4000, ("AAA", "BBB"), 3000)]

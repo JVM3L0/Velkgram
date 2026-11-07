@@ -157,3 +157,27 @@ def test_coupon_title_drops_the_discount_and_the_leading_cupom_store(
     title: str, shown: str
 ) -> None:
     assert coupon_title(title) == shown
+
+
+@pytest.mark.parametrize(
+    ("line", "cap"),
+    [
+        ("20% OFF em compras (limitado a R$ 50.00): BF20OFF", 5000),
+        ("15% OFF, limite de R$ 50: XA", 5000),
+        ("15% OFF, Limite de R$ 50 OFF: XB", 5000),
+        ("10% OFF limitado a R$ 50,00: XC", 5000),
+        ("10% OFF, Limite de R$ 12.50 OFF: XD", 1250),
+        ("10% OFF, Limite de R$ 1.000 OFF: XE", 100000),
+        ("10% OFF, Limite de R$ 1.000,50 OFF: XF", 100050),
+        ("10% OFF: XG", None),
+    ],
+)
+def test_cap_wordings(line: str, cap: int | None) -> None:
+    deal = coupon_deal("Cupom X", line, [])
+    assert deal is not None
+    assert deal.tiers[0].cap_cents == cap
+
+
+def test_scope_stops_before_a_parenthesis() -> None:
+    deal = coupon_deal("Cupom X", "20% OFF em compras (limitado a R$ 50.00): BF20OFF", [])
+    assert deal is not None and deal.scope == "compras"

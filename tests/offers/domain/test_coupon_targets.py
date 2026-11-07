@@ -67,14 +67,39 @@ def test_shopee_minimum_is_inclusive() -> None:
     assert applicable_tier(*args, 4000) == AppliedTier("R$ 10 OFF", 4000, ("QIP98Q1ZXO",))
 
 
-def test_mercado_livre_picks_the_tier_by_price() -> None:
+def test_mercado_livre_picks_the_tier_by_real_saving() -> None:
     c = _build(MERCADO_LIVRE, ("https://mercadolivre.com/sec/2U6U32Q",), NOW, 1, 1)
     args = (c.coupon_tiers, c.coupon_min_cents, c.coupon_discount or "", c.coupons)
-    high = applicable_tier(*args, 69900)
-    assert high == AppliedTier("R$ 90 OFF", 69900, ("MOVEIS0511",))
-    mid = applicable_tier(*args, 15000)
-    assert mid is not None and (mid.discount, mid.min_cents) == ("10% OFF", 14900)
-    assert mid.codes == ("PROMOSML", "CLIENTESTOP")
+    for price in (69900, 15000):
+        tier = applicable_tier(*args, price)
+        assert tier is not None
+        assert (tier.discount, tier.min_cents) == ("30% OFF", 100)
+        assert tier.codes == ("ECONOMIZAML", "DESCONTONAHORA")
+        assert tier.cap_cents == 50000
+
+
+def test_applicable_tier_prefers_the_larger_capped_saving() -> None:
+    tiers = (CouponTier("10% OFF", 7900, 4000, ("A",)), CouponTier("15% OFF", None, 2000, ("B",)))
+    tier = applicable_tier(tiers, None, "", (), 30000)
+    assert tier == AppliedTier("10% OFF", 7900, ("A",), 4000)
+
+
+def test_equal_savings_go_to_the_higher_minimum() -> None:
+    tiers = (
+        CouponTier("R$ 10 OFF", None, None, ("A",)),
+        CouponTier("R$ 10 OFF", 500, None, ("B",)),
+    )
+    tier = applicable_tier(tiers, None, "", (), 5000)
+    assert tier is not None and tier.codes == ("B",)
+
+
+def test_no_tier_applies_when_every_minimum_is_above_the_price() -> None:
+    tiers = (CouponTier("10% OFF", 7900, None, ("A",)),)
+    assert applicable_tier(tiers, None, "", (), 5000) is None
+
+
+def test_empty_discount_with_met_minimum_is_still_applicable() -> None:
+    assert applicable_tier((), 1000, "", ("A",), 5000) == AppliedTier("", 1000, ("A",))
 
 
 def test_tier_without_codes_falls_back_to_coupon_codes() -> None:
@@ -94,11 +119,31 @@ def test_tie_on_min_goes_to_the_first_tier() -> None:
     assert applicable_tier(tiers, None, "", (), 500) == AppliedTier("A", 100, ("X",))
 
 
-def test_recent_window_starts_three_days_before_the_coupon() -> None:
-    old = _product(at=COUPON_AT - timedelta(days=3, seconds=1), msg_id=3)
-    edge = _product(at=COUPON_AT - timedelta(days=3), msg_id=4)
+def test_recent_window_starts_24_hours_before_the_coupon() -> None:
+    old = _product(at=COUPON_AT - timedelta(hours=24, seconds=1), msg_id=3)
+    edge = _product(at=COUPON_AT - timedelta(hours=24), msg_id=4)
     assert _ids([old]) == []
     assert _ids([edge]) == [4]
+
+
+def test_coupon_dependent_offer_is_never_a_target() -> None:
+    assert _ids([_product(coupons=("FAVORITO",))]) == []
+
+
+def test_target_carries_the_offer_fields() -> None:
+    offer = _product(msg_id=7)
+    [t] = coupon_targets(_coupon(), [_wish()], [offer], NOW)
+    assert t.offer_title == offer.title
+    assert t.offer_link == offer.main_link == "https://s.shopee.com.br/prod"
+    assert t.offer_posted_at == offer.posted_at
+    assert t.cap_cents is None
+
+
+def test_target_carries_the_tier_cap() -> None:
+    c = _build(MERCADO_LIVRE, ("https://mercadolivre.com/sec/2U6U32Q",), COUPON_AT, 10, 1)
+    offer = replace(_product(price=170000), store=c.store)
+    [t] = coupon_targets(c, [_wish(max_cents=200000)], [offer], NOW)
+    assert t.cap_cents == 50000
 
 
 def test_offer_posted_after_the_coupon_but_before_now_is_included() -> None:
@@ -161,3 +206,11 @@ def test_non_coupon_or_codeless_or_dead_coupon_gives_no_targets() -> None:
     assert coupon_targets(replace(_coupon(), sold_out=True), [_wish()], offers, NOW) == ()
     assert coupon_targets(replace(_coupon(), store=None), [_wish()], offers, NOW) == ()
     assert coupon_targets(_product(), [_wish()], offers, NOW) == ()
+
+
+def test_lone_tier_with_unparseable_discount_and_unmet_minimum_is_not_applicable() -> None:
+    assert applicable_tier((), 5000, "frete grátis", ("X",), 4000) is None
+    assert (
+        applicable_tier((CouponTier("frete grátis", 5000, None, ("X",)),), None, "", (), 4000)
+        is None
+    )

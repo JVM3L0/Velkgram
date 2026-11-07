@@ -32,3 +32,31 @@ def host_of(url: str) -> str:
         return urlsplit(url).hostname or ""
     except ValueError:
         return ""
+
+
+def product_url(store: str | None, product_id: str | None) -> str | None:
+    """The canonical product page of a store item, or None when the store has no stable one."""
+    if not store or not product_id:
+        return None
+    if store == "amazon":
+        return f"https://www.amazon.com.br/dp/{product_id}"
+    if store == "mercadolivre":
+        return f"https://www.mercadolivre.com.br/p/{product_id}"
+    if store == "kabum":
+        return f"https://www.kabum.com.br/produto/{product_id}"
+    if store == "shopee":
+        shop, _, item = product_id.partition(".")
+        return f"https://shopee.com.br/product/{shop}/{item}" if shop and item else None
+    if store == "aliexpress":
+        return f"https://pt.aliexpress.com/item/{product_id}.html"
+    return None
+
+
+def real_product_url(
+    store: str | None, product_id: str | None, kind: str | None, final_url: str | None
+) -> str | None:
+    """The real product link of an enriched offer: built from the id, else the resolved URL."""
+    if kind != "product":
+        return None
+    url = product_url(store, product_id) or final_url
+    return url if is_safe_https_url(url) else None
