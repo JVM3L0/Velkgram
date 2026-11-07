@@ -302,7 +302,7 @@ RA: §4.2 (the offer-alert bullets), §4.3, §5.
   - `velkgram/alerting/domain/models.py` (`AlertMessage.title`, `AlertMessage.store_title`)
   - `velkgram/alerting/domain/format.py` (`format_alert`, `format_coupon_line`, new `extra_lines`)
   - `velkgram/alerting/services/evaluate.py`
-  - `velkgram/offers/domain/title.py` and `velkgram/offers/__init__.py` (`offer_title`, `store_title`)
+  - `velkgram/offers/domain/title.py` and `velkgram/offers/__init__.py` (`split_title`, `store_title`)
   - `velkgram/apps/collector/collector.py` (Evaluator wiring and `build_message`)
 - Test:
   - `tests/alerting/domain/test_format.py`
@@ -312,23 +312,23 @@ RA: §4.2 (the offer-alert bullets), §4.3, §5.
 **Interfaces:**
 - **Consumes:** `ActiveCoupon.cap_cents` (Task 1); `format_saving` (Task 3).
 - **Produces, in `offers/domain/title.py`, re-exported from `velkgram.offers`:**
-  - `offer_title(text: str, store: str | None) -> str`, which returns `title_of(text, store)`;
+  - `split_title(text: str, store: str | None) -> tuple[str, str]` returns `(title_of(text, store), rest)`. `rest` is the text after the title line: the first line whose `_clean` form is non-empty, the same rule `title_of` uses. When no line qualifies, `rest` is `""`.
   - `store_title(slug: str) -> str`, which returns `STORE_TITLES.get(slug, slug)`.
-- **Produces `AlertMessage.title: str = ""` and `AlertMessage.store_title: str | None = None`.**
+- **Produces `AlertMessage.title: str = ""`, `AlertMessage.body: str = ""` (the text after the title line) and `AlertMessage.store_title: str | None = None`.**
 - **Produces new `Evaluator.__init__` keywords:**
-  - `title_of: Callable[[str, str | None], str]`. Its default is the first non-blank line, stripped.
+  - `split_title: Callable[[str, str | None], tuple[str, str]]`. Its default splits at the first non-blank line, stripped.
   - `store_title: Callable[[str], str]`. Its default is the identity, so harness tests show the slug.
 - **`_notify_and_finalize`:**
   - `store, _ = self._class_of(m)` (memoized, so no new I/O);
-  - `title = self._title_of(m.text, store)`;
+  - `title, body = self._split_title(m.text, store)`;
   - `store_title = self._store_title(store) if store else None`.
 - **The coupon-dependent rule:** at the top of `_lookup`, `if extract_coupons(m.text): return []`. Both the coupon lines and the over-max path then skip.
 - **`format_coupon_line(c: ActiveCoupon, price_cents: int) -> str`.** `price_cents` is required.
   - Text: `🎟️ Cupom ativo da loja: {codes} — {discount}{ a partir de R$ M}{, limite de R$ C}{format_saving(...)}`.
   - `_coupon_lines` passes the alert price. That code path already returns `()` when the price is None.
-- **`extra_lines(text: str, codes: tuple[str, ...]) -> tuple[str, ...]`.**
-  - It starts after the title line: the first line that is non-empty once `URL_PATTERN` matches are removed and ` -*•` are stripped from its ends.
-  - From the following lines it drops:
+- **`extra_lines(body: str, codes: tuple[str, ...]) -> tuple[str, ...]`.**
+  - It reads `body`, the text after the title line, which comes from `split_title`. It does no title detection of its own.
+  - From those lines it drops:
     - blank lines;
     - lines that are empty once URLs are removed and ` -*•🔗` are stripped;
     - lines where `extract_price(line)` is not None;
@@ -350,7 +350,7 @@ RA: §4.2 (the offer-alert bullets), §4.3, §5.
   ```
   - `rendered`, when set, is still returned verbatim.
   - The `text[:300]` dump and the price-line ` com cupom …` suffix are removed.
-- **`Collector.build_message`** (the retry path): for an offer alert, `store = classify_message(m).store`. It passes `title=offer_title(m.text, store)` and `store_title=store_title(store) if store else None`. It still sends no coupon lines.
+- **`Collector.build_message`** (the retry path): for an offer alert, `store = classify_message(m).store`. It passes `title, body = split_title(m.text, store)` and `store_title=store_title(store) if store else None`. It still sends no coupon lines.
 
 - [ ] **Step 1: Write failing tests**
   - **Golden full post.** Wish "Monitor", channel "Promotom", store title "Mercado Livre", price 151700, text:
@@ -387,10 +387,10 @@ RA: §4.2 (the offer-alert bullets), §4.3, §5.
     - 5 candidate lines → 3;
     - one 300-character line → one line of 200 characters ending `…`;
     - two 150-character lines → the first whole, the second cut to 49 characters + `…`;
-    - a first line `🔥 Oferta https://x.com` counts as the title and is not repeated.
+    - `split_title("🔥🔥🔥\nMonitor X\nDetalhe", None)` returns `("Monitor X", "Detalhe")`, so the extras are exactly `("Detalhe",)`.
   - **Evaluator:**
     - a post with "-CUPOM: X" makes no `for_store` call, creates no over-max alert even with an active coupon, and still alerts within max;
-    - `AlertMessage` carries `title` and `store_title` from the injected callables.
+    - `AlertMessage` carries `title`, `body` and `store_title` from the injected callables.
   - **Collector:** a failed offer alert that is retried through `build_message` has the title line and ` · <store>` in its text.
 - [ ] **Step 2: Rewrite the existing tests that pin the old text.**
   - `tests/alerting/domain/test_format.py`: the `"y"*300` dump test, `test_alert_mentions_the_coupon_right_after_the_price`, `test_alert_lists_several_coupons`, `test_alert_without_a_coupon_keeps_the_plain_price_line` (line 1 is now the title), and the one-argument `format_coupon_line(c)` calls (lines ~140–170).

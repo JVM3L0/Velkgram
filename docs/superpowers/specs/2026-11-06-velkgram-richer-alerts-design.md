@@ -84,10 +84,10 @@ Stored coupons were parsed with the old rule. The deploy runs `velkgram rebuild-
 
 ### 4.3 Offer alert text (v1 path)
 The evaluator already memoizes `classify_message(m)` per message (coupon-alerts §4.2), so the store needs no new I/O. Two pure helpers are exported from `velkgram/offers/__init__.py` and used by alerting:
-- `offer_title(text, store) -> str`, wrapping the existing `title_of`;
+- `split_title(text, store) -> (title, rest)`: `title` is the existing `title_of`, and `rest` is the text after the title line, chosen by the same rule;
 - `store_title(slug) -> str`, reading `STORE_TITLES`, with the slug itself as the fallback.
 
-`AlertMessage` gets `title: str = ""` and `store_title: str | None = None`. Each `ActiveCoupon` gets `cap_cents: int | None = None`, carried from the applicable tier.
+`AlertMessage` gets `title: str = ""`, `body: str = ""` and `store_title: str | None = None`. Each `ActiveCoupon` gets `cap_cents: int | None = None`, carried from the applicable tier.
 
 **Text** (lines in braces are omitted when empty):
 ```
@@ -109,7 +109,7 @@ via {channel}
   - When the minimum is not met, the suffix is ` (não vale: mínimo R$ M)`. This happens only for a coupon whose post has no tiers, because the port already filters by price.
   - When the saving is None for another reason, there is no suffix.
 - **Codes in the post** (from `extract_coupons(text)`): the post gives no terms for them, so they show code only. They no longer go in the price line.
-- **Extra lines:** the post's lines after the title line, in order. The title line is the first line that is non-empty once URLs are removed and ` -*•` are stripped from its ends. These lines are dropped:
+- **Extra lines:** the post's lines after the title line (`rest` from `split_title`), in order. These lines are dropped:
   - blank lines;
   - lines whose only content is a URL;
   - lines from which `extract_price` reads a price;
