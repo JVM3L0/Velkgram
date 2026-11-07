@@ -338,3 +338,14 @@ def test_golden_active_coupon_line() -> None:
         "🎟️ Cupom ativo da loja: ESPECIALML — 15% OFF, limite de R$ 40,00"
         " → R$ 40,00 de desconto (2,6%) → ~R$ 1.477,00 ⚠️ limite baixo"
     )
+
+
+def test_extra_lines_stop_when_the_budget_is_used_exactly() -> None:
+    assert extra_lines("a" * 100 + "\n" + "b" * 100 + "\n" + "c" * 50, ()) == (
+        "a" * 100,
+        "b" * 100,
+    )
+
+
+def test_extra_lines_drop_code_lines_ignoring_case() -> None:
+    assert extra_lines("use o cupom favorito agora\nDetalhe", ("FAVORITO",)) == ("Detalhe",)

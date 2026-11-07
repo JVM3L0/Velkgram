@@ -1,4 +1,4 @@
-from velkgram.offers.domain.title import STORE_TITLES, title_of
+from velkgram.offers.domain.title import STORE_TITLES, split_title, store_title, title_of
 
 
 def test_title_is_first_line_without_link() -> None:
@@ -37,3 +37,16 @@ def test_title_falls_back_when_text_is_only_emoji_and_links() -> None:
 def test_store_titles() -> None:
     assert STORE_TITLES["kabum"] == "KaBuM!"
     assert len(STORE_TITLES) == 12
+
+
+def test_split_title_returns_the_title_and_the_rest() -> None:
+    assert split_title("🔥🔥🔥\nMonitor X\nDetalhe", None) == ("Monitor X", "Detalhe")
+
+
+def test_split_title_without_a_qualifying_line_has_no_rest() -> None:
+    assert split_title("🔥🔥🔥\n\nhttps://x.com/a", "shopee") == (STORE_TITLES["shopee"], "")
+
+
+def test_store_title_maps_known_slugs_and_passes_unknown_through() -> None:
+    assert store_title("mercadolivre") == "Mercado Livre"
+    assert store_title("xyz") == "xyz"

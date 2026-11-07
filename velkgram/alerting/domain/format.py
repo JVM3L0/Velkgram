@@ -39,11 +39,13 @@ def extra_lines(body: str, codes: tuple[str, ...]) -> tuple[str, ...]:
             not line
             or not URL_PATTERN.sub(" ", line).strip(" -*•🔗")
             or extract_price(line) is not None
-            or any(code in line for code in codes)
+            or any(code.lower() in line.lower() for code in codes)
             or _squash(line).strip(" -") == "anuncio"
         ):
             continue
         line = line.removeprefix("-").strip()
+        if budget <= 0:
+            break
         if len(line) > budget:
             kept.append(line[: budget - 1] + "…")
             break
