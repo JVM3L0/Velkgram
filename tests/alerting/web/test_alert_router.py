@@ -1,10 +1,13 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.apps.web_support import make_client, make_settings
 from tests.fakes.clock import FakeClock
+from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.shared.db import connect
 
 NOW = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
@@ -172,3 +175,60 @@ def test_ordinary_alert_shows_neither_chip(tmp_path: Path) -> None:
     page = client.get("/alerts").text
     assert "acima do limite" not in page
     assert "cupom" not in page
+
+
+def _seed_product_alerts(tmp_path: Path) -> None:
+    """Offer alert on message 1 (real link), coupon alert on message 2 pointing at offer 3."""
+    from tests.offers.adapters._queries_helpers import add_link, offer, put
+
+    _seed(tmp_path, [(1, 1000, "sent")])
+    conn = connect(make_settings(tmp_path).db_path)
+    try:
+        add_link(conn, "https://l/a", store="amazon", product_id="B0C8814GKB")
+        add_link(conn, "https://l/b", store="kabum", product_id="123456")
+        put(
+            conn,
+            offer(1, channel_id=CHANNEL, link="https://l/a"),
+            offer(3, channel_id=CHANNEL, link="https://l/b"),
+        )
+        conn.execute(
+            "INSERT INTO alerts (wish_id, channel_id, message_id, price_cents, price_unknown, "
+            "dedup_key, status, attempts, created_at, latency_telegram_ms, latency_internal_ms, "
+            "kind, offer_channel_id, offer_message_id) "
+            "VALUES (1, ?, 2, 1000, 0, 'wcc:1:amazon:X', 'sent', 1, ?, 1, 1, 'coupon', ?, 3)",
+            (CHANNEL, _iso(NOW), CHANNEL),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_alerts_show_produto_button_for_offer_and_coupon_alerts(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed_product_alerts(tmp_path)
+    page = client.get("/alerts").text
+    assert 'href="https://www.amazon.com.br/dp/B0C8814GKB"' in page
+    assert 'href="https://www.kabum.com.br/produto/123456"' in page
+    assert page.count("<span>Produto</span>") == 4  # compact and wide cell, two rows
+
+
+def test_alerts_without_real_link_have_no_produto_button(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [(1, 1000, "sent")])
+    assert "Produto" not in client.get("/alerts").text
+
+
+def test_alerts_render_without_buttons_when_product_links_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def boom(self: object, pairs: object) -> None:
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(SqliteOfferQueries, "product_links", boom)
+    client = _client(tmp_path)
+    _seed_product_alerts(tmp_path)
+    with caplog.at_level(logging.ERROR):
+        page = client.get("/alerts")
+    assert page.status_code == 200
+    assert "Produto" not in page.text
+    assert any(r.getMessage() == "product_links_failed" for r in caplog.records)

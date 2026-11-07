@@ -60,6 +60,8 @@ class OfferCard:
     text: str | None = None
     coupon_tiers: tuple[CouponTier, ...] = ()
     image_url: str | None = None
+    product_url: str | None = None
+    """The real product link of an enriched product offer (None for coupons and unknown links)."""
     seen_channel_ids: tuple[int, ...] = ()
     """Channels that posted this product at this price within 24 h (feed collapse); newest first."""
 
@@ -173,6 +175,10 @@ class OfferQueries(Protocol):
         With `price_cents`, only coupons whose applicable tier the price reaches, described by
         that tier; the limit applies after that filter.
         """
+        ...
+
+    def product_links(self, pairs: Sequence[tuple[int, int]]) -> dict[tuple[int, int], str]:
+        """Real product URL per (channel_id, message_id); offers without one are left out."""
         ...
 
     def stores_seen(self) -> list[str]: ...

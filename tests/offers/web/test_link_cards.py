@@ -106,3 +106,15 @@ def test_other_product_chip_on_product_page(tmp_path: Path) -> None:
     html = client.get("/wishes/1").text
     assert html.count(">outro produto<") == 1
     assert OTHER_TITLE in html
+
+
+def test_produto_button_only_when_real_link(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    conn = _conn(tmp_path)
+    add_link(conn, "https://l/a", store="amazon", product_id="B0C8814GKB")
+    add_link(conn, "https://l/b", store="amazon", product_id=None, kind="not_product")
+    put(conn, offer(1, link="https://l/a"), offer(2, link="https://l/b"))
+    conn.close()
+    html = client.get("/").text
+    assert html.count("<span>Produto</span>") == 1
+    assert 'href="https://www.amazon.com.br/dp/B0C8814GKB"' in html

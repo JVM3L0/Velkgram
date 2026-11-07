@@ -16,6 +16,7 @@ from velkgram.offers.adapters.sqlite.repository import (
 from velkgram.offers.domain.coupon_targets import applicable_tier
 from velkgram.offers.domain.models import MatchSource, OfferKind
 from velkgram.offers.domain.stats import product_stats
+from velkgram.offers.domain.urls import real_product_url
 from velkgram.offers.ports.queries import (
     NEWS_COUNT_CAP,
     ActiveCouponView,
@@ -81,6 +82,8 @@ _SEEN_CHANNELS = (
 )
 _IMAGE = (
     "CASE WHEN pl.kind = 'product' AND pl.product_id IS NOT NULL THEN pl.image_url END AS image_url"
+    ", pl.store AS pl_store, pl.product_id AS pl_product_id, pl.kind AS pl_kind, "
+    "pl.final_url AS pl_final_url"
 )
 
 _CARD_COLUMNS = (
@@ -137,6 +140,13 @@ def _card(row: sqlite3.Row) -> OfferCard:
         text=row["text"],
         coupon_tiers=decode_tiers(row["coupon_tiers"]),
         image_url=row["image_url"] if "image_url" in keys else None,
+        product_url=(
+            real_product_url(
+                row["pl_store"], row["pl_product_id"], row["pl_kind"], row["pl_final_url"]
+            )
+            if "pl_kind" in keys and row["kind"] == OfferKind.product.value
+            else None
+        ),
         seen_channel_ids=_seen_channels(row, keys),
     )
 
@@ -435,6 +445,24 @@ class SqliteOfferQueries:
             recent = tuple(int(r[0]) for r in reversed(rows))
             out[wid] = WishSummary(recent[-1] if recent else None, counts.get(wid, 0), recent)
         return out
+
+    def product_links(self, pairs: Sequence[tuple[int, int]]) -> dict[tuple[int, int], str]:
+        if not pairs:
+            return {}
+        # Row values keep the lookup to one statement whatever the page size.
+        values = ", ".join("(?, ?)" for _ in pairs)
+        rows = self._conn.execute(
+            "SELECT o.channel_id, o.message_id, pl.store, pl.product_id, pl.kind, pl.final_url "
+            f"FROM offers o {_PL_JOIN} "
+            f"WHERE (o.channel_id, o.message_id) IN (VALUES {values})",
+            [v for pair in pairs for v in pair],
+        ).fetchall()
+        found: dict[tuple[int, int], str] = {}
+        for r in rows:
+            url = real_product_url(r["store"], r["product_id"], r["kind"], r["final_url"])
+            if url is not None:
+                found[(int(r["channel_id"]), int(r["message_id"]))] = url
+        return found
 
     def stores_seen(self) -> list[str]:
         rows = self._conn.execute(

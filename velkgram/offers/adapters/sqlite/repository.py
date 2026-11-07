@@ -16,6 +16,7 @@ from velkgram.offers.domain.models import (
     RetroRun,
     RetroStatus,
 )
+from velkgram.offers.domain.urls import real_product_url
 from velkgram.shared.db import transaction
 
 _MIN_INT = -(2**63)
@@ -284,6 +285,21 @@ class SqliteOfferRepository:
             (store, to_iso(since), limit),
         ).fetchall()
         return [to_offer(r) for r in rows]
+
+    def product_urls(self, main_links: Sequence[str]) -> dict[str, str]:
+        if not main_links:
+            return {}
+        rows = self._conn.execute(
+            "SELECT url, store, product_id, kind, final_url FROM product_links "
+            f"WHERE url IN ({', '.join('?' * len(main_links))})",
+            tuple(main_links),
+        ).fetchall()
+        found: dict[str, str] = {}
+        for r in rows:
+            url = real_product_url(r["store"], r["product_id"], r["kind"], r["final_url"])
+            if url is not None:
+                found[str(r["url"])] = url
+        return found
 
     def purge_text_before(self, cutoff: datetime) -> int:
         with transaction(self._conn) as c:
