@@ -285,14 +285,16 @@ class SqliteOfferQueries:
             if (c.channel_id, c.message_id) == exclude or not c.coupons:
                 continue
             discount, min_cents, codes = c.coupon_discount or "", c.coupon_min_cents, c.coupons
+            cap_cents: int | None = None
             if price_cents is not None:
                 tier = applicable_tier(c.coupon_tiers, min_cents, discount, codes, price_cents)
                 if tier is None:
                     continue
                 discount, min_cents, codes = tier.discount, tier.min_cents, tier.codes
+                cap_cents = tier.cap_cents
             views.append(
                 ActiveCouponView(
-                    c.channel_id, c.message_id, c.posted_at, discount, min_cents, codes
+                    c.channel_id, c.message_id, c.posted_at, discount, min_cents, codes, cap_cents
                 )
             )
             if len(views) >= limit:

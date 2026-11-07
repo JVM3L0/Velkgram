@@ -69,6 +69,7 @@ class CouponTargetData:
     discount: str
     min_cents: int | None
     codes: tuple[str, ...]
+    cap_cents: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

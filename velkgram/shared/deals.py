@@ -89,6 +89,45 @@ def matches(wish: WishView, normalized_text: str, price_cents: int | None) -> bo
     return price_cents is None or price_cents <= wish.max_price_cents
 
 
+LOW_CAP_PCT = 5
+"""A capped saving under this share of the price is flagged as low."""
+
+
+@dataclass(frozen=True, slots=True)
+class Saving:
+    cents: int
+    capped: bool
+    low: bool
+
+
+def min_not_met(min_cents: int | None, price_cents: int) -> bool:
+    """True only when a minimum is set and the price is below it (equal counts as met)."""
+    return min_cents is not None and min_cents > price_cents
+
+
+_DISCOUNT_PERCENT = re.compile(r"(\d+)% OFF")
+_DISCOUNT_CASH = re.compile(r"R\$ (\d+)(?:,(\d{2}))? OFF")
+
+
+def coupon_saving(
+    discount: str, min_cents: int | None, cap_cents: int | None, price_cents: int
+) -> Saving | None:
+    """What a coupon takes off `price_cents`; None if its minimum isn't met or it is unknown."""
+    if min_not_met(min_cents, price_cents):
+        return None
+    cash = _DISCOUNT_CASH.fullmatch(discount)
+    if cash is not None:
+        value = int(cash.group(1)) * 100 + (int(cash.group(2)) if cash.group(2) else 0)
+        return Saving(min(value, price_cents), capped=False, low=False)
+    percent = _DISCOUNT_PERCENT.fullmatch(discount)
+    if percent is None:
+        return None
+    cents = price_cents * int(percent.group(1)) // 100
+    if cap_cents is None or cap_cents >= cents:
+        return Saving(cents, capped=False, low=False)
+    return Saving(cap_cents, capped=True, low=cap_cents * 100 < LOW_CAP_PCT * price_cents)
+
+
 _COUPON_KEYWORD = re.compile(r"\b(?:cupom|cupons|cupon|c[óo]digo|code)\b", re.IGNORECASE)
 _COUPON_TOKEN = re.compile(r"(?=[A-Z0-9_-]*[A-Z])[A-Z0-9_-]{3,25}")
 _NOT_CODES = frozenset(

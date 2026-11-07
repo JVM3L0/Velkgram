@@ -133,3 +133,10 @@ def test_query_plan_uses_the_store_kind_feed_index(conn: sqlite3.Connection) -> 
     sql = SqliteOfferQueries.ACTIVE_COUPONS_SQL
     plan = conn.execute(f"EXPLAIN QUERY PLAN {sql}", ("shopee", "2026-01-01")).fetchall()
     assert any("idx_offers_store_kind_feed" in str(r[3]) for r in plan)
+
+
+def test_view_carries_the_applicable_tiers_cap_only_with_a_price(conn: sqlite3.Connection) -> None:
+    tiers = (CouponTier("10% OFF", None, 4000, ("CAPPED",)),)
+    put(conn, coupon(1, coupon_tiers=tiers))
+    assert [v.cap_cents for v in _active(conn, 30000)] == [4000]
+    assert [v.cap_cents for v in _active(conn, None)] == [None]

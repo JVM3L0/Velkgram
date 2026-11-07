@@ -111,6 +111,7 @@ class ActiveCouponView:
     discount: str
     min_cents: int | None
     codes: tuple[str, ...]
+    cap_cents: int | None = None
 
 
 NEWS_COUNT_CAP = 100

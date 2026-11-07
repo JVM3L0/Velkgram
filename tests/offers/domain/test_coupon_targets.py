@@ -67,14 +67,39 @@ def test_shopee_minimum_is_inclusive() -> None:
     assert applicable_tier(*args, 4000) == AppliedTier("R$ 10 OFF", 4000, ("QIP98Q1ZXO",))
 
 
-def test_mercado_livre_picks_the_tier_by_price() -> None:
+def test_mercado_livre_picks_the_tier_by_real_saving() -> None:
     c = _build(MERCADO_LIVRE, ("https://mercadolivre.com/sec/2U6U32Q",), NOW, 1, 1)
     args = (c.coupon_tiers, c.coupon_min_cents, c.coupon_discount or "", c.coupons)
-    high = applicable_tier(*args, 69900)
-    assert high == AppliedTier("R$ 90 OFF", 69900, ("MOVEIS0511",))
-    mid = applicable_tier(*args, 15000)
-    assert mid is not None and (mid.discount, mid.min_cents) == ("10% OFF", 14900)
-    assert mid.codes == ("PROMOSML", "CLIENTESTOP")
+    for price in (69900, 15000):
+        tier = applicable_tier(*args, price)
+        assert tier is not None
+        assert (tier.discount, tier.min_cents) == ("30% OFF", 100)
+        assert tier.codes == ("ECONOMIZAML", "DESCONTONAHORA")
+        assert tier.cap_cents == 50000
+
+
+def test_applicable_tier_prefers_the_larger_capped_saving() -> None:
+    tiers = (CouponTier("10% OFF", 7900, 4000, ("A",)), CouponTier("15% OFF", None, 2000, ("B",)))
+    tier = applicable_tier(tiers, None, "", (), 30000)
+    assert tier == AppliedTier("10% OFF", 7900, ("A",), 4000)
+
+
+def test_equal_savings_go_to_the_higher_minimum() -> None:
+    tiers = (
+        CouponTier("R$ 10 OFF", None, None, ("A",)),
+        CouponTier("R$ 10 OFF", 500, None, ("B",)),
+    )
+    tier = applicable_tier(tiers, None, "", (), 5000)
+    assert tier is not None and tier.codes == ("B",)
+
+
+def test_no_tier_applies_when_every_minimum_is_above_the_price() -> None:
+    tiers = (CouponTier("10% OFF", 7900, None, ("A",)),)
+    assert applicable_tier(tiers, None, "", (), 5000) is None
+
+
+def test_empty_discount_with_met_minimum_is_still_applicable() -> None:
+    assert applicable_tier((), 1000, "", ("A",), 5000) == AppliedTier("", 1000, ("A",))
 
 
 def test_tier_without_codes_falls_back_to_coupon_codes() -> None:
