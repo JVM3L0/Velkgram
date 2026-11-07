@@ -1,8 +1,10 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from velkgram.alerting.domain.format import (
+    format_age,
     format_alert,
     format_coupon_alert,
+    format_saving,
     message_link,
     telegram_link,
 )
@@ -83,51 +85,100 @@ def test_alert_without_a_coupon_keeps_the_plain_price_line() -> None:
 
 def _coupon(**kw: object) -> str:
     args: dict[str, object] = {
-        "store_title": "Shopee",
-        "codes": ("QIP98Q1ZXO",),
-        "discount": "R$ 10 OFF",
-        "min_cents": 4000,
+        "store_title": "Mercado Livre",
+        "codes": ("OFFNOML",),
+        "discount": "15% OFF",
+        "min_cents": None,
+        "cap_cents": 4000,
         "scope": None,
-        "wish_name": "SSD",
-        "offer_price_cents": 9900,
-        "max_price_cents": 20000,
+        "wish_name": "Monitor",
+        "offer_title": "Smart Tv Aoc 50'' 50U7066",
+        "offer_price_cents": 170900,
+        "max_price_cents": 200000,
         "over_max": False,
-        "link": "https://s.shopee.com.br/x",
+        "offer_age": timedelta(hours=5, minutes=50),
+        "product_url": "https://www.mercadolivre.com.br/p/MLB1",
+        "offer_link": "https://meli.la/x",
+        "coupon_link": "https://mercadolivre.com/sec/2U6U32Q",
     }
     args.update(kw)
     return format_coupon_alert(**args)  # type: ignore[arg-type]
 
 
-def test_coupon_alert_plain() -> None:
-    assert _coupon().splitlines() == [
-        "🎟️ Cupom Shopee: QIP98Q1ZXO — R$ 10 OFF a partir de R$ 40,00",
-        'Para "SSD": oferta de R$ 99,00',
-        "https://s.shopee.com.br/x",
+GOLDEN_A = """🎟️ Cupom Mercado Livre: OFFNOML — 15% OFF, limite de R$ 40,00
+Para "Monitor": Smart Tv Aoc 50'' 50U7066
+💰 R$ 1.709,00 → R$ 40,00 de desconto (2,3%) → ~R$ 1.669,00 ⚠️ limite baixo
+📅 oferta postada há 5 h
+🔗 Produto: https://www.mercadolivre.com.br/p/MLB1
+🎟️ Resgatar cupom: https://mercadolivre.com/sec/2U6U32Q"""
+
+
+def test_coupon_alert_golden_with_product_link() -> None:
+    assert _coupon() == GOLDEN_A
+
+
+def test_coupon_alert_golden_without_product_link_uses_the_offer_link() -> None:
+    lines = GOLDEN_A.splitlines()
+    lines[4] = "🔗 Oferta: https://meli.la/x"
+    assert _coupon(product_url=None) == "\n".join(lines)
+
+
+def test_coupon_alert_golden_without_title() -> None:
+    lines = GOLDEN_A.splitlines()
+    lines[1] = 'Para "Monitor"'
+    assert _coupon(offer_title="") == "\n".join(lines)
+
+
+def test_coupon_alert_golden_over_max_scope_no_age() -> None:
+    text = _coupon(
+        wish_name='Monitor "34"',
+        offer_title='LG 34" Curvo',
+        discount="10% OFF",
+        min_cents=7900,
+        scope="Selecionados",
+        offer_price_cents=151700,
+        max_price_cents=150000,
+        over_max=True,
+        offer_age=None,
+        product_url=None,
+        offer_link="https://meli.la/y",
+    )
+    assert text.splitlines() == [
+        "🎟️ Cupom Mercado Livre: OFFNOML — 10% OFF a partir de R$ 79,00, "
+        "limite de R$ 40,00 em Selecionados",
+        'Para "Monitor "34"": LG 34" Curvo',
+        "💰 R$ 1.517,00 → R$ 40,00 de desconto (2,6%) → ~R$ 1.477,00 ⚠️ limite baixo "
+        "(acima do seu limite de R$ 1.500,00)",
+        "• pode não valer para todos os produtos",
+        "🔗 Oferta: https://meli.la/y",
+        "🎟️ Resgatar cupom: https://mercadolivre.com/sec/2U6U32Q",
     ]
 
 
-def test_coupon_alert_over_max() -> None:
-    line = _coupon(over_max=True, offer_price_cents=25000).splitlines()[1]
-    assert line == 'Para "SSD": oferta de R$ 250,00 (acima do seu limite de R$ 200,00)'
-
-
-def test_coupon_alert_with_scope_adds_caveat_line() -> None:
-    lines = _coupon(scope="eletrônicos").splitlines()
-    assert lines[0].endswith("a partir de R$ 40,00 em eletrônicos")
-    assert lines[2] == "• pode não valer para todos os produtos"
-    assert lines[3] == "https://s.shopee.com.br/x"
-
-
 def test_coupon_alert_without_discount_or_minimum() -> None:
-    first = _coupon(discount="", min_cents=None).splitlines()[0]
-    assert first == "🎟️ Cupom Shopee: QIP98Q1ZXO"
+    first = _coupon(discount="", min_cents=None, cap_cents=None).splitlines()[0]
+    assert first == "🎟️ Cupom Mercado Livre: OFFNOML"
 
 
-def test_coupon_alert_lists_mercado_livre_tier_codes() -> None:
-    first = _coupon(
-        store_title="Mercado Livre", codes=("ML10", "ML10B"), discount="10% OFF", min_cents=None
-    ).splitlines()[0]
-    assert first == "🎟️ Cupom Mercado Livre: ML10, ML10B — 10% OFF"
+def test_coupon_alert_lists_several_codes() -> None:
+    first = _coupon(codes=("ML10", "ML10B")).splitlines()[0]
+    assert first.startswith("🎟️ Cupom Mercado Livre: ML10, ML10B — 15% OFF")
+
+
+def test_format_age() -> None:
+    assert format_age(timedelta(seconds=30)) == "1 min"
+    assert format_age(timedelta(minutes=59)) == "59 min"
+    assert format_age(timedelta(minutes=60)) == "1 h"
+    assert format_age(timedelta(hours=5, minutes=50)) == "5 h"
+    assert format_age(timedelta(minutes=-2)) == "1 min"
+
+
+def test_format_saving_minimum_not_met() -> None:
+    assert format_saving("10% OFF", 200000, None, 150000) == " (não vale: mínimo R$ 2.000,00)"
+
+
+def test_format_saving_unparseable_discount_is_empty() -> None:
+    assert format_saving("frete grátis", None, None, 150000) == ""
 
 
 def test_rendered_text_is_returned_verbatim() -> None:

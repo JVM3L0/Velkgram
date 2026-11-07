@@ -97,7 +97,7 @@ async def test_one_event_with_two_targets_gives_two_alerts() -> None:
     assert a.latency_telegram_ms == 1000
     assert a.dedup_keys == (f"wco:1:{CH}:50", "wcc:1:shopee:QIP98Q1ZXO")
     assert a.payload is not None
-    assert a.payload.splitlines()[1] == 'Para "SSD": oferta de R$ 99,00'
+    assert a.payload.splitlines()[2].startswith("💰 R$ 99,00")
     assert h.notifier.sent[0].rendered == a.payload
 
 
@@ -106,7 +106,7 @@ async def test_link_falls_back_to_the_telegram_post() -> None:
     await h.feed(_event(_target(1), link=None))
     payload = h.alerts()[0].payload
     assert payload is not None
-    assert payload.splitlines()[-1] == f"https://t.me/c/{str(CH)[4:]}/50"
+    assert payload.splitlines()[-1] == f"🎟️ Resgatar cupom: https://t.me/c/{str(CH)[4:]}/50"
 
 
 async def test_edited_coupon_within_three_days_gives_no_second_alert() -> None:

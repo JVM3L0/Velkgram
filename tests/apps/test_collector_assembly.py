@@ -393,7 +393,8 @@ async def test_live_coupon_after_a_matching_offer_produces_one_coupon_alert(env:
     [sent] = [m for m in env.notifier.sent if m.rendered is not None]
     assert sent.rendered is not None
     assert sent.rendered.startswith("🎟️ Cupom Shopee: QIP98Q1ZXO")
-    assert 'Para "Teclado": oferta de R$ 99,00' in sent.rendered
+    assert 'Para "Teclado"' in sent.rendered
+    assert "💰 R$ 99,00" in sent.rendered
 
 
 async def test_stopping_the_collector_leaves_no_pending_workers(env: Env) -> None:
@@ -441,6 +442,14 @@ async def test_same_coupon_two_days_later_is_suppressed_by_the_three_day_window(
     await _seed_product_and_coupon(env)
     assert env.count("alerts", "kind='coupon'") == 1
     env.clock.advance(2 * 24 * 3600)
+    fresh = replace(
+        msg(4, CH, "Teclado mecanico por R$ 99"),
+        date=env.clock.now() - timedelta(hours=2),
+        links=("https://s.shopee.com.br/prod2",),
+        source="backfill",
+    )
+    await env.collector.ingestor.on_new(fresh)
+    await _settle(env)
     await _post_coupon(env, 3)
     assert env.count("alerts", "kind='coupon'") == 1
     assert env.count("alert_suppressions", "rule='wish_coupon'") == 1

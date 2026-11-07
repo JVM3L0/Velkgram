@@ -70,6 +70,10 @@ class CouponTargetData:
     min_cents: int | None
     codes: tuple[str, ...]
     cap_cents: int | None = None
+    offer_title: str = ""
+    offer_link: str | None = None
+    product_url: str | None = None
+    offer_posted_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

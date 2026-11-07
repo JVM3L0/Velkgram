@@ -119,11 +119,31 @@ def test_tie_on_min_goes_to_the_first_tier() -> None:
     assert applicable_tier(tiers, None, "", (), 500) == AppliedTier("A", 100, ("X",))
 
 
-def test_recent_window_starts_three_days_before_the_coupon() -> None:
-    old = _product(at=COUPON_AT - timedelta(days=3, seconds=1), msg_id=3)
-    edge = _product(at=COUPON_AT - timedelta(days=3), msg_id=4)
+def test_recent_window_starts_24_hours_before_the_coupon() -> None:
+    old = _product(at=COUPON_AT - timedelta(hours=24, seconds=1), msg_id=3)
+    edge = _product(at=COUPON_AT - timedelta(hours=24), msg_id=4)
     assert _ids([old]) == []
     assert _ids([edge]) == [4]
+
+
+def test_coupon_dependent_offer_is_never_a_target() -> None:
+    assert _ids([_product(coupons=("FAVORITO",))]) == []
+
+
+def test_target_carries_the_offer_fields() -> None:
+    offer = _product(msg_id=7)
+    [t] = coupon_targets(_coupon(), [_wish()], [offer], NOW)
+    assert t.offer_title == offer.title
+    assert t.offer_link == offer.main_link == "https://s.shopee.com.br/prod"
+    assert t.offer_posted_at == offer.posted_at
+    assert t.cap_cents is None
+
+
+def test_target_carries_the_tier_cap() -> None:
+    c = _build(MERCADO_LIVRE, ("https://mercadolivre.com/sec/2U6U32Q",), COUPON_AT, 10, 1)
+    offer = replace(_product(price=170000), store=c.store)
+    [t] = coupon_targets(c, [_wish(max_cents=200000)], [offer], NOW)
+    assert t.cap_cents is not None
 
 
 def test_offer_posted_after_the_coupon_but_before_now_is_included() -> None:

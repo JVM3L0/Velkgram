@@ -16,6 +16,7 @@ from velkgram.offers.ports.wishes import WishReader
 from velkgram.shared.deals import WishView, matches
 from velkgram.shared.events import (
     CouponMatchedWish,
+    CouponTargetData,
     Event,
     MessageData,
     MessageDeleted,
@@ -29,7 +30,7 @@ log = logging.getLogger(__name__)
 type _Event = MessageReceived | MessageEdited | MessageDeleted
 
 _LIVE_AGE_LIMIT = timedelta(minutes=30)
-_COUPON_LOOKBACK = timedelta(days=3)
+_COUPON_LOOKBACK = timedelta(hours=24)
 
 
 class OfferBuilder:
@@ -136,6 +137,7 @@ class OfferBuilder:
             targets = coupon_targets(offer, self._wishes.enabled(), recent, now)
             if not targets:
                 return
+            targets = self._with_product_urls(targets)
             forwarded = offer.origin_channel_id is not None and offer.origin_message_id is not None
             self._outbox.append(
                 CouponMatchedWish(
@@ -157,6 +159,21 @@ class OfferBuilder:
                 "coupon_targets_failed",
                 extra={"channel_id": offer.channel_id, "message_id": offer.message_id},
             )
+
+    def _with_product_urls(
+        self, targets: tuple[CouponTargetData, ...]
+    ) -> tuple[CouponTargetData, ...]:
+        """Resolve the targets' product URLs in one lookup; on failure keep them without."""
+        links = [t.offer_link for t in targets if t.offer_link is not None]
+        try:
+            urls = self._repo.product_urls(links) if links else {}
+        except Exception as e:
+            log.warning("product_link_lookup_failed", extra={"error": type(e).__name__})
+            return targets
+        return tuple(
+            replace(t, product_url=urls.get(t.offer_link)) if t.offer_link is not None else t
+            for t in targets
+        )
 
     def ingest_many(self, items: Sequence[SourceMessage], *, source: MatchSource) -> int:
         """Ingest a batch with `ingest`'s rules: one wish read and one `add_matches` call."""

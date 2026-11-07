@@ -14,7 +14,7 @@ from velkgram.shared.deals import (
 )
 from velkgram.shared.events import CouponTargetData
 
-_LOOKBACK = timedelta(days=3)
+_LOOKBACK = timedelta(hours=24)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +54,7 @@ def _is_candidate(offer: Offer, coupon: Offer, now: datetime) -> bool:
         offer.kind == OfferKind.product
         and offer.store == coupon.store
         and offer.price_cents is not None
+        and not offer.coupons
         and not offer.deleted
         and not offer.sold_out
         and offer.norm_text is not None
@@ -108,6 +109,9 @@ def coupon_targets(
                     min_cents=tier.min_cents,
                     codes=tier.codes,
                     cap_cents=tier.cap_cents,
+                    offer_title=offer.title,
+                    offer_link=offer.main_link,
+                    offer_posted_at=offer.posted_at,
                 )
             )
     return tuple(targets)

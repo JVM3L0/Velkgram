@@ -477,7 +477,21 @@ async def test_failed_handle_discards_events_queued_before_the_failure(
     assert published.events == []
 
 
-async def test_product_posted_two_and_a_half_days_before_the_coupon_is_a_target(
+async def test_product_posted_23_hours_before_the_coupon_is_a_target(
+    repo: InMemoryOfferRepository, wishes: FakeWishReader, published: Published
+) -> None:
+    wishes.views = [_wish(1, 20000)]
+    wishes.enabled_ids = {1}
+    b = OfferBuilder(repo, wishes, FakeClock(NOW), publish=published)
+    old = replace(_product_msg(10), date=NOW - timedelta(minutes=5) - timedelta(hours=23))
+    b.ingest(old, source=MatchSource.retro)
+    await _feed(b, _coupon_msg())
+    [event] = published.events
+    assert isinstance(event, CouponMatchedWish)
+    assert [t.wish_id for t in event.targets] == [1]
+
+
+async def test_product_posted_two_and_a_half_days_before_the_coupon_is_not_a_target(
     repo: InMemoryOfferRepository, wishes: FakeWishReader, published: Published
 ) -> None:
     wishes.views = [_wish(1, 20000)]
@@ -486,9 +500,38 @@ async def test_product_posted_two_and_a_half_days_before_the_coupon_is_a_target(
     old = replace(_product_msg(10), date=NOW - timedelta(minutes=5) - timedelta(days=2, hours=12))
     b.ingest(old, source=MatchSource.retro)
     await _feed(b, _coupon_msg())
+    assert published.events == []
+
+
+async def test_target_gets_the_product_url(
+    repo: InMemoryOfferRepository, pub_builder: OfferBuilder, published: Published
+) -> None:
+    repo.product_url_map["https://s.shopee.com.br/prod"] = "https://www.amazon.com.br/dp/B0C8814GKB"
+    await _feed(pub_builder, _coupon_msg())
     [event] = published.events
     assert isinstance(event, CouponMatchedWish)
-    assert [t.wish_id for t in event.targets] == [1]
+    assert [t.product_url for t in event.targets] == ["https://www.amazon.com.br/dp/B0C8814GKB"] * 2
+    assert event.targets[0].offer_link == "https://s.shopee.com.br/prod"
+
+
+async def test_product_url_lookup_failure_still_sends_the_event(
+    repo: InMemoryOfferRepository,
+    pub_builder: OfferBuilder,
+    published: Published,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+
+    def boom(links: object) -> dict[str, str]:
+        raise RuntimeError("db")
+
+    monkeypatch.setattr(repo, "product_urls", boom)
+    with caplog.at_level(logging.WARNING):
+        await _feed(pub_builder, _coupon_msg())
+    [event] = published.events
+    assert isinstance(event, CouponMatchedWish)
+    assert [t.product_url for t in event.targets] == [None, None]
+    assert any(r.message == "product_link_lookup_failed" for r in caplog.records)
 
 
 async def test_partial_forward_origin_is_not_reported(

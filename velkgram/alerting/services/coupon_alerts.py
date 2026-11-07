@@ -136,18 +136,27 @@ class CouponAlerter:
                 e.coupon_channel_id, e.coupon_message_id, wish.id, rule, matched_id, now
             )
             return
-        link = e.link or telegram_link(e.coupon_channel_id, e.coupon_message_id)
+        coupon_link = e.link or telegram_link(e.coupon_channel_id, e.coupon_message_id)
+        offer_link = target.offer_link or telegram_link(
+            target.offer_channel_id, target.offer_message_id
+        )
+        offer_age = now - target.offer_posted_at if target.offer_posted_at is not None else None
         payload = format_coupon_alert(
-            e.store_title,
-            target.codes,
-            target.discount,
-            target.min_cents,
-            e.scope,
-            wish.name,
-            target.offer_price_cents,
-            wish.max_price_cents,
-            target.over_max,
-            link,
+            store_title=e.store_title,
+            codes=target.codes,
+            discount=target.discount,
+            min_cents=target.min_cents,
+            cap_cents=target.cap_cents,
+            scope=e.scope,
+            wish_name=wish.name,
+            offer_title=target.offer_title,
+            offer_price_cents=target.offer_price_cents,
+            max_price_cents=wish.max_price_cents,
+            over_max=target.over_max,
+            offer_age=offer_age,
+            product_url=target.product_url,
+            offer_link=offer_link,
+            coupon_link=coupon_link,
         )
         alert = self._repo.add(
             Alert(
@@ -180,7 +189,7 @@ class CouponAlerter:
             text="",
             price_cents=target.offer_price_cents,
             channel_name="",
-            link=link,
+            link=coupon_link,
             delayed_minutes=None,
             rendered=payload,
         )
