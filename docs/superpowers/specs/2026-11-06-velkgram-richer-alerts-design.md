@@ -74,7 +74,7 @@ In a cap, "R$ 50.00" is a dot-decimal amount: a dot followed by exactly two digi
 Stored coupons were parsed with the old rule. The deploy runs `velkgram rebuild-offers` once to re-parse them; that command already exists and is idempotent.
 
 ### 4.2 Offers that already used a coupon
-- **Coupon-dependent offer:** a product offer whose post names a coupon code, i.e. `extract_coupons(text)` is non-empty. Example: "R$ 1517 ⏎ -CUPOM: FAVORITO". Its posted price depends on that code. The base price is unknown, and store coupons usually do not stack.
+- **Coupon-dependent offer:** a product offer whose post names a coupon code: its stored `coupons` column is non-empty (built with `extract_coupons(text)`, and it survives the text purge); in the live evaluator, `extract_coupons(m.text)` is non-empty. Example: "R$ 1517 ⏎ -CUPOM: FAVORITO". Its posted price depends on that code. The base price is unknown, and store coupons usually do not stack.
 - **Coupon alerts:** a coupon-dependent offer is never a target in `coupon_targets`.
 - **Offer alerts:**
   - A coupon-dependent offer gets no "cupom ativo da loja" lines.
@@ -109,16 +109,17 @@ via {channel}
   - When the minimum is not met, the suffix is ` (não vale: mínimo R$ M)`. This happens only for a coupon whose post has no tiers, because the port already filters by price.
   - When the saving is None for another reason, there is no suffix.
 - **Codes in the post** (from `extract_coupons(text)`): the post gives no terms for them, so they show code only. They no longer go in the price line.
-- **Extra lines:** the post's lines after the title, in order. These lines are dropped:
+- **Extra lines:** the post's lines after the title line, in order. The title line is the first line that is non-empty once URLs are removed and ` -*•` are stripped from its ends. These lines are dropped:
   - blank lines;
   - lines whose only content is a URL;
   - lines from which `extract_price` reads a price;
   - lines that contain a code already shown;
   - the line "-Anúncio" (case- and accent-insensitive, leading "-" optional).
 
-  Each kept line loses a leading "-" and surrounding spaces. At most 3 lines and 200 characters in all are kept; a line that would pass the limit is cut with "…". Example: "Resgate cupom do anúncio" stays.
+  Each kept line loses a leading "-" and surrounding spaces. At most 3 lines are kept, with a budget of 200 characters of line text (newlines don't count). The line that would pass the budget is cut to the remaining budget minus 1, plus "…", and nothing after it is kept. Example: "Resgate cupom do anúncio" stays.
 - **The link** is unchanged: the first link in the post, else the Telegram link.
 - **The 300-character dump** of the post is removed.
+- **Retries:** the collector's retry path (`build_message`, which resends failed alerts) builds the same title and store, so a retried alert looks like a first send. It still has no coupon lines, as today.
 
 ### 4.4 Coupon alert text
 `CouponTargetData` (`shared/events.py`) gets five new fields, all with defaults so old call sites still build:
@@ -165,7 +166,7 @@ The coupon content dedup key uses the chosen tier's codes. A coupon that used to
   - The offer of a row is `(offer_channel_id, offer_message_id)` for coupon alerts and `(channel_id, message_id)` for offer alerts.
   - The alerting web router takes an injected callable `product_links(pairs) -> dict[pair, url]`, the same pattern as `notifier_status`. `apps/web/main.py` wires it to a new public `OfferQueries.product_links(pairs)`: one query for the whole page.
   - A failure of the callable renders the page without buttons. It is logged as `product_links_failed`.
-- Every href goes through the existing `safe_href`.
+- On the offers pages every href goes through the existing `safe_href`. Alerting cannot import it (module boundary), so the Alerts page shows only URLs from `product_links`, which the offers side already checked with `is_safe_https_url`.
 
 ## 5. Error handling ("alert first")
 - **Text helpers:** `offer_title`, `coupon_saving`, the extra-line filter and the formatters are pure and total: they never raise on odd text. A bad parse shows less, never fails the alert.
