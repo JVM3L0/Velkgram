@@ -155,6 +155,15 @@ def test_coupon_alert_golden_over_max_scope_no_age() -> None:
     ]
 
 
+def test_coupon_alert_age_line_comes_before_the_scope_caveat() -> None:
+    lines = _coupon(scope="Selecionados").splitlines()
+    assert lines[2].startswith("💰 ")
+    assert lines[3] == "📅 oferta postada há 5 h"
+    assert lines[4] == "• pode não valer para todos os produtos"
+    assert lines[5].startswith("🔗 Produto: ")
+    assert lines[6].startswith("🎟️ Resgatar cupom: ")
+
+
 def test_coupon_alert_without_discount_or_minimum() -> None:
     first = _coupon(discount="", min_cents=None, cap_cents=None).splitlines()[0]
     assert first == "🎟️ Cupom Mercado Livre: OFFNOML"

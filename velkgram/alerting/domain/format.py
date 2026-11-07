@@ -111,10 +111,10 @@ def format_coupon_alert(
     if over_max:
         price += f" (acima do seu limite de {format_brl(max_price_cents)})"
     lines = [head, wish_line, price]
-    if scope:
-        lines.append("• pode não valer para todos os produtos")
     if offer_age is not None:
         lines.append(f"📅 oferta postada há {format_age(offer_age)}")
+    if scope:
+        lines.append("• pode não valer para todos os produtos")
     lines.append(f"🔗 Produto: {product_url}" if product_url else f"🔗 Oferta: {offer_link}")
     lines.append(f"🎟️ Resgatar cupom: {coupon_link}")
     return "\n".join(lines)
