@@ -50,13 +50,13 @@ This version makes every alert self-explanatory **in the first and only send**. 
   | store | URL |
   |---|---|
   | `amazon` | `https://www.amazon.com.br/dp/{ASIN}` |
-  | `mercadolivre` | `https://produto.mercadolivre.com.br/MLB-{digits}` (id `MLB123…` → `MLB-123…`) |
+  | `mercadolivre` | `https://www.mercadolivre.com.br/p/{id}` (id as stored, `MLB…`) |
   | `kabum` | `https://www.kabum.com.br/produto/{id}` |
   | `shopee` | `https://shopee.com.br/product/{shop}/{item}` (id `{shop}.{item}`) |
   | `aliexpress` | `https://pt.aliexpress.com/item/{id}.html` |
   | other | None |
 
-  **Mercado Livre is unverified.** The spike's bot requests to both `produto.mercadolivre.com.br/MLB-…` and `/p/MLB…` were redirected to an account check. Before Task 1 is merged, the owner opens both forms for one real id in a browser. The table keeps the form that lands on the product. If neither does, `mercadolivre` returns None, because its `final_url` is the affiliate showcase (`/social/<affiliate>`), which is a list.
+  **Mercado Livre:** the owner confirmed in a browser that `/p/MLB62870034` (the id the enricher read from a `meli.la` showcase body) lands on the product. Bots are redirected to an account check, so the controller cannot verify this form. Almost all Mercado Livre offers arrive as `meli.la` links, whose id comes from the body. An id taken from a `produto.mercadolivre.com.br/MLB-…` URL is an item id, and `/p/` may not resolve it. That is accepted: the link may then show a list.
 
   An offer's **real product link** is `product_url(...)` when its `product_links` row has `kind = 'product'`. When that gives None (Magalu, other stores), the row's `final_url` is used, which is already query-free. Either value must pass `is_safe_https_url`; otherwise there is no real link. Rows that are not `product` (campaigns, lists, unknown) give no real link.
 
@@ -220,7 +220,6 @@ The coupon content dedup key uses the chosen tier's codes. A coupon that used to
   - the Alerts page shows it for both alert kinds;
   - a failing callable renders the page without buttons.
 - **Real check (controller and owner):**
-  - the owner opens the two Mercado Livre forms in a browser (§3);
   - the controller opens one built URL per store from the table in §3 (a single GET each) and confirm it lands on the product;
   - after deploy, read one real offer alert and one real coupon alert on the phone.
 
