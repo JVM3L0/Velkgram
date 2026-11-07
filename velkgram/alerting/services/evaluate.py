@@ -28,7 +28,13 @@ from velkgram.alerting.ports.notifier import Notifier
 from velkgram.alerting.ports.repository import AlertRepository
 from velkgram.alerting.ports.wishlist_reader import WishlistReader
 from velkgram.alerting.services.notify import send_with_retry
-from velkgram.shared.deals import WishView, extract_price, matches_terms, within_over_max
+from velkgram.shared.deals import (
+    WishView,
+    extract_coupons,
+    extract_price,
+    matches_terms,
+    within_over_max,
+)
 from velkgram.shared.events import AlertTriggered, MessageData, MessageEdited, MessageReceived
 from velkgram.shared.ports import Clock, EventBus
 from velkgram.shared.text import normalize_text
@@ -44,6 +50,15 @@ _MEMO_CAP = 256  # per-message memos live as long as the evaluator; keep them bo
 
 def _no_class(_m: MessageData) -> tuple[str | None, bool]:
     return None, False
+
+
+def _split_first_line(text: str, _store: str | None) -> tuple[str, str]:
+    title, _, rest = text.strip().partition("\n")
+    return title.strip(), rest
+
+
+def _identity(slug: str) -> str:
+    return slug
 
 
 def _ms(delta: timedelta) -> int:
@@ -65,6 +80,8 @@ class Evaluator:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         coupons: ActiveCoupons | None = None,
         classify: Callable[[MessageData], tuple[str | None, bool]] = _no_class,
+        split_title: Callable[[str, str | None], tuple[str, str]] = _split_first_line,
+        store_title: Callable[[str], str] = _identity,
     ) -> None:
         self._wishes = wishes
         self._repo = repo
@@ -81,6 +98,8 @@ class Evaluator:
         self._wish_max: dict[int, int] = {}
         self._coupons = coupons
         self._classify = classify
+        self._split_title = split_title
+        self._store_title = store_title
         self._classes: dict[tuple[int, int], tuple[str | None, bool]] = {}
         # (channel, message, price) -> coupon lines: wishes of one message share one lookup.
         self._lines: dict[tuple[int, int, int], tuple[str, ...]] = {}
@@ -206,6 +225,8 @@ class Evaluator:
 
         Only for non-coupon posts with a known store. Logs slow calls and failures, never raises.
         """
+        if extract_coupons(m.text):
+            return []  # coupon-dependent post: the price assumes the post's own coupon
         store, is_coupon_post = self._class_of(m)
         if self._coupons is None or store is None or is_coupon_post:
             return []
@@ -295,7 +316,7 @@ class Evaluator:
         lines = self._lines.get(key)
         if lines is None:
             found = self._lookup(m, price, now) or []
-            lines = tuple(format_coupon_line(c) for c in found[:_MAX_COUPON_LINES])
+            lines = tuple(format_coupon_line(c, price) for c in found[:_MAX_COUPON_LINES])
             if len(self._lines) >= _MEMO_CAP:
                 self._lines.pop(next(iter(self._lines)))
             self._lines[key] = lines
@@ -304,9 +325,14 @@ class Evaluator:
     async def _notify_and_finalize(self, m: MessageData, alert: Alert) -> None:
         t = self._clock.now()
         names = self._channel_names()
+        store, _ = self._class_of(m)
+        title, body = self._split_title(m.text, store)
         message = AlertMessage(
             wish_name=self._wish_names.get(alert.wish_id, str(alert.wish_id)),
             text=m.text,
+            title=title,
+            body=body,
+            store_title=self._store_title(store) if store else None,
             price_cents=alert.price_cents,
             channel_name=names.get(m.channel_id, str(m.channel_id)),
             link=message_link(m),

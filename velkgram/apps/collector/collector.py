@@ -37,7 +37,14 @@ from velkgram.ingestion import (
     snapshot_cursors,
 )
 from velkgram.ingestion.adapters.sqlite.repository import SqliteMessageRepository
-from velkgram.offers import OfferBuilder, RetroMatcher, classify_message, purge_offer_text_before
+from velkgram.offers import (
+    OfferBuilder,
+    RetroMatcher,
+    classify_message,
+    purge_offer_text_before,
+    split_title,
+    store_title,
+)
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
@@ -122,6 +129,8 @@ class Collector:
             sleep=sleep,
             coupons=OffersActiveCoupons(SqliteOfferQueries(conn)),
             classify=_classify,
+            split_title=split_title,
+            store_title=store_title,
         )
         self.coupon_alerter = CouponAlerter(
             WishlistApiReader(self._wish_repo),
@@ -404,9 +413,14 @@ class Collector:
         channel_name = self._names.get(alert.channel_id)
         if m is None or wish is None or channel_name is None:
             return None
+        store = classify_message(m).store
+        title, body = split_title(m.text, store)
         return AlertMessage(
             wish_name=wish.name,
             text=m.text,
+            title=title,
+            body=body,
+            store_title=store_title(store) if store else None,
             price_cents=alert.price_cents,
             channel_name=channel_name,
             link=message_link(m),

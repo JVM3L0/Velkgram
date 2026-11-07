@@ -74,3 +74,6 @@ class AlertMessage:
     rendered: str | None = None  # final text (coupon alerts); format_alert returns it verbatim
     coupon_lines: tuple[str, ...] = ()  # active store coupons, already formatted
     over_max_cents: int | None = None  # set on above-max alerts: the wish max, for the suffix
+    title: str = ""  # the offer title line of the post
+    body: str = ""  # the post text after the title line
+    store_title: str | None = None  # display name of the offer's store

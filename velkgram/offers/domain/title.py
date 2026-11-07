@@ -42,3 +42,16 @@ def title_of(text: str, store: str | None) -> str:
         if line:
             return _truncate(line)
     return STORE_TITLES.get(store or "", FALLBACK_TITLE)
+
+
+def split_title(text: str, store: str | None) -> tuple[str, str]:
+    """The title and the text after the title line ("" when no line qualifies)."""
+    lines = text.split("\n")
+    for i, raw in enumerate(lines):
+        if _clean(raw):
+            return title_of(text, store), "\n".join(lines[i + 1 :])
+    return title_of(text, store), ""
+
+
+def store_title(slug: str) -> str:
+    return STORE_TITLES.get(slug, slug)

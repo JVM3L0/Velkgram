@@ -17,6 +17,7 @@ from velkgram.alerting import Alert, AlertKind, AlertStatus
 from velkgram.alerting.adapters.notify_telegram import TelegramBotNotifier
 from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
+from velkgram.alerting.domain.format import format_alert
 from velkgram.alerting.ports.notifier_state import NotifierStatus
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
@@ -526,6 +527,22 @@ async def test_retry_of_an_over_max_alert_keeps_the_suffix(env: Env) -> None:
     assert rebuilt is not None
     assert rebuilt.over_max_cents == 50000
     assert rebuilt.coupon_lines == ()
+
+
+async def test_retried_offer_alert_has_the_title_line_and_the_store(env: Env) -> None:
+    await _over_max_alert_with_active_coupon(env)
+    [alert] = [
+        a
+        for a in SqliteAlertRepository(env.conn).list_since(NOW - timedelta(days=1))
+        if a.kind is AlertKind.offer
+    ]
+    rebuilt = env.collector.build_message(alert)
+    assert rebuilt is not None
+    assert rebuilt.title == "Teclado mecanico por R$ 600"
+    assert rebuilt.store_title == "Shopee"
+    text = format_alert(rebuilt)
+    assert text.splitlines()[1] == "Teclado mecanico por R$ 600"
+    assert " · Shopee" in text.splitlines()[2]
 
 
 # --- telegram bot notifier end to end -----------------------------------------------------

@@ -67,6 +67,8 @@ class Harness:
             sleep=_no_sleep,
             coupons=coupons,
             classify=lambda _m: (store, is_coupon_post),
+            split_title=lambda text, _store: (text.split("\n", 1)[0], text.partition("\n")[2]),
+            store_title=lambda slug: f"Loja {slug}",
         )
 
     def wish(self, name: str = "RTX 4060", max_cents: int = 100000) -> None:
@@ -158,8 +160,10 @@ async def test_alert_under_max_gets_at_most_two_lines_newest_first() -> None:
     await h.feed(msg(7, text=UNDER))
     lines = h.notifier.sent[0].coupon_lines
     assert lines == (
-        "🎟️ Cupom ativo da loja: AAA — R$ 10 OFF a partir de R$ 40,00",
-        "🎟️ Cupom ativo da loja: BBB, CCC — R$ 10 OFF a partir de R$ 40,00",
+        "🎟️ Cupom ativo da loja: AAA — R$ 10 OFF a partir de R$ 40,00"
+        " → R$ 10,00 de desconto (1,1%) → ~R$ 890,00",
+        "🎟️ Cupom ativo da loja: BBB, CCC — R$ 10 OFF a partir de R$ 40,00"
+        " → R$ 10,00 de desconto (1,1%) → ~R$ 890,00",
     )
     assert h.notifier.sent[0].over_max_cents is None
     assert port.calls[0][2:] == (90000, (CH, 7))
@@ -249,3 +253,44 @@ async def test_port_failure_is_logged(caplog: pytest.LogCaptureFixture) -> None:
         await h.feed(msg(7, text=OVER))
     assert any(r.message == "active_coupons_failed" for r in caplog.records)
     await asyncio.sleep(0)
+
+
+DEPENDENT = "RTX 4060 por R$ 1.200,00\n-CUPOM: FAVORITO"
+DEPENDENT_UNDER = "RTX 4060 por R$ 900,00\n-CUPOM: FAVORITO"
+
+
+async def test_coupon_dependent_post_makes_no_store_lookup_nor_over_max_alert() -> None:
+    port = FakeActiveCoupons([_coupon(5)])
+    h = Harness(port)
+    h.wish()
+    await h.feed(msg(7, text=DEPENDENT))
+    assert port.calls == []
+    assert h.stored() == []
+    assert h.processed == [(CH, 7)]
+
+
+async def test_coupon_dependent_post_within_max_alerts_without_coupon_lines() -> None:
+    port = FakeActiveCoupons([_coupon(5)])
+    h = Harness(port)
+    h.wish()
+    await h.feed(msg(7, text=DEPENDENT_UNDER))
+    assert port.calls == []
+    [sent] = h.notifier.sent
+    assert sent.coupon_lines == ()
+
+
+async def test_alert_message_carries_title_body_and_store_title() -> None:
+    h = Harness(FakeActiveCoupons([]))
+    h.wish()
+    await h.feed(msg(7, text="RTX 4060 Gamer\nR$ 900,00\nDetalhe"))
+    [sent] = h.notifier.sent
+    assert sent.title == "RTX 4060 Gamer"
+    assert sent.body == "R$ 900,00\nDetalhe"
+    assert sent.store_title == "Loja shopee"
+
+
+async def test_unknown_store_has_no_store_title() -> None:
+    h = Harness(FakeActiveCoupons([]), store=None)
+    h.wish()
+    await h.feed(msg(7, text=UNDER))
+    assert h.notifier.sent[0].store_title is None

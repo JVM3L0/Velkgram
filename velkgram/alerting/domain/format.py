@@ -1,12 +1,15 @@
 """Link helpers and pt-BR alert text."""
 
+import unicodedata
 from datetime import timedelta
 
 from velkgram.alerting.domain.models import ActiveCoupon, AlertMessage
-from velkgram.shared.deals import coupon_saving, extract_coupons, min_not_met
+from velkgram.shared.deals import coupon_saving, extract_coupons, extract_price, min_not_met
 from velkgram.shared.events import MessageData
+from velkgram.shared.text import URL_PATTERN
 
-_MAX_TEXT = 300
+_EXTRA_LINES = 3
+_EXTRA_BUDGET = 200
 
 
 def telegram_link(channel_id: int, message_id: int) -> str:
@@ -22,34 +25,72 @@ def format_brl(cents: int) -> str:
     return f"R$ {reais:,}".replace(",", ".") + f",{centavos:02d}"
 
 
+def _squash(line: str) -> str:
+    return unicodedata.normalize("NFKD", line).encode("ascii", "ignore").decode().lower()
+
+
+def extra_lines(body: str, codes: tuple[str, ...]) -> tuple[str, ...]:
+    """Detail lines of a post (text after the title) worth repeating in the alert."""
+    kept: list[str] = []
+    budget = _EXTRA_BUDGET
+    for raw in body.split("\n"):
+        line = raw.strip()
+        if (
+            not line
+            or not URL_PATTERN.sub(" ", line).strip(" -*•🔗")
+            or extract_price(line) is not None
+            or any(code in line for code in codes)
+            or _squash(line).strip(" -") == "anuncio"
+        ):
+            continue
+        line = line.removeprefix("-").strip()
+        if len(line) > budget:
+            kept.append(line[: budget - 1] + "…")
+            break
+        kept.append(line)
+        budget -= len(line)
+        if len(kept) == _EXTRA_LINES:
+            break
+    return tuple(kept)
+
+
 def format_alert(msg: AlertMessage) -> str:
     if msg.rendered is not None:
         return msg.rendered
     price = (
         format_brl(msg.price_cents) if msg.price_cents is not None else "⚠️ preço não identificado"
     )
-    codes = extract_coupons(msg.text)
-    if codes:
-        price += f" com {'cupom' if len(codes) == 1 else 'cupons'} {', '.join(codes)}"
+    price = f"💰 {price}"
+    if msg.store_title:
+        price += f" · {msg.store_title}"
     if msg.over_max_cents is not None:
         price += f" (acima do seu limite de {format_brl(msg.over_max_cents)}, mas há cupom)"
-    lines = [f"🔔 {msg.wish_name}", price, *msg.coupon_lines]
+    codes = extract_coupons(msg.text)
+    lines = [f"🔔 {msg.wish_name}"]
+    if msg.title:
+        lines.append(msg.title)
+    lines.append(price)
+    if codes:
+        lines.append(f"🎟️ Cupom no post: {', '.join(codes)}")
+    lines.extend(msg.coupon_lines)
     if msg.delayed_minutes is not None:
         lines.append(f"⏱ atrasado {msg.delayed_minutes} min")
+    lines.extend(extra_lines(msg.body, codes))
     lines.append(f"via {msg.channel_name}")
     if msg.link:
         lines.append(msg.link)
-    lines.append(msg.text[:_MAX_TEXT])
     return "\n".join(lines)
 
 
-def format_coupon_line(c: ActiveCoupon) -> str:
+def format_coupon_line(c: ActiveCoupon, price_cents: int) -> str:
     line = f"🎟️ Cupom ativo da loja: {', '.join(c.codes)}"
     if c.discount:
         line += f" — {c.discount}"
     if c.min_cents is not None:
         line += f" a partir de {format_brl(c.min_cents)}"
-    return line
+    if c.cap_cents is not None:
+        line += f", limite de {format_brl(c.cap_cents)}"
+    return line + format_saving(c.discount, c.min_cents, c.cap_cents, price_cents)
 
 
 def format_saving(

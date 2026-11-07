@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from velkgram.alerting.domain.format import (
+    extra_lines,
     format_age,
     format_alert,
     format_coupon_alert,
@@ -59,28 +60,131 @@ def test_format_brl() -> None:
 
 
 def test_format_price_unknown_and_delayed() -> None:
-    out = format_alert(_msg(price_cents=None, delayed_minutes=12, text="y" * 400))
+    out = format_alert(_msg(price_cents=None, delayed_minutes=12))
     assert "⚠️ preço não identificado" in out
     assert "⏱ atrasado 12 min" in out
-    assert "y" * 300 in out
-    assert "y" * 301 not in out
 
 
-def test_alert_mentions_the_coupon_right_after_the_price() -> None:
-    text = "Placa de Video Palit RTX 5070\n\nR$ 4679\n-CUPOM: ZAFADINHO10\n\n-Anúncio"
-    lines = format_alert(_msg(price_cents=467900, text=text)).splitlines()
-    assert lines[1] == "R$ 4.679,00 com cupom ZAFADINHO10"
+POST = (
+    'Monitor Gamer LG UltraGear Curvo 34"- QuadHD 2K -34G600A\n\n'
+    "R$ 1517\n-CUPOM: FAVORITO\n\nhttps://meli.la/2ZeTaW5\n\n-Anúncio"
+)
+TITLE = 'Monitor Gamer LG UltraGear Curvo 34"- QuadHD 2K -34G600A'
 
 
-def test_alert_lists_several_coupons() -> None:
-    text = "Teclado\nR$ 80\ncupom: AAA111\nCódigo: BBB222"
-    assert format_alert(_msg(price_cents=8000, text=text)).splitlines()[1] == (
-        "R$ 80,00 com cupons AAA111, BBB222"
+def _rich(**kw: object) -> AlertMessage:
+    base: dict[str, object] = {
+        "wish_name": "Monitor",
+        "text": POST,
+        "title": TITLE,
+        "body": POST.split("\n", 1)[1],
+        "price_cents": 151700,
+        "channel_name": "Promotom",
+        "link": "https://meli.la/2ZeTaW5",
+        "delayed_minutes": None,
+        "store_title": "Mercado Livre",
+    }
+    base.update(kw)
+    return AlertMessage(**base)  # type: ignore[arg-type]
+
+
+def test_golden_full_post() -> None:
+    assert format_alert(_rich()) == "\n".join(
+        [
+            "🔔 Monitor",
+            TITLE,
+            "💰 R$ 1.517,00 · Mercado Livre",
+            "🎟️ Cupom no post: FAVORITO",
+            "via Promotom",
+            "https://meli.la/2ZeTaW5",
+        ]
     )
 
 
-def test_alert_without_a_coupon_keeps_the_plain_price_line() -> None:
-    assert format_alert(_msg()).splitlines()[1] == "R$ 1.299,90"
+def test_no_price_with_store() -> None:
+    assert format_alert(_rich(price_cents=None)).splitlines()[2] == (
+        "💰 ⚠️ preço não identificado · Mercado Livre"
+    )
+
+
+def test_unknown_store_has_no_separator() -> None:
+    line = format_alert(_rich(store_title=None)).splitlines()[2]
+    assert line == "💰 R$ 1.517,00"
+
+
+def test_over_max_suffix_follows_the_store() -> None:
+    line = format_alert(_rich(over_max_cents=140000)).splitlines()[2]
+    assert line == (
+        "💰 R$ 1.517,00 · Mercado Livre (acima do seu limite de R$ 1.400,00, mas há cupom)"
+    )
+
+
+def test_delay_line_comes_just_before_the_extra_lines() -> None:
+    out = format_alert(_rich(delayed_minutes=7, body="Detalhe", text="x")).splitlines()
+    assert out[-4:] == ["⏱ atrasado 7 min", "Detalhe", "via Promotom", "https://meli.la/2ZeTaW5"]
+
+
+def test_empty_title_has_no_title_line() -> None:
+    lines = format_alert(_rich(title="")).splitlines()
+    assert lines[:2] == ["🔔 Monitor", "💰 R$ 1.517,00 · Mercado Livre"]
+
+
+def test_several_post_coupons_share_one_line() -> None:
+    text = "Teclado\nR$ 80\ncupom: AAA111\nCódigo: BBB222"
+    out = format_alert(_rich(text=text, body="R$ 80\ncupom: AAA111\nCódigo: BBB222"))
+    assert "🎟️ Cupom no post: AAA111, BBB222" in out.splitlines()
+
+
+def test_active_coupon_lines_follow_the_post_coupon_line() -> None:
+    out = format_alert(_rich(coupon_lines=("🎟️ Cupom ativo da loja: AAA",)))
+    assert out.splitlines()[3:5] == ["🎟️ Cupom no post: FAVORITO", "🎟️ Cupom ativo da loja: AAA"]
+
+
+def test_extra_lines_are_rendered() -> None:
+    out = format_alert(_rich(body="Resgate cupom do anúncio"))
+    assert "Resgate cupom do anúncio" in out.splitlines()
+
+
+def test_extra_lines_keep_a_detail_line() -> None:
+    assert extra_lines("Resgate cupom do anúncio", ()) == ("Resgate cupom do anúncio",)
+
+
+def test_extra_lines_of_a_bare_post_are_empty() -> None:
+    assert extra_lines("R$ 1517\n\nhttps://meli.la/2ZeTaW5\n-Anúncio", ()) == ()
+
+
+def test_extra_lines_drop_coupon_code_lines_and_bullets() -> None:
+    body = "-CUPOM: FAVORITO\n- Frete grátis\n🔗 https://x.com/a\n-"
+    assert extra_lines(body, ("FAVORITO",)) == ("Frete grátis",)
+
+
+def test_extra_lines_keep_at_most_three() -> None:
+    assert extra_lines("\n".join(f"linha {i}" for i in range(5)), ()) == (
+        "linha 0",
+        "linha 1",
+        "linha 2",
+    )
+
+
+def test_extra_lines_cut_one_long_line_to_the_budget() -> None:
+    [line] = extra_lines("a" * 300, ())
+    assert len(line) == 200
+    assert line.endswith("…")
+
+
+def test_extra_lines_stop_after_the_cut_line() -> None:
+    first, second, *rest = extra_lines("a" * 150 + "\n" + "b" * 150 + "\n" + "c" * 10, ())
+    assert first == "a" * 150
+    assert second == "b" * 49 + "…"
+    assert rest == []
+
+
+def test_split_title_skips_emoji_only_lines() -> None:
+    from velkgram.offers import split_title
+
+    title, rest = split_title("🔥🔥🔥\nMonitor X\nDetalhe", None)
+    assert (title, rest) == ("Monitor X", "Detalhe")
+    assert extra_lines(rest, ()) == ("Detalhe",)
 
 
 def _coupon(**kw: object) -> str:
@@ -202,8 +306,9 @@ def test_coupon_line_one_code() -> None:
 
     c = ActiveCoupon(1, 2, datetime(2026, 11, 4, tzinfo=UTC), "R$ 10 OFF", 4000, ("QIP98Q1ZXO",))
     assert (
-        format_coupon_line(c)
+        format_coupon_line(c, 90000)
         == "🎟️ Cupom ativo da loja: QIP98Q1ZXO — R$ 10 OFF a partir de R$ 40,00"
+        " → R$ 10,00 de desconto (1,1%) → ~R$ 890,00"
     )
 
 
@@ -215,16 +320,21 @@ def test_coupon_line_two_codes_and_no_discount_or_minimum() -> None:
 
     at = datetime(2026, 11, 4, tzinfo=UTC)
     two = ActiveCoupon(1, 2, at, "10% OFF", None, ("AAA", "BBB"))
-    assert format_coupon_line(two) == "🎟️ Cupom ativo da loja: AAA, BBB — 10% OFF"
+    assert format_coupon_line(two, 10000) == (
+        "🎟️ Cupom ativo da loja: AAA, BBB — 10% OFF → R$ 10,00 de desconto (10,0%) → ~R$ 90,00"
+    )
     bare = ActiveCoupon(1, 2, at, "", None, ("AAA",))
-    assert format_coupon_line(bare) == "🎟️ Cupom ativo da loja: AAA"
+    assert format_coupon_line(bare, 10000) == "🎟️ Cupom ativo da loja: AAA"
 
 
-def test_alert_with_coupon_lines_places_them_after_the_price() -> None:
-    out = format_alert(_msg(coupon_lines=("🎟️ Cupom ativo da loja: AAA",)))
-    assert out.splitlines()[1:3] == ["R$ 1.299,90", "🎟️ Cupom ativo da loja: AAA"]
+def test_golden_active_coupon_line() -> None:
+    from velkgram.alerting.domain.format import format_coupon_line
+    from velkgram.alerting.domain.models import ActiveCoupon
 
-
-def test_over_max_suffix_on_the_price_line() -> None:
-    out = format_alert(_msg(over_max_cents=100000))
-    assert out.splitlines()[1] == "R$ 1.299,90 (acima do seu limite de R$ 1.000,00, mas há cupom)"
+    c = ActiveCoupon(
+        1, 2, datetime(2026, 11, 4, tzinfo=UTC), "15% OFF", None, ("ESPECIALML",), cap_cents=4000
+    )
+    assert format_coupon_line(c, 151700) == (
+        "🎟️ Cupom ativo da loja: ESPECIALML — 15% OFF, limite de R$ 40,00"
+        " → R$ 40,00 de desconto (2,6%) → ~R$ 1.477,00 ⚠️ limite baixo"
+    )
