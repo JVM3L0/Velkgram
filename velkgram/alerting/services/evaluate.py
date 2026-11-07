@@ -225,11 +225,11 @@ class Evaluator:
 
         Only for non-coupon posts with a known store. Logs slow calls and failures, never raises.
         """
-        if extract_coupons(m.text):
-            return []  # coupon-dependent post: the price assumes the post's own coupon
-        store, is_coupon_post = self._class_of(m)
-        if self._coupons is None or store is None or is_coupon_post:
+        if self._coupons is None:
             return []
+        store, is_coupon_post = self._class_of(m)
+        if store is None or is_coupon_post or extract_coupons(m.text):
+            return []  # a post with its own coupon assumes it in the price
         start = time.perf_counter()
         try:
             found = self._coupons.for_store(

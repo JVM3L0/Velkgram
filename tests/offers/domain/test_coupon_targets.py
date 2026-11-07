@@ -143,7 +143,7 @@ def test_target_carries_the_tier_cap() -> None:
     c = _build(MERCADO_LIVRE, ("https://mercadolivre.com/sec/2U6U32Q",), COUPON_AT, 10, 1)
     offer = replace(_product(price=170000), store=c.store)
     [t] = coupon_targets(c, [_wish(max_cents=200000)], [offer], NOW)
-    assert t.cap_cents is not None
+    assert t.cap_cents == 50000
 
 
 def test_offer_posted_after_the_coupon_but_before_now_is_included() -> None:
@@ -206,3 +206,11 @@ def test_non_coupon_or_codeless_or_dead_coupon_gives_no_targets() -> None:
     assert coupon_targets(replace(_coupon(), sold_out=True), [_wish()], offers, NOW) == ()
     assert coupon_targets(replace(_coupon(), store=None), [_wish()], offers, NOW) == ()
     assert coupon_targets(_product(), [_wish()], offers, NOW) == ()
+
+
+def test_lone_tier_with_unparseable_discount_and_unmet_minimum_is_not_applicable() -> None:
+    assert applicable_tier((), 5000, "frete grátis", ("X",), 4000) is None
+    assert (
+        applicable_tier((CouponTier("frete grátis", 5000, None, ("X",)),), None, "", (), 4000)
+        is None
+    )

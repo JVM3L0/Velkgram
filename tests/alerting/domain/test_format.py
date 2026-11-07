@@ -5,12 +5,15 @@ from velkgram.alerting.domain.format import (
     format_age,
     format_alert,
     format_coupon_alert,
+    format_coupon_line,
     format_saving,
     message_link,
     telegram_link,
 )
-from velkgram.alerting.domain.models import AlertMessage
+from velkgram.alerting.domain.models import ActiveCoupon, AlertMessage
 from velkgram.shared.events import MessageData
+
+_NOW = datetime(2026, 11, 4, tzinfo=UTC)
 
 
 def _md(links: tuple[str, ...]) -> MessageData:
@@ -292,6 +295,21 @@ def test_format_saving_minimum_not_met() -> None:
 
 def test_format_saving_unparseable_discount_is_empty() -> None:
     assert format_saving("frete grátis", None, None, 150000) == ""
+
+
+def test_format_saving_price_zero_is_empty() -> None:
+    assert format_saving("10% OFF", None, None, 0) == ""
+    assert format_saving("10% OFF", 5000, None, 0) == ""
+
+
+def test_format_alert_with_coupon_line_at_price_zero_does_not_raise() -> None:
+    line = format_coupon_line(ActiveCoupon(-1, 1, _NOW, "10% OFF", None, ("AAA",)), 0)
+    assert line.endswith("— 10% OFF")
+    assert "AAA" in format_alert(_msg(price_cents=0, coupon_lines=(line,)))
+
+
+def test_coupon_alert_with_offer_price_zero_does_not_raise() -> None:
+    assert "💰 R$ 0,00" in _coupon(offer_price_cents=0)
 
 
 def test_rendered_text_is_returned_verbatim() -> None:

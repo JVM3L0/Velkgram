@@ -449,6 +449,7 @@ class SqliteOfferQueries:
     def product_links(self, pairs: Sequence[tuple[int, int]]) -> dict[tuple[int, int], str]:
         if not pairs:
             return {}
+        # Callers pass at most one page of pairs, well under SQLite's variable limit.
         # Row values keep the lookup to one statement whatever the page size.
         values = ", ".join("(?, ?)" for _ in pairs)
         rows = self._conn.execute(

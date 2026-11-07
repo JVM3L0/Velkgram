@@ -531,7 +531,8 @@ async def test_product_url_lookup_failure_still_sends_the_event(
     [event] = published.events
     assert isinstance(event, CouponMatchedWish)
     assert [t.product_url for t in event.targets] == [None, None]
-    assert any(r.message == "product_link_lookup_failed" for r in caplog.records)
+    [record] = [r for r in caplog.records if r.message == "product_link_lookup_failed"]
+    assert record.__dict__["error"] == "RuntimeError"
 
 
 async def test_partial_forward_origin_is_not_reported(

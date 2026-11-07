@@ -35,3 +35,13 @@ def test_coupon_saving(
     discount: str, min_cents: int | None, cap: int | None, price: int, expected: Saving | None
 ) -> None:
     assert coupon_saving(discount, min_cents, cap, price) == expected
+
+
+@pytest.mark.parametrize("text", ["10% OFF", "R$ 15 OFF", "R$ 15,50 OFF", "R$ 1.500 OFF"])
+def test_discount_text_formats_round_trip_through_coupon_saving(text: str) -> None:
+    from velkgram.offers.domain.coupon import _DISCOUNT, _discount_text
+
+    match = _DISCOUNT.search(text)
+    assert match is not None
+    produced = _discount_text(match)
+    assert coupon_saving(produced, None, None, 1_000_000) is not None

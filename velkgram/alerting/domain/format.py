@@ -99,8 +99,9 @@ def format_saving(
     discount: str, min_cents: int | None, cap_cents: int | None, price_cents: int
 ) -> str:
     """The saving suffix of a coupon line: what it takes off the price, or why it doesn't apply."""
-    if min_not_met(min_cents, price_cents):
-        assert min_cents is not None
+    if price_cents <= 0:
+        return ""
+    if min_cents is not None and min_not_met(min_cents, price_cents):
         return f" (não vale: mínimo {format_brl(min_cents)})"
     saving = coupon_saving(discount, min_cents, cap_cents, price_cents)
     if saving is None:
