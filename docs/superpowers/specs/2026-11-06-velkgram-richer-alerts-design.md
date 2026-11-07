@@ -17,17 +17,21 @@ This version makes every alert self-explanatory **in the first and only send**. 
 - **No message edits.** The alert is sent once. The real product link stays in the DB (the enricher already stores it), and the web shows it.
 - The offer's own description (its first line) goes in the alert as the product name.
 - The coupon alert gets the real product link when the enricher already resolved it. It usually has, because the offer arrived before the coupon. The alert keeps the redeem link too.
+- **Coupon alerts must not pair a coupon with an offer whose posted price already depended on another coupon.** The owner's first real coupon alerts showed the problem. Three Mercado Livre coupons, posted hours apart, each alerted "R$ 1.517" for the same monitor. That post's price already used the coupon FAVORITO, and Mercado Livre coupons don't stack.
+- **No reading of store prices.** A spike (§8) showed a plain GET reads a price only on Mercado Livre and Amazon, so the owner judged it not worth it.
 
 ## 2. Goals and non-goals
 **Goals**
 1. A clearer offer alert: the product name, the price and the store, each coupon with its real saving on this price, then a few extra lines from the post.
-2. A clearer coupon alert: the product name, the real saving, the real product link and the redeem link.
+2. A clearer coupon alert: the product name, the real saving, the offer's age, the real product link and the redeem link.
 3. A real saving for capped percentage coupons, used both in the text and in picking which coupon tier to show.
-4. The web shows a "Produto" button with the real product link on offer cards and on the Alerts page.
+4. Fewer misleading coupon pairings: an offer that already used a coupon gets no other one, and only offers from the last 24 h count.
+5. The web shows a "Produto" button with the real product link on offer cards and on the Alerts page.
 
 **Non-goals**
 - Editing a sent Telegram message, or sending a follow-up message.
-- Reading prices from store pages.
+- Reading prices from store pages, at enrichment time or when a coupon arrives (spike in §8).
+- Knowing whether an offer has ended.
 - Changing the enricher, its schedule, or v1 alert latency.
 - Rewriting the payload of alerts that were already sent.
 - A product link in the v1 offer alert. Its link has not been enriched yet when the alert goes out.
@@ -52,6 +56,8 @@ This version makes every alert self-explanatory **in the first and only send**. 
   | `aliexpress` | `https://pt.aliexpress.com/item/{id}.html` |
   | other | None |
 
+  **Mercado Livre is unverified.** The spike's bot requests to both `produto.mercadolivre.com.br/MLB-…` and `/p/MLB…` were redirected to an account check. Before Task 1 is merged, the owner opens both forms for one real id in a browser. The table keeps the form that lands on the product. If neither does, `mercadolivre` returns None, because its `final_url` is the affiliate showcase (`/social/<affiliate>`), which is a list.
+
   An offer's **real product link** is `product_url(...)` when its `product_links` row has `kind = 'product'`. When that gives None (Magalu, other stores), the row's `final_url` is used, which is already query-free. Either value must pass `is_safe_https_url`; otherwise there is no real link. Rows that are not `product` (campaigns, lists, unknown) give no real link.
 
 ## 4. Behavior
@@ -67,7 +73,16 @@ In a cap, "R$ 50.00" is a dot-decimal amount: a dot followed by exactly two digi
 
 Stored coupons were parsed with the old rule. The deploy runs `velkgram rebuild-offers` once to re-parse them; that command already exists and is idempotent.
 
-### 4.2 Offer alert text (v1 path)
+### 4.2 Offers that already used a coupon
+- **Coupon-dependent offer:** a product offer whose post names a coupon code, i.e. `extract_coupons(text)` is non-empty. Example: "R$ 1517 ⏎ -CUPOM: FAVORITO". Its posted price depends on that code. The base price is unknown, and store coupons usually do not stack.
+- **Coupon alerts:** a coupon-dependent offer is never a target in `coupon_targets`.
+- **Offer alerts:**
+  - A coupon-dependent offer gets no "cupom ativo da loja" lines.
+  - It never takes the above-max path ("acima do seu limite, mas há cupom").
+  - It still gets its normal alert when its posted price is within the wish's max, showing its own code (§4.3).
+- **Recent window:** the coupon-after-offer window (coupon-alerts §3) shrinks from 3 days to **24 h**: product offers with `posted_at` in `[coupon.posted_at − 24 h, now]`. Both copies of the constant change: `_LOOKBACK` in `offers/domain/coupon_targets.py` and `_COUPON_LOOKBACK` in `offers/services/build_offer.py`. The offer-after-coupon window (24 h, coupon-alerts §4.2) is unchanged.
+
+### 4.3 Offer alert text (v1 path)
 The evaluator already memoizes `classify_message(m)` per message (coupon-alerts §4.2), so the store needs no new I/O. Two pure helpers are exported from `velkgram/offers/__init__.py` and used by alerting:
 - `offer_title(text, store) -> str`, wrapping the existing `title_of`;
 - `store_title(slug) -> str`, reading `STORE_TITLES`, with the slug itself as the fallback.
@@ -105,12 +120,13 @@ via {channel}
 - **The link** is unchanged: the first link in the post, else the Telegram link.
 - **The 300-character dump** of the post is removed.
 
-### 4.3 Coupon alert text
-`CouponTargetData` (`shared/events.py`) gets four new fields, all with defaults so old call sites still build:
+### 4.4 Coupon alert text
+`CouponTargetData` (`shared/events.py`) gets five new fields, all with defaults so old call sites still build:
 - `cap_cents: int | None = None`, from the applicable tier;
 - `offer_title: str = ""`, the offer's stored `title`;
 - `offer_link: str | None = None`, the offer's `main_link`;
-- `product_url: str | None = None`, the real product link (§3).
+- `product_url: str | None = None`, the real product link (§3);
+- `offer_posted_at: datetime | None = None`, the offer's `posted_at`.
 
 `OfferBuilder` fills them when it computes targets. The product link comes from **one** indexed query per coupon over the targets' `main_link`s (`product_links.url` is UNIQUE). A failure of that query only drops the product links: it logs `product_link_lookup_failed` with the error class and the event still goes out.
 
@@ -119,11 +135,17 @@ via {channel}
 🎟️ Cupom {store}: CODE[, CODE2] — {discount}{ a partir de R$ M}{, limite de R$ C}{ em {scope}}
 Para "{wish}": {offer title}
 💰 R$ {price}{saving}{ (acima do seu limite de R$ {max})}
+{📅 oferta postada há {age}}
 {• pode não valer para todos os produtos}   ← only when scope is set
 🔗 {Produto|Oferta}: {url}
 🎟️ Resgatar cupom: {coupon link}
 ```
-- **Saving suffix:** `{saving}` follows §4.2. The minimum is always met here, because a target's tier applies.
+- **Age:** `{age}` is measured from `offer_posted_at` to the alert's creation:
+  - under 1 h: "N min" (at least 1);
+  - otherwise: "N h", rounded down.
+
+  The line is omitted when `offer_posted_at` is None.
+- **Saving suffix:** `{saving}` follows §4.3. The minimum is always met here, because a target's tier applies.
 - **Title fallback:** when `offer_title` is empty, the second line reads `Para "{wish}"`.
 - **The link line:**
   - `🔗 Produto: {product_url}` when a real link exists;
@@ -132,12 +154,12 @@ Para "{wish}": {offer title}
 - **Coupon link:** unchanged from today (`e.link`, else the Telegram link of the coupon post).
 - The rendered text is stored in `alerts.payload` as today, so the web shows the new text.
 
-### 4.4 Tier choice
-`coupon_targets` (coupon-alerts §4.1.2) and the `ActiveCoupons.for_store` query (§4.2.1) both use the new applicable tier (§3), through one shared helper. Its home is `offers/domain/coupon.py`, next to `best_tier`, which stays as it is for the feed headline.
+### 4.5 Tier choice
+`coupon_targets` (coupon-alerts §4.1.2) and the `ActiveCoupons.for_store` query (coupon-alerts §4.2.1) both use the new applicable tier (§3), through one shared helper. Its home is `offers/domain/coupon.py`, next to `best_tier`, which stays as it is for the feed headline.
 
 The coupon content dedup key uses the chosen tier's codes. A coupon that used to alert with one tier's codes may now pick another tier. That is accepted, because the coupon-origin key still dedups the same post.
 
-### 4.5 Web: "Produto" button
+### 4.6 Web: "Produto" button
 - **Offer cards** (`_offer_card.html`): `OfferCard` gets `product_url: str | None = None`, filled from the same `product_links` join that already gives `image_url`. A "Produto" button (icon `shopping_bag`) appears beside "Abrir" when it is set.
 - **Alerts page** (`alerts.html`): each row gets the same button when its offer has a real link.
   - The offer of a row is `(offer_channel_id, offer_message_id)` for coupon alerts and `(channel_id, message_id)` for offer alerts.
@@ -148,8 +170,8 @@ The coupon content dedup key uses the chosen tier's codes. A coupon that used to
 ## 5. Error handling ("alert first")
 - **Text helpers:** `offer_title`, `coupon_saving`, the extra-line filter and the formatters are pure and total: they never raise on odd text. A bad parse shows less, never fails the alert.
 - **Offer alerts:** the v1 offer alert path gets no new I/O.
-- **Coupon alerts:** the product-link lookup is best-effort (§4.3).
-- **Web:** the product-link callable is best-effort (§4.5).
+- **Coupon alerts:** the product-link lookup is best-effort (§4.4).
+- **Web:** the product-link callable is best-effort (§4.6).
 
 ## 6. Data
 - **No migration.** `coupon_tiers` JSON already stores `cap_cents`, and `product_links` already stores `store`, `product_id`, `kind` and `final_url`.
@@ -185,11 +207,32 @@ The coupon content dedup key uses the chosen tier's codes. A coupon that used to
   - no link at all;
   - no title;
   - with scope.
+- **Coupon-dependent offers:**
+  - The real FAVORITO monitor post is not a coupon target.
+  - It gets no active-coupon lines.
+  - It takes no above-max path.
+  - It still gets a normal in-max alert.
+- **Recent window:** an offer posted 23 h before the coupon is a target; one posted 25 h before is not.
+- **Coupon alert age line:** 30 s gives "1 min"; 59 min gives "59 min"; 5 h 50 min gives "5 h"; no `offer_posted_at` gives no line.
 - **Builder:** targets carry title, link, cap and product link from a seeded `product_links` row; a failing lookup still emits the event without product links.
 - **Web:**
   - the offer card shows "Produto" only with a real link;
   - the Alerts page shows it for both alert kinds;
   - a failing callable renders the page without buttons.
-- **Real check (controller):**
-  - open one built URL per store from the table in §3 (a single GET each) and confirm it lands on the product;
+- **Real check (controller and owner):**
+  - the owner opens the two Mercado Livre forms in a browser (§3);
+  - the controller opens one built URL per store from the table in §3 (a single GET each) and confirm it lands on the product;
   - after deploy, read one real offer alert and one real coupon alert on the phone.
+
+## 8. Spike: store prices (2026-11-06, for the record)
+13 single GETs with the enricher's headers, on real offer links:
+- **Mercado Livre:** `meli.la` lands on `/social/<affiliate>`. Its `og:title` carries the featured product and its current price (for example "R$ 1.849" for the monitor whose post said R$ 1.517 with FAVORITO). Product pages redirect bots to an account check.
+- **Amazon:** the first `a-offscreen` price matched the post in both samples, about 230 KB into a 1.4 MB page.
+- **No price:**
+  - Shopee: captcha, and the page needs JavaScript;
+  - AliExpress: the link landed on a coins page;
+  - Pichau and Terabyte: 403;
+  - other stores: no usable data.
+- **"Indisponível"** appears on every page, so availability can't be read.
+
+Mercado Livre and Amazon are about 73% of a day's offers, but the owner judged two stores not worth it.
