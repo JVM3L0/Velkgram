@@ -155,7 +155,7 @@ Para "{wish}": {offer title}
 - The rendered text is stored in `alerts.payload` as today, so the web shows the new text.
 
 ### 4.5 Tier choice
-`coupon_targets` (coupon-alerts §4.1.2) and the `ActiveCoupons.for_store` query (coupon-alerts §4.2.1) both use the new applicable tier (§3), through one shared helper. Its home is `offers/domain/coupon.py`, next to `best_tier`, which stays as it is for the feed headline.
+`coupon_targets` (coupon-alerts §4.1.2) and the `ActiveCoupons.for_store` query (coupon-alerts §4.2.1) both use the new applicable tier (§3), through the existing shared helper `applicable_tier` in `offers/domain/coupon_targets.py`. `best_tier` (the feed headline) is unchanged.
 
 The coupon content dedup key uses the chosen tier's codes. A coupon that used to alert with one tier's codes may now pick another tier. That is accepted, because the coupon-origin key still dedups the same post.
 
