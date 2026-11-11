@@ -101,6 +101,12 @@ def _collector(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _serve(_args: argparse.Namespace) -> int:
+    from velkgram.apps.serve import serve
+
+    return serve()
+
+
 def _report(args: argparse.Namespace) -> int:
     since: date = args.since
     until: date = args.until or datetime.now(UTC).date()
@@ -225,6 +231,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "login": _login_cmd,
     "hash-password": _hash_password,
     "collector": _collector,
+    "serve": _serve,
     "report": _report,
     "rebuild-offers": cmd_rebuild_offers,
     "enrich": cmd_enrich,
@@ -239,6 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("login", help="interactive Telegram login; prints a StringSession")
     sub.add_parser("hash-password", help="hash a web password for WEB_PASSWORD_HASH")
     sub.add_parser("collector", help="run the Telegram collector")
+    sub.add_parser("serve", help="migrate, then run collector, enricher and web in one container")
     sub.add_parser("rebuild-offers", help="rebuild offers and wish matches from stored messages")
     sub.add_parser("notify-test", help="send a test alert through the Telegram bot")
     enrich = sub.add_parser("enrich", help="follow offer links to learn store, title and image")

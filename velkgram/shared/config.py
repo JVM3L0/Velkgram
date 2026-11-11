@@ -18,6 +18,7 @@ class Settings:
     alert_chat_id: int | None = None
     web_password_hash: str | None = None
     web_secret_key: str | None = None
+    web_https_only: bool = False
     log_level: str = "INFO"
     retention_days: int = 90
     app_timezone: ZoneInfo = field(default_factory=lambda: ZoneInfo("America/Sao_Paulo"))
@@ -32,7 +33,8 @@ class Settings:
             f"notifier={self.notifier!r}, alert_bot_token={mask(self.alert_bot_token)}, "
             f"alert_chat_id={self.alert_chat_id!r}, "
             f"web_password_hash={mask(self.web_password_hash)}, "
-            f"web_secret_key={mask(self.web_secret_key)}, log_level={self.log_level!r}, "
+            f"web_secret_key={mask(self.web_secret_key)}, web_https_only={self.web_https_only}, "
+            f"log_level={self.log_level!r}, "
             f"retention_days={self.retention_days}, app_timezone={self.app_timezone.key!r})"
         )
 
@@ -94,6 +96,7 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         alert_chat_id=_alert_chat_id(env),
         web_password_hash=env.get("WEB_PASSWORD_HASH") or None,
         web_secret_key=env.get("WEB_SECRET_KEY") or None,
+        web_https_only=_value(env, "WEB_HTTPS_ONLY", "").lower() in ("1", "true", "yes"),
         log_level=_value(env, "LOG_LEVEL", "INFO"),
         retention_days=_retention_days(env),
         app_timezone=_app_timezone(env),

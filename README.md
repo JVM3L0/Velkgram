@@ -141,6 +141,30 @@ docker compose run --rm collector velkgram report   # usage report
 - The collector healthcheck fails if the heartbeat is older than 90 s or the connection is in the `fatal` state.
 - Run the collector in one place only: do not start `uv run velkgram collector` while the container is up (same session).
 
+## Railway
+
+Railway volumes attach to a single service and the processes share one SQLite file, so everything runs in **one service**: `velkgram serve` migrates, then supervises the collector, the enricher and the web UI (if one dies, all stop and Railway restarts the container). `railway.toml` already sets the Dockerfile build, the start command, the `/login` healthcheck and the restart policy.
+
+1. Push the repo to GitHub and create a Railway project from it (one service).
+2. Add a **volume** to the service mounted at `/app/data`.
+3. Set the variables below, then generate a public domain (Settings → Networking).
+4. Check the logs for `no pending migrations` or the applied list, then open the domain and log in.
+
+| Variable | Value |
+|---|---|
+| `DB_PATH` | `/app/data/velkgram.db` |
+| `RAILWAY_RUN_UID` | `0` (the volume is root-owned; the image runs as uid 1000) |
+| `TG_API_ID`, `TG_API_HASH`, `TG_SESSION` | from `velkgram login` |
+| `NOTIFIER`, `ALERT_BOT_TOKEN`, `ALERT_CHAT_ID` | `telegram` plus the bot token and chat |
+| `WEB_PASSWORD_HASH`, `WEB_SECRET_KEY` | from `velkgram hash-password` and a long random string |
+| `WEB_HTTPS_ONLY` | `1` |
+
+- Railway injects `PORT`; `serve` binds the web UI to it and trusts the proxy headers.
+- Run only one replica. Two collectors on the same `TG_SESSION` break the session, and the volume is single-instance anyway. Stop the local container before the first deploy for the same reason.
+- The UI is public on Railway, protected only by the password and the login throttle. Use a strong password.
+- Copy the local `data/velkgram.db` into the volume only if you want to keep history (for example with `railway ssh`); otherwise it starts empty.
+- Run one-off commands with `railway ssh` and `velkgram report --since YYYY-MM-DD`.
+
 ## Development
 
 ```bash
@@ -166,4 +190,5 @@ The architecture is a modular monolith with hexagonal modules (`channels`, `wish
 | New UI (Beer CSS M3 Expressive, Catppuccin themes) | ✅ done |
 | Usage report (`velkgram report`) | ✅ done |
 | Docker / compose, healthcheck | ✅ done |
+| Railway deploy (`velkgram serve`, `railway.toml`) | ✅ done |
 | WhatsApp notifier | ⬜ separate spec, after v1 |

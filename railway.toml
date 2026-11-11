@@ -1,0 +1,12 @@
+# Railway runs everything in ONE service: the volume (SQLite) can attach to a single service only.
+# `velkgram serve` migrates, then supervises collector + enricher + web.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "velkgram serve"
+healthcheckPath = "/login"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

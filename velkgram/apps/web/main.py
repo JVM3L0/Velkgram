@@ -188,7 +188,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         SessionMiddleware,
         secret_key=settings.web_secret_key,
         same_site="strict",
-        https_only=False,
+        https_only=settings.web_https_only,
     )
     templates = _build_templates()
     app.state.settings = settings

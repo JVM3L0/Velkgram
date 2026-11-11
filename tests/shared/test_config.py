@@ -109,3 +109,10 @@ def test_repr_masks_bot_token_and_shows_chat_id() -> None:
     text = repr(s)
     assert "SECRET" not in text
     assert "alert_chat_id=-5" in text
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [("", False), ("0", False), ("1", True), ("true", True)]
+)
+def test_web_https_only_flag(raw: str, expected: bool) -> None:
+    assert load_settings({"WEB_HTTPS_ONLY": raw}).web_https_only is expected
