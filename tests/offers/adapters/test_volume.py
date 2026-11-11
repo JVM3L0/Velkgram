@@ -17,6 +17,7 @@ The collapse EXISTS needs `INDEXED BY idx_offers_main_link`, otherwise SQLite sc
 """
 
 import json
+import os
 import re
 import sqlite3
 import statistics
@@ -43,7 +44,8 @@ from velkgram.shared.migrate import apply_migrations
 
 ROWS = 50_000
 LINKS = 5_000  # distinct main links; the even ones are enriched in product_links
-BOUND_S = 0.150
+# Shared CI runners are 2-3x slower and noisy; the plan checks (no SCAN) still guard the structure.
+BOUND_S = 0.150 * (2 if os.environ.get("CI") else 1)
 DEEP_PAGE = 100
 STORES = ("amazon", "kabum", "magalu", "shopee", None)
 NOTHING = FeedFilter(None, None, None, (), False, None)
