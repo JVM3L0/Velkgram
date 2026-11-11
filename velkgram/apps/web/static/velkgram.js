@@ -121,3 +121,18 @@
     if (pill instanceof HTMLElement && window.scrollY < TOP_PX) pill.click();
   });
 })();
+
+// A product image that fails to load (dead link, hotlink block) steps aside so the placeholder
+// icon behind it shows. `error` does not bubble, so listen in the capture phase.
+(() => {
+  document.addEventListener(
+    "error",
+    (event) => {
+      const img = event.target;
+      if (img instanceof HTMLImageElement && img.classList.contains("offer-thumb")) {
+        img.classList.add("is-broken");
+      }
+    },
+    true,
+  );
+})();

@@ -106,26 +106,26 @@ def test_alert_status_labels_are_portuguese(tmp_path: Path) -> None:
         assert raw not in page.replace(" ", "").replace("\n", "")
 
 
-def test_alerts_mark_dedup_and_latency_columns_hidden_on_compact(tmp_path: Path) -> None:
+def test_alerts_mark_latency_line_hidden_on_compact(tmp_path: Path) -> None:
     client = _client(tmp_path)
     _seed(tmp_path, [(1, 1000, "sent")])
     page = client.get("/alerts").text
-    assert page.count("hide-compact") >= 2
+    assert page.count("hide-compact") >= 1
 
 
-def test_alerts_empty_state_has_no_table_and_links_to_wishes(tmp_path: Path) -> None:
+def test_alerts_empty_state_has_no_list_and_links_to_wishes(tmp_path: Path) -> None:
     page = _client(tmp_path).get("/alerts").text
     assert "Nenhum alerta ainda" in page
-    assert "<table" not in page
+    assert "alert-card" not in page
     assert 'class="empty' in page
     assert 'href="/wishes"' in page
 
 
-def test_alerts_with_rows_keep_the_table(tmp_path: Path) -> None:
+def test_alerts_with_rows_render_cards(tmp_path: Path) -> None:
     client = _client(tmp_path)
     _seed(tmp_path, [(1, 100, "sent")])
     page = client.get("/alerts").text
-    assert "<table" in page and "Nenhum alerta ainda" not in page
+    assert "alert-card" in page and "Nenhum alerta ainda" not in page
 
 
 def _seed_kind(
@@ -209,7 +209,7 @@ def test_alerts_show_produto_button_for_offer_and_coupon_alerts(tmp_path: Path) 
     page = client.get("/alerts").text
     assert 'href="https://www.amazon.com.br/dp/B0C8814GKB"' in page
     assert 'href="https://www.kabum.com.br/produto/123456"' in page
-    assert page.count("<span>Produto</span>") == 4  # compact and wide cell, two rows
+    assert page.count("<span>Produto</span>") == 2  # one per alert card
 
 
 def test_alerts_without_real_link_have_no_produto_button(tmp_path: Path) -> None:

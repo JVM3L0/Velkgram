@@ -26,7 +26,7 @@
 
 /* ---- Latte (light). Also the default when no flavour class is set. ---- */
 body.latte,
-body:not(.frappe):not(.macchiato):not(.mocha) {
+body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) {
   color-scheme: light;
   /* Latte sapphire #209fb5, darker for AA on every container */
   --primary: #006b7e;
@@ -226,9 +226,101 @@ body.mocha {
   --surface-container-highest: #575a6f;
 }
 
+/* ---- Gruvbox dark: Gruvbox Material (soft), accents washed 40% toward the text ("bem pastel") ---- */
+/* Surfaces and text are Gruvbox Material; roles are the pastel accents. */
+body.gruvbox-dark {
+  color-scheme: dark;
+  --primary: #bab979;
+  --on-primary: #1b1b1b;
+  --primary-container: #48483a;
+  --on-primary-container: #d4be98;
+  --secondary: #d6b071;
+  --on-secondary: #1b1b1b;
+  --secondary-container: #4e4638;
+  --on-secondary-container: #d4be98;
+  --tertiary: #a0b49f;
+  --on-tertiary: #1b1b1b;
+  --tertiary-container: #424742;
+  --on-tertiary-container: #d4be98;
+  --error: #e18b78;
+  --on-error: #1b1b1b;
+  --error-container: #513e3a;
+  --on-error-container: #d4be98;
+  --success: #bab979;
+  --warning: #df9f6c;
+  --amber: #d6b071;
+  --amber-fill: #d6b071;
+  --background: #282828;
+  --on-background: #d4be98;
+  --surface: #282828;
+  --on-surface: #d4be98;
+  --surface-variant: #45403d;
+  --on-surface-variant: #b9ad9d;
+  --outline: #928374;
+  --outline-variant: #7c6f64;
+  --shadow: #000000;
+  --scrim: #000000;
+  --inverse-surface: #fbf1c7;
+  --inverse-on-surface: #654735;
+  --inverse-primary: #6c782e;
+  --surface-dim: #1b1b1b;
+  --surface-bright: #504945;
+  --surface-container-lowest: #1b1b1b;
+  --surface-container-low: #32302f;
+  --surface-container: #45403d;
+  --surface-container-high: #504945;
+  --surface-container-highest: #554d48;
+}
+
+/* ---- Gruvbox light: Gruvbox Material (soft); text roles darkened for AA, containers washed pastel ---- */
+/* Role colours stay dark enough to read as text on cream; only their containers are pastel. */
+body.gruvbox-light {
+  color-scheme: light;
+  --primary: #5d6728;
+  --on-primary: #f9f5d7;
+  --primary-container: #d7d6b0;
+  --on-primary-container: #654735;
+  --secondary: #895607;
+  --on-secondary: #f9f5d7;
+  --secondary-container: #e0d2a9;
+  --on-secondary-container: #654735;
+  --tertiary: #3f6770;
+  --on-tertiary: #f9f5d7;
+  --tertiary-container: #d0d6c0;
+  --on-tertiary-container: #654735;
+  --error: #a64040;
+  --on-error: #f9f5d7;
+  --error-container: #e7cdb6;
+  --on-error-container: #654735;
+  --success: #5d6728;
+  --warning: #9c4b08;
+  --amber: #895607;
+  --amber-fill: #b47109;
+  --background: #f2e5bc;
+  --on-background: #654735;
+  --surface: #f2e5bc;
+  --on-surface: #654735;
+  --surface-variant: #eddeb5;
+  --on-surface-variant: #6b5f56;
+  --outline: #8a7a69;
+  --outline-variant: #b5a688;
+  --shadow: #000000;
+  --scrim: #000000;
+  --inverse-surface: #32302f;
+  --inverse-on-surface: #d4be98;
+  --inverse-primary: #a9b665;
+  --surface-dim: #e6d5ae;
+  --surface-bright: #fbf1c7;
+  --surface-container-lowest: #f9f5d7;
+  --surface-container-low: #fbf1c7;
+  --surface-container: #eddeb5;
+  --surface-container-high: #e6d5ae;
+  --surface-container-highest: #dccb9f;
+}
+
 /* ---- System mode in a dark OS: Mocha ---- */
 @media (prefers-color-scheme: dark) {
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) {
+  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) {
     color-scheme: dark;
     --primary: #74c7ec;
     --on-primary: #11111b;
@@ -463,6 +555,8 @@ nav.bottom a, nav.left a {
 .swatch-frappe { background: linear-gradient(135deg, #303446 50%, #85c1dc 50%); }
 .swatch-macchiato { background: linear-gradient(135deg, #24273a 50%, #7dc4e4 50%); }
 .swatch-mocha { background: linear-gradient(135deg, #1e1e2e 50%, #74c7ec 50%); }
+.swatch-gruvbox-dark { background: linear-gradient(135deg, #282828 50%, #bab979 50%); }
+.swatch-gruvbox-light { background: linear-gradient(135deg, #f2e5bc 50%, #5d6728 50%); }
 
 /* ---- Shared page bits ---- */
 .error { color: var(--error); margin: 0.5rem 0; }
@@ -617,6 +711,8 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
     max-inline-size: none;
     block-size: auto;
     max-block-size: none;
+    /* Inline block, not a sheet: it must never scroll on its own. */
+    overflow: visible;
     margin: 0.75rem 0 0;
     padding: 0;
     box-shadow: none;
@@ -734,35 +830,7 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .offer-actions .button { min-block-size: 3rem; margin: 0; gap: 0.375rem; padding-inline: 1rem 1.25rem; }
 .offer-actions .button.circle { inline-size: 3rem; padding: 0; border-radius: var(--shape-control); background-color: var(--secondary-container); color: var(--on-secondary-container); }
 
-@media (min-width: 840px) {
-  .feed-list { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
-  .feed-list .offer {
-    display: grid;
-    grid-template-columns: 15rem minmax(0, 1fr) auto;
-    grid-template-areas:
-      "price title actions" "price meta actions" "price flags actions"
-      "price codes actions" "price post actions";
-    align-items: center;
-    column-gap: 1.25rem;
-    row-gap: 0.15rem;
-    padding-block: 0.75rem;
-  }
-  /* Cards with a link image get their own left column spanning every row, so rows keep their height. */
-  .feed-list .offer:has(> .offer-thumb) {
-    grid-template-columns: 6rem 15rem minmax(0, 1fr) auto;
-    grid-template-areas:
-      "thumb price title actions" "thumb price meta actions" "thumb price flags actions"
-      "thumb price codes actions" "thumb price post actions";
-  }
-  .feed-list .offer > .offer-thumb { grid-area: thumb; }
-  .feed-list .offer-price { grid-area: price; font-size: 1.375rem; }
-  .feed-list .offer-title { grid-area: title; -webkit-line-clamp: 1; line-clamp: 1; }
-  .feed-list .offer-meta { grid-area: meta; }
-  .feed-list .offer-flags { grid-area: flags; }
-  .feed-list .coupon-codes { grid-area: codes; }
-  .feed-list .post-full { grid-area: post; }
-  .feed-list .offer-actions { grid-area: actions; margin: 0 !important; padding: 0; }
-}
+@media (min-width: 840px) { .feed-list { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; } }
 
 .empty {
   grid-column: 1 / -1;
@@ -984,21 +1052,21 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 /* Cards lift off the page on Latte; dark flavours rely on tone alone. */
 body.latte .offer, body.latte .wish-card, body.latte .status-card,
 body.latte .table-wrap, body.latte .chart-frame, body.latte .login-card,
-body:not(.frappe):not(.macchiato):not(.mocha) .offer,
-body:not(.frappe):not(.macchiato):not(.mocha) .wish-card,
-body:not(.frappe):not(.macchiato):not(.mocha) .status-card,
-body:not(.frappe):not(.macchiato):not(.mocha) .table-wrap,
-body:not(.frappe):not(.macchiato):not(.mocha) .chart-frame,
-body:not(.frappe):not(.macchiato):not(.mocha) .login-card {
+body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .offer,
+body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .wish-card,
+body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .status-card,
+body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .table-wrap,
+body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .chart-frame,
+body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .login-card {
   box-shadow: 0 1px 2px rgb(76 79 105 / 0.14), 0 2px 8px rgb(76 79 105 / 0.1);
 }
 @media (prefers-color-scheme: dark) {
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .offer,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .wish-card,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .status-card,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .table-wrap,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .chart-frame,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .login-card { box-shadow: none; }
+  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .offer,
+  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .wish-card,
+  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .status-card,
+  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .table-wrap,
+  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .chart-frame,
+  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .login-card { box-shadow: none; }
 }
 
 /* Compact offer rows: tighter, price and open action share a line on the product page. */
@@ -1006,21 +1074,6 @@ body:not(.frappe):not(.macchiato):not(.mocha) .login-card {
   .offer { gap: 0.375rem; padding: 0.875rem 1rem; }
   .offer-price { font-size: 1.5rem; }
   .offer-actions { padding-block-start: 0.25rem; }
-  .product-page .offer {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "price actions" "title title" "meta meta" "flags flags" "codes codes" "post post";
-    align-items: center;
-    column-gap: 0.75rem;
-  }
-  .product-page .offer-price { grid-area: price; }
-  .product-page .offer-title { grid-area: title; }
-  .product-page .offer-meta { grid-area: meta; }
-  .product-page .offer-flags { grid-area: flags; }
-  .product-page .coupon-codes { grid-area: codes; }
-  .product-page .post-full { grid-area: post; }
-  .product-page .offer-actions { grid-area: actions; margin: 0 !important; padding: 0; }
-  .product-page .offer-actions .button { min-block-size: 2.5rem; }
 }
 
 .add-row .field { min-inline-size: 0; }
@@ -1049,8 +1102,8 @@ form.inline { margin: 0 !important; }
 .channel-switch { flex: none; margin: 0; }
 .row-menu-wrap { flex: none; display: flex; align-items: center; }
 .row-menu-wrap > button { margin: 0; }
-body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha) .channel-list { box-shadow: 0 1px 2px rgb(76 79 105 / 0.14), 0 2px 8px rgb(76 79 105 / 0.1); }
-@media (prefers-color-scheme: dark) { body:not(.latte):not(.frappe):not(.macchiato):not(.mocha) .channel-list { box-shadow: none; } }
+body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .channel-list { box-shadow: 0 1px 2px rgb(76 79 105 / 0.14), 0 2px 8px rgb(76 79 105 / 0.1); }
+@media (prefers-color-scheme: dark) { body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .channel-list { box-shadow: none; } }
 
 /* ---- Shell: on compact the app bar names the page, so the big H1 steps aside ---- */
 .appbar .title { display: flex; align-items: baseline; gap: 0.5rem; }
@@ -1229,4 +1282,193 @@ nav.tabs.feed-tabs { margin-block: 0 1rem; border-block-end: 1px solid var(--out
   background-color: var(--primary);
   color: var(--on-primary);
   box-shadow: var(--elevate2, 0 2px 8px rgb(0 0 0 / 0.25));
+}
+
+/* ---- Offer product card: image and name lead, the coupon strip sits above the actions ----
+   Wide card (grid, wide screens): image on top. Phone: image left, text beside it.
+   Wide list rows: image left, actions right. Coupon cards keep their own layout. */
+.offer-product { display: flex; flex-direction: column; align-items: stretch; gap: 0.75rem; padding: 1rem; }
+.offer-media {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--shape-control);
+  background-color: var(--surface-container);
+  color: var(--outline);
+}
+.offer-media > i { font-size: 2.5rem; }
+/* The image covers the placeholder icon; if it fails to load, velkgram.js hides it. */
+.offer-media .offer-thumb {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: 0.5rem;
+  object-fit: contain;
+  background-color: #fff;
+  border-radius: 0;
+}
+.offer-media .offer-thumb.is-broken { display: none; }
+.offer-body { display: flex; flex-direction: column; align-items: flex-start; gap: 0.375rem; min-inline-size: 0; }
+.offer-body > * { margin: 0 !important; max-inline-size: 100%; }
+.offer-body .offer-meta { align-items: center; gap: 0.25rem 0.5rem; font-size: 0.8125rem; line-height: 1.5; }
+/* Store chip: tinted with the store's brand colour. Tint and border are mixed into the theme
+   surface, so the text stays on-surface and keeps its contrast in every flavour. */
+.store-chip {
+  --store: var(--primary);
+  gap: 0.375rem;
+  font-weight: 700;
+  color: var(--on-surface);
+  background-color: color-mix(in srgb, var(--store) 24%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--store) 60%, transparent);
+}
+.store-chip::before { content: ""; flex: none; inline-size: 0.5rem; block-size: 0.5rem; border-radius: 50%; background-color: var(--store); }
+.store-chip[data-store="amazon"] { --store: #ff9900; }
+.store-chip[data-store="mercadolivre"] { --store: #ffd400; }
+.store-chip[data-store="shopee"] { --store: #ee4d2d; }
+.store-chip[data-store="kabum"] { --store: #ff6500; }
+.store-chip[data-store="magalu"] { --store: #0086ff; }
+.store-chip[data-store="aliexpress"] { --store: #e62e04; }
+.store-chip[data-store="pichau"] { --store: #d4001a; }
+.store-chip[data-store="terabyte"] { --store: #1fa84f; }
+.store-chip[data-store="casasbahia"] { --store: #1a56c4; }
+.store-chip[data-store="americanas"] { --store: #e60014; }
+.store-chip[data-store="carrefour"] { --store: #2a6fd6; }
+.store-chip[data-store="netshoes"] { --store: #8a4dff; }
+.offer-when { color: var(--on-surface-variant); }
+.offer-body .offer-title {
+  align-self: stretch;
+  padding: 0.1em 0 0.15em;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.offer-product .offer-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+.offer-product.offer-quiet .offer-price { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.03em; }
+.offer-product.offer-quiet .offer-price.offer-price-unknown { font-size: 1rem; font-weight: 600; letter-spacing: 0; }
+.offer-product .offer-with-coupon { margin: 0; font-size: 0.8125rem; font-weight: 600; }
+.offer-body .offer-flags { gap: 0.375rem; }
+.offer-body .store-coupons { padding-inline: 0; border: 0; background-color: transparent; color: var(--primary); font-weight: 600; }
+.offer-body .store-coupons:hover { text-decoration: underline; }
+/* Coupon strip: the code button reads as a coupon on its own; no label. */
+.offer-product > .coupon-codes { align-items: center; gap: 0.375rem 0.5rem; }
+.offer-product .coupon-code { min-block-size: 2.25rem; padding: 0 0.625rem 0 0.75rem; gap: 0.375rem; font-size: 0.875rem; border-width: 1px; }
+.offer-product > .offer-actions { margin: auto 0 0 !important; padding: 0; }
+.offer-product .offer-actions .button { min-block-size: 2.5rem; }
+
+@media (max-width: 599.98px) {
+  .offer-product {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    grid-template-areas: "media body" "codes codes" "actions actions" "post post";
+    align-items: start;
+    gap: 0 0.875rem;
+  }
+  .offer-product > * { margin-block-start: 0.75rem; }
+  .offer-product > .offer-media { grid-area: media; margin: 0; aspect-ratio: 1; }
+  .offer-product > .offer-body { grid-area: body; margin: 0; }
+  .offer-product > .coupon-codes { grid-area: codes; }
+  .offer-product > .offer-actions { grid-area: actions; margin: 0.75rem 0 0 !important; }
+  .offer-product > .post-full { grid-area: post; margin-block-start: 0.25rem; }
+  .offer-body .offer-title { -webkit-line-clamp: 2; line-clamp: 2; }
+}
+
+@media (min-width: 840px) {
+  .feed-list .offer-product {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr) auto;
+    grid-template-areas: "media body actions" "media codes actions" "post post post";
+    align-items: start;
+    gap: 0 1.25rem;
+    padding-block: 0.875rem;
+  }
+  .feed-list .offer-product > * { margin-block-start: 0.5rem; }
+  .feed-list .offer-product > .offer-media { grid-area: media; margin: 0; aspect-ratio: 1; }
+  .feed-list .offer-product > .offer-body { grid-area: body; margin: 0; }
+  .feed-list .offer-product > .coupon-codes { grid-area: codes; }
+  .feed-list .offer-product > .offer-actions { grid-area: actions; align-self: center; margin: 0 !important; }
+  .feed-list .offer-product > .post-full { grid-area: post; }
+  .feed-list .offer-product .offer-title { -webkit-line-clamp: 2; line-clamp: 2; }
+}
+
+/* Cards lift off the page on the light Gruvbox, as on Latte. */
+body.gruvbox-light .offer, body.gruvbox-light .wish-card, body.gruvbox-light .status-card,
+body.gruvbox-light .table-wrap, body.gruvbox-light .chart-frame, body.gruvbox-light .login-card,
+body.gruvbox-light .channel-list {
+  box-shadow: 0 1px 2px rgb(101 71 53 / 0.16), 0 2px 8px rgb(101 71 53 / 0.1);
+}
+
+/* ---- Wishes: aligned cards, terms as chips, one footer line ---- */
+.feed > .wish-card { margin: 0 !important; }
+.wish-terms { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.wish-terms .chip { margin: 0; }
+.wish-card .tonal-chip { background-color: var(--secondary-container); color: var(--on-secondary-container); }
+.wish-card .wish-price { font-size: 1.75rem; }
+.wish-card .wish-price.wish-price-unknown { font-size: 0.9375rem; font-weight: 400; line-height: 1.3; letter-spacing: 0; }
+.wish-foot { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.125rem 0.75rem; padding-block-start: 0.5rem; border-radius: 0; border-block-start: 1px solid var(--outline-variant); }
+.wish-foot .wish-count { font-weight: 600; }
+.wish-foot:not(:has(.wish-count)) { justify-content: flex-start; }
+.wish-actions button, .wish-actions .button { min-block-size: 2.75rem; }
+
+/* ---- Alerts: one card per alert, status icon on the left, actions on the right ---- */
+.alert-list { display: flex; flex-direction: column; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.alert-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "icon body" "actions actions";
+  align-items: start;
+  gap: 0.75rem 1rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--shape-xl);
+  background-color: var(--surface-container-low);
+  color: var(--on-surface);
+}
+.alert-icon {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 50%;
+  background-color: var(--primary-container);
+  color: var(--on-primary-container);
+}
+.alert-failed .alert-icon { background-color: var(--error-container); color: var(--on-error-container); }
+.alert-pending .alert-icon, .alert-expired .alert-icon { background-color: var(--surface-container-highest); color: var(--on-surface); }
+.alert-body { grid-area: body; display: flex; flex-direction: column; gap: 0.25rem; min-inline-size: 0; }
+.alert-body > * { margin: 0 !important; }
+.alert-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem 0.5rem; }
+.alert-wish { font-size: 1.0625rem; font-weight: 600; overflow-wrap: anywhere; }
+.alert-head .chip { margin: 0; block-size: auto; min-block-size: 1.75rem; padding-block: 0.125rem; white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
+.alert-price { font-size: 1.5rem; font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--primary); }
+.alert-price-unknown { font-size: 1rem; font-weight: 600; letter-spacing: 0; color: var(--on-surface-variant); }
+.alert-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; font-size: 0.8125rem; color: var(--on-surface-variant); }
+.alert-meta .chip { margin: 0; }
+.alert-channel { display: block; max-inline-size: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alert-tech { font-size: 0.8125rem; color: var(--on-surface-variant); font-variant-numeric: tabular-nums; }
+.alert-actions { grid-area: actions; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.alert-actions .button { min-block-size: 2.5rem; margin: 0; }
+@media (min-width: 600px) {
+  .alert-card { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "icon body actions"; align-items: center; }
+  .alert-actions { flex-wrap: nowrap; }
+}
+body.latte .alert-card, body.gruvbox-light .alert-card,
+body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .alert-card {
+  box-shadow: 0 1px 2px rgb(76 79 105 / 0.14), 0 2px 8px rgb(76 79 105 / 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .alert-card { box-shadow: none; }
 }

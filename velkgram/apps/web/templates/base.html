@@ -16,7 +16,7 @@
 <body class="{{ theme_classes(request.cookies.get('theme')) }}">
   {% if request.session.get("user") %}
   {% set current_theme = request.cookies.get("theme") if request.cookies.get("theme") in theme_modes else "system" %}
-  {% set theme_labels = {"system": "Sistema", "latte": "Latte", "frappe": "Frappé", "macchiato": "Macchiato", "mocha": "Mocha"} %}
+  {% set theme_labels = {"system": "Sistema", "latte": "Latte", "frappe": "Frappé", "macchiato": "Macchiato", "mocha": "Mocha", "gruvbox-dark": "Gruvbox escuro", "gruvbox-light": "Gruvbox claro"} %}
   <a class="sr-only" href="#conteudo">Pular para o conteúdo</a>
   <div class="shell">
     <header class="appbar">

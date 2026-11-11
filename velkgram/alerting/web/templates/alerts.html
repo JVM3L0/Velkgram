@@ -5,29 +5,31 @@
 <div class="list-page">
 <h1>Alertas</h1>
 {% if rows %}
-<div class="table-wrap">
-<table class="data alerts-table">
-  <thead><tr>
-    <th>Quando</th><th>Status</th><th>Preço</th>
-    <th class="hide-compact">Latência</th><th class="hide-compact">Dedup</th>
-    <th>Desejo</th><th class="hide-compact">Canal</th><th class="hide-compact"><span class="sr-only">Mensagem</span></th>
-  </tr></thead>
-  <tbody>
+<ul class="alert-list">
   {% for r in rows %}
-    <tr>
-      <td class="alert-when">{{ r.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
-      <td class="alert-status"><span class="chip small status-{{ r.status }}">{{ r.status_label }}</span></td>
-      <td class="alert-price">{% if r.price %}<strong class="num">{{ r.price }}</strong>{% else %}<span class="muted">preço não identificado</span>{% endif %}</td>
-      <td class="hide-compact">Telegram {{ r.latency_telegram_ms }} ms · interno {{ r.latency_internal_ms }} ms</td>
-      <td class="hide-compact">{{ r.dedup_keys }} {{ "chave" if r.dedup_keys == 1 else "chaves" }}</td>
-      <td class="wish-cell">{{ r.wish }}{% if r.is_coupon or r.over_max %}<span class="wish-flags">{% if r.is_coupon %}<span class="chip small tonal-chip"><i aria-hidden="true">confirmation_number</i><span class="coupon-text">cupom{% if r.coupon_codes %} {{ r.coupon_codes | join(", ") }}{% endif %}</span></span>{% endif %}{% if r.over_max %}<span class="chip small flag-warn">acima do limite</span>{% endif %}</span>{% endif %}<span class="show-compact muted compact-sub">{{ r.channel }}</span>{% if r.product_href %}<a class="button small border" href="{{ r.product_href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">shopping_bag</i><span>Produto</span></a>{% endif %}<a class="show-compact compact-sub" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
-      <td class="hide-compact">{{ r.channel }}</td>
-      <td class="hide-compact">{% if r.product_href %}<a class="button small border" href="{{ r.product_href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">shopping_bag</i><span>Produto</span></a>{% endif %}<a class="button small border" href="{{ r.link }}" rel="noopener noreferrer" target="_blank">Abrir</a></td>
-    </tr>
+  <li class="alert-card alert-{{ r.status }}">
+    <span class="alert-icon" aria-hidden="true"><i>{{ {"sent": "notifications_active", "failed": "error", "pending": "schedule", "expired": "timer_off"}[r.status] }}</i></span>
+    <div class="alert-body">
+      <p class="alert-head">
+        <span class="alert-wish">{{ r.wish }}</span>
+        <span class="chip small status-{{ r.status }}">{{ r.status_label }}</span>
+        {% if r.is_coupon %}<span class="chip small tonal-chip"><i aria-hidden="true">confirmation_number</i><span class="coupon-text">cupom{% if r.coupon_codes %} {{ r.coupon_codes | join(", ") }}{% endif %}</span></span>{% endif %}
+        {% if r.over_max %}<span class="chip small flag-warn">acima do limite</span>{% endif %}
+      </p>
+      <p class="alert-price">{% if r.price %}{{ r.price }}{% else %}<span class="alert-price-unknown">preço não identificado</span>{% endif %}</p>
+      <p class="alert-meta">
+        <span class="chip small chip-muted"><span class="alert-channel">{{ r.channel }}</span></span>
+        <time datetime="{{ r.created_at.isoformat() }}">{{ r.created_at.strftime("%d/%m/%Y %H:%M") }}</time>
+      </p>
+      <p class="alert-tech hide-compact">Telegram {{ r.latency_telegram_ms }} ms · interno {{ r.latency_internal_ms }} ms · {{ r.dedup_keys }} {{ "chave" if r.dedup_keys == 1 else "chaves" }}</p>
+    </div>
+    <div class="alert-actions">
+      {% if r.product_href %}<a class="button small border" href="{{ r.product_href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">shopping_bag</i><span>Produto</span></a>{% endif %}
+      <a class="button small" href="{{ r.link }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">open_in_new</i><span>Abrir</span></a>
+    </div>
+  </li>
   {% endfor %}
-  </tbody>
-</table>
-</div>
+</ul>
 {% else %}
 <div class="empty">
   <i aria-hidden="true">notifications_off</i>

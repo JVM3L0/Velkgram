@@ -1,16 +1,16 @@
 """Theme modes, the `theme` cookie value to `<body>` classes, and safe redirect targets."""
 
-THEME_MODES = ("system", "latte", "frappe", "macchiato", "mocha")
+THEME_MODES = ("system", "latte", "frappe", "macchiato", "mocha", "gruvbox-dark", "gruvbox-light")
 THEME_COOKIE = "theme"
 THEME_MAX_AGE = 31536000  # one year
 
-_DARK_FLAVOURS = ("frappe", "macchiato", "mocha")
+_DARK_FLAVOURS = ("frappe", "macchiato", "mocha", "gruvbox-dark")
 
 
 def theme_classes(mode: str | None) -> str:
     """`<body>` classes for a theme cookie value. System and unknown values add none."""
-    if mode == "latte":
-        return "latte light"
+    if mode in ("latte", "gruvbox-light"):
+        return f"{mode} light"
     if mode in _DARK_FLAVOURS:
         return f"{mode} dark"
     return ""

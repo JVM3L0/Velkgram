@@ -4,6 +4,9 @@
     <h2 class="wish-name"><a href="/wishes/{{ wish.id }}">{{ wish.name }}</a></h2>
     {% if paused %}<span class="chip small state-off">pausado</span>{% endif %}
   </div>
+  {% if wish.required_terms %}
+  <p class="wish-terms">{% for term in wish.required_terms[:5] %}<span class="chip small tonal-chip">{{ term }}</span>{% endfor %}{% if wish.required_terms | length > 5 %}<span class="chip small chip-muted">+{{ wish.required_terms | length - 5 }}</span>{% endif %}</p>
+  {% endif %}
   {% if stats and stats.match_count %}
   <p class="wish-price">{% if stats.last_price_cents is not none %}{{ stats.last_price_cents | brl }}{% else %}<span class="wish-price-unknown">preço não identificado</span>{% endif %}</p>
   {% set delta = stats.delta_percent %}
@@ -15,11 +18,13 @@
   </p>
   {% endif %}
   <div class="wish-spark">{{ stats.sparkline_svg | safe }}</div>
-  <p class="wish-count"><a href="/wishes/{{ wish.id }}">{{ stats.match_count }} {{ "oferta" if stats.match_count == 1 else "ofertas" }}</a></p>
   {% else %}
   <p class="wish-price wish-price-unknown">sem ofertas ainda</p>
   {% endif %}
-  <p class="wish-limit">Alerta até {{ wish.max_price_cents | brl }}</p>
+  <p class="wish-foot">
+    {% if stats and stats.match_count %}<span class="wish-count"><a href="/wishes/{{ wish.id }}">{{ stats.match_count }} {{ "oferta" if stats.match_count == 1 else "ofertas" }}</a></span>{% endif %}
+    <span class="wish-limit">Alerta até {{ wish.max_price_cents | brl }}</span>
+  </p>
   <div class="wish-actions">
     <button class="border" type="button" hx-post="/wishes/{{ wish.id }}/toggle" hx-target="#wish-{{ wish.id }}" hx-swap="outerHTML">
       <i aria-hidden="true">{{ "play_arrow" if paused else "pause" }}</i><span>{{ "Retomar" if paused else "Pausar" }}</span>

@@ -1,4 +1,4 @@
-"""WCAG AA contrast of every theme pair in velkgram.css, for all four flavours (NFR5)."""
+"""WCAG AA contrast of every theme pair in velkgram.css, for every flavour (NFR5)."""
 
 import re
 from pathlib import Path
@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 
 CSS = Path(__file__).parents[3] / "velkgram" / "apps" / "web" / "static" / "velkgram.css"
-FLAVOURS = ("latte", "frappe", "macchiato", "mocha")
+FLAVOURS = ("latte", "frappe", "macchiato", "mocha", "gruvbox-dark", "gruvbox-light")
 ROLES = ("primary", "secondary", "tertiary", "error")
 SURFACES = ("surface", "surface-container-lowest", "surface-container-low", "surface-container")
 LOUD_SURFACES = ("surface-container-high", "surface-container-highest")
-_NOT_OTHERS = ":not(.frappe):not(.macchiato):not(.mocha)"
+_NOT_OTHERS = ":not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light)"
 
 
 def _rules() -> list[tuple[str, dict[str, str]]]:

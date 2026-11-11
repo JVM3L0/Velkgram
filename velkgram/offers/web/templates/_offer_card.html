@@ -1,26 +1,31 @@
 {% if row.is_coupon %}{% include "_coupon_card.html" %}{% else %}
-<article class="offer{% if row.sold_out or row.deleted %} offer-gone{% endif %}{% if not row.priced or not row.comparable %} offer-quiet{% endif %}">
-  <p class="offer-price{% if not row.priced %} offer-price-unknown{% endif %}">{{ row.price }}{% if row.coupons %} <span class="offer-with-coupon">· com cupom</span>{% endif %}</p>
+<article class="offer offer-product{% if row.sold_out or row.deleted %} offer-gone{% endif %}{% if not row.priced or not row.comparable %} offer-quiet{% endif %}">
+  <div class="offer-media">
+    <i aria-hidden="true">image</i>
+    {% if row.image_url %}<img class="offer-thumb" src="{{ row.image_url }}" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" width="96" height="96">{% endif %}
+  </div>
+  <div class="offer-body">
+    <p class="offer-meta">
+      {% if row.store %}<span class="chip small store-chip"{% if row.store_key %} data-store="{{ row.store_key }}"{% endif %}>{{ row.store }}</span>{% endif %}
+      {% if row.channel %}<span class="chip small chip-muted"><span class="offer-channel">{{ row.channel }}</span></span>{% endif %}
+      <time class="offer-when" datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
+      {% if row.source %}<span class="chip small {{ 'source-retro' if row.historic else 'source-live' }}" title="{{ 'Encontrada na busca retroativa ao criar ou editar o desejo' if row.historic else 'Recebida em tempo real' }}" aria-describedby="{{ 'source-retro-desc' if row.historic else 'source-live-desc' }}">{{ row.source }}</span>{% endif %}
+    </p>
+    <h2 class="offer-title">{{ row.title }}</h2>
+    <p class="offer-price{% if not row.priced %} offer-price-unknown{% endif %}">{{ row.price }}{% if row.coupons %}<span class="offer-with-coupon">com cupom</span>{% endif %}</p>
+    {% if row.sold_out or row.deleted or row.reposts or row.seen_count >= 2 or row.other_product or row.store_coupons or (row.source and not row.comparable) %}
+    <p class="offer-flags">
+      {% if row.sold_out %}<span class="chip small flag-warn">esgotado</span>{% endif %}
+      {% if row.deleted %}<span class="chip small flag-error">removida</span>{% endif %}
+      {% if row.store_coupons %}<a class="chip small tonal-chip store-coupons" href="/cupons?loja={{ row.store_key | urlencode }}"><i aria-hidden="true">confirmation_number</i>{{ row.store_coupons }} {{ "cupom" if row.store_coupons == 1 else "cupons" }} da loja</a>{% endif %}
+      {% if row.seen_count >= 2 %}<span class="chip small" title="{{ row.seen_in | join(', ') }}">visto em {{ row.seen_count }} canais</span>{% endif %}
+      {% if row.other_product %}<span class="chip small chip-muted" title="Produto diferente do mais frequente deste desejo — fora do gráfico e das estatísticas">outro produto</span>{% endif %}
+      {% if row.source and not row.comparable %}<span class="chip small chip-muted" title="Cupom ou post com vários preços — fora do gráfico e das estatísticas">não comparável</span>{% endif %}
+      {% if row.reposts %}<span class="chip small">+{{ row.reposts }} {{ "repostagem" if row.reposts == 1 else "repostagens" }}</span>{% endif %}
+    </p>
+    {% endif %}
+  </div>
   {% with codes = row.coupons %}{% include "_coupon_codes.html" %}{% endwith %}
-  {% if row.image_url %}<img class="offer-thumb" src="{{ row.image_url }}" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" width="96" height="96">{% endif %}
-  <h2 class="offer-title">{{ row.title }}</h2>
-  <p class="offer-meta">
-    {% if row.store %}<span class="chip small tonal-chip">{{ row.store }}</span>{% endif %}
-    {% if row.store_coupons %}<a class="chip small tonal-chip store-coupons" href="/cupons?loja={{ row.store_key | urlencode }}"><i aria-hidden="true">confirmation_number</i>{{ row.store_coupons }} {{ "cupom" if row.store_coupons == 1 else "cupons" }} da loja</a>{% endif %}
-    {% if row.source %}<span class="chip small {{ 'source-retro' if row.historic else 'source-live' }}" title="{{ 'Encontrada na busca retroativa ao criar ou editar o desejo' if row.historic else 'Recebida em tempo real' }}" aria-describedby="{{ 'source-retro-desc' if row.historic else 'source-live-desc' }}">{{ row.source }}</span>{% endif %}
-    {% if row.source and not row.comparable %}<span class="chip small" title="Cupom ou post com vários preços — fora do gráfico e das estatísticas">não comparável</span>{% endif %}
-    {% if row.channel %}<span class="offer-channel">{{ row.channel }}</span>{% endif %}
-    <time datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
-  </p>
-  {% if row.sold_out or row.deleted or row.reposts or row.seen_count >= 2 or row.other_product %}
-  <p class="offer-flags">
-    {% if row.sold_out %}<span class="chip small flag-warn">esgotado</span>{% endif %}
-    {% if row.deleted %}<span class="chip small flag-error">removida</span>{% endif %}
-    {% if row.seen_count >= 2 %}<span class="chip small" title="{{ row.seen_in | join(', ') }}">visto em {{ row.seen_count }} canais</span>{% endif %}
-    {% if row.other_product %}<span class="chip small chip-muted" title="Produto diferente do mais frequente deste desejo — fora do gráfico e das estatísticas">outro produto</span>{% endif %}
-    {% if row.reposts %}<span class="chip small">+{{ row.reposts }} {{ "repostagem" if row.reposts == 1 else "repostagens" }}</span>{% endif %}
-  </p>
-  {% endif %}
   <div class="offer-actions">
     {% if row.product_href %}<a class="button small border" href="{{ row.product_href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">shopping_bag</i><span>Produto</span></a>{% endif %}
     {% if row.href %}<a class="button small" href="{{ row.href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">open_in_new</i><span>Abrir</span></a>{% endif %}

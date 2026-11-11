@@ -16,14 +16,24 @@ from velkgram.apps.web.theme import THEME_MODES, safe_next, theme_classes
         ("frappe", "frappe dark"),
         ("macchiato", "macchiato dark"),
         ("mocha", "mocha dark"),
+        ("gruvbox-dark", "gruvbox-dark dark"),
+        ("gruvbox-light", "gruvbox-light light"),
     ],
 )
 def test_theme_classes_for_every_mode(mode: str | None, expected: str) -> None:
     assert theme_classes(mode) == expected
 
 
-def test_theme_modes_are_the_five_choices() -> None:
-    assert THEME_MODES == ("system", "latte", "frappe", "macchiato", "mocha")
+def test_theme_modes_are_the_seven_choices() -> None:
+    assert THEME_MODES == (
+        "system",
+        "latte",
+        "frappe",
+        "macchiato",
+        "mocha",
+        "gruvbox-dark",
+        "gruvbox-light",
+    )
 
 
 def test_post_theme_sets_cookie_and_redirects_to_next(tmp_path: Path) -> None:

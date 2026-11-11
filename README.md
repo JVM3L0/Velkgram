@@ -120,7 +120,7 @@ uv run velkgram report                                                   # usage
 
 - **Feed (`/`):** the offers catalog with search, filters and infinite scroll. "Acompanhar" opens a new wish pre-filled from the offer.
 - **Product page (`/wishes/{id}`):** stats, price chart (30 days, 90 days or all), matches and the retroactive status of the wish.
-- **Wishes, channels, alerts, status and login** use Beer CSS 5.0.3 (Material 3 Expressive). The theme menu offers system, Latte, Frappé, Macchiato and Mocha (Catppuccin).
+- **Wishes, channels, alerts, status and login** use Beer CSS 5.0.3 (Material 3 Expressive). The theme menu offers system, Latte, Frappé, Macchiato and Mocha (Catppuccin), plus Gruvbox dark and light (Gruvbox Material, "bem pastel" accents).
 
 > The usage report only sees message text from the last `RETENTION_DAYS`, because older text is purged. Token-cost numbers for older dates undercount.
 
