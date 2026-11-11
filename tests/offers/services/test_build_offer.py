@@ -265,6 +265,16 @@ async def test_blank_redelivery_of_unpurged_offer_adds_no_matches(
     assert len(repo._matches) == before
 
 
+async def test_coupon_post_never_matches_a_wish(
+    builder: OfferBuilder, repo: InMemoryOfferRepository, wishes: FakeWishReader
+) -> None:
+    """A coupon post lists many products; matching its text would put it in the wish history."""
+    wishes.views = [_wish(required=(("cupom",),), max_price_cents=10_000_000)]
+    builder.ingest(_coupon_msg())
+    assert repo.get(1, 50) is not None
+    assert repo._matches == {}
+
+
 # --- coupon events ----------------------------------------------------------------------------
 
 SHOPEE_COUPON = (

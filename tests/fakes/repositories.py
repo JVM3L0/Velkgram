@@ -266,7 +266,10 @@ class InMemoryOfferRepository:
             (
                 OfferText(o.channel_id, o.message_id, o.posted_at, o.price_cents, o.norm_text)
                 for o in self._offers.values()
-                if o.norm_text is not None and not o.deleted and o.posted_at >= since
+                if o.norm_text is not None
+                and not o.deleted
+                and o.kind == OfferKind.product
+                and o.posted_at >= since
             ),
             key=lambda t: (t.posted_at, t.channel_id, t.message_id),
         )

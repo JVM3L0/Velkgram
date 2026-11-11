@@ -218,7 +218,7 @@ class SqliteOfferRepository:
         while True:
             rows = self._conn.execute(
                 "SELECT channel_id, message_id, posted_at, price_cents, norm_text FROM offers "
-                "WHERE norm_text IS NOT NULL AND deleted = 0 "
+                "WHERE norm_text IS NOT NULL AND deleted = 0 AND kind = 'product' "
                 "AND (posted_at, channel_id, message_id) > (?, ?, ?) "
                 "ORDER BY posted_at, channel_id, message_id LIMIT ?",
                 (*cursor, batch_size),

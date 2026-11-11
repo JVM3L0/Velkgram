@@ -226,7 +226,8 @@ class OfferBuilder:
         source: MatchSource,
         now: datetime,
     ) -> list[OfferMatch]:
-        if offer.deleted or offer.norm_text is None:
+        # A coupon post lists many products; its text would match wishes by accident.
+        if offer.deleted or offer.norm_text is None or offer.kind == OfferKind.coupon:
             return []
         return [
             OfferMatch(

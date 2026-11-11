@@ -125,3 +125,26 @@ def test_migration_007_creates_the_dominant_covering_indexes(tmp_path: Path) -> 
     cols = [r[2] for r in c.execute("PRAGMA index_info(idx_offer_matches_wish_cover)")]
     assert cols == ["wish_id", "channel_id", "message_id", "price_cents"]
     c.close()
+
+
+def test_migration_008_drops_matches_of_coupon_posts(tmp_path: Path) -> None:
+    c = connect(tmp_path / "pop.db")
+    migrations = files("velkgram.offers") / "migrations"
+    for name in sorted(p.name for p in migrations.iterdir() if p.name < "008"):
+        if name.endswith(".sql"):
+            c.executescript((migrations / name).read_text())
+    for mid, kind in ((1, "product"), (2, "coupon")):
+        c.execute(
+            "INSERT INTO offers (channel_id, message_id, posted_at, title, has_photo, sold_out, "
+            "deleted, updated_at, kind) VALUES (1, ?, '2026-01-01T00:00:00Z', 't', 0, 0, 0, "
+            "'2026-01-01T00:00:00Z', ?)",
+            (mid, kind),
+        )
+        c.execute(
+            "INSERT INTO offer_matches (wish_id, channel_id, message_id, posted_at, source, "
+            "matched_at) VALUES (1, 1, ?, '2026-01-01T00:00:00Z', 'live', '2026-01-01T00:00:00Z')",
+            (mid,),
+        )
+    c.executescript((migrations / "008_drop_coupon_matches.sql").read_text())
+    assert [r[0] for r in c.execute("SELECT message_id FROM offer_matches")] == [1]
+    c.close()

@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -11,7 +12,14 @@ from tests.fakes.repositories import FakeWishReader, InMemoryOfferRepository
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository, to_iso
 from velkgram.offers.domain.build import wish_fingerprint
-from velkgram.offers.domain.models import MatchSource, Offer, OfferMatch, RetroRun, RetroStatus
+from velkgram.offers.domain.models import (
+    MatchSource,
+    Offer,
+    OfferKind,
+    OfferMatch,
+    RetroRun,
+    RetroStatus,
+)
 from velkgram.offers.services.retro_match import RetroMatcher
 from velkgram.shared.db import connect
 from velkgram.shared.deals import WishView
@@ -93,6 +101,14 @@ async def test_new_wish_gets_retro_matches_within_window(env: Env) -> None:
     assert run.status is RetroStatus.done
     assert run.finished_at == NOW
     assert run.fingerprint == wish_fingerprint(_wish())
+
+
+async def test_retro_skips_coupon_posts(env: Env) -> None:
+    env.repo.upsert(_offer(1))
+    env.repo.upsert(replace(_offer(2), kind=OfferKind.coupon))
+    env.wishes.views = [_wish()]
+    await env.matcher.on_wishlist_changed(CHANGED)
+    assert env.matched_ids() == {1}
 
 
 async def test_retro_never_duplicates_live_match(env: Env) -> None:
