@@ -98,3 +98,43 @@ def test_sigterm_handler_stops_the_loop(tmp_path: Path, monkeypatch: pytest.Monk
         assert len(fetcher.calls) == 1
     finally:
         signal.signal(signal.SIGTERM, previous)
+
+
+def test_enrich_also_syncs_post_images_while_it_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+
+    db = _db(tmp_path, 1)
+    conn = connect(db)
+    conn.execute(
+        "INSERT INTO channels (ref, telegram_id, name, status, enabled, silent_after_hours, "
+        "created_at) VALUES ('@fumotom', -100, 'Fumotom', 'active', 1, 12, '2026-03-01T00:00:00Z')"
+    )
+    conn.commit()
+    conn.close()
+    page = (
+        '<div data-post="fumotom/7"><a class="tgme_widget_message_photo_wrap" '
+        "style=\"background-image:url('https://cdn1.telesco.pe/file/a.jpg')\"></a></div>"
+    )
+    synced = threading.Event()
+
+    class Pages:
+        def fetch(self, username: str) -> str | None:
+            synced.set()
+            return page
+
+    monkeypatch.setattr(cli, "_make_channel_pages", lambda: Pages())
+
+    def wait_for_sync() -> None:
+        synced.wait(timeout=5)
+
+    monkeypatch.setattr(cli, "_make_fetcher", lambda: _Fetcher(on_fetch=wait_for_sync))
+    monkeypatch.setenv("DB_PATH", str(db))
+    assert main(["enrich", "--limit", "1"]) == 0
+    c = sqlite3.connect(db)
+    try:
+        rows = c.execute("SELECT channel_id, message_id, url FROM post_images").fetchall()
+    finally:
+        c.close()
+    assert rows == [(-100, 7, "https://cdn1.telesco.pe/file/a.jpg")]

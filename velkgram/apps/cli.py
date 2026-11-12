@@ -22,15 +22,21 @@ from velkgram.alerting.ports.notifier_state import NotifierStatus
 from velkgram.apps import notifier_wiring
 from velkgram.apps.notifier_wiring import ChatHolder, MemoryNotifierStateStore
 from velkgram.apps.web.auth import hash_password
+from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.adapters.telethon.client import build_client
 from velkgram.offers import LinkEnricher, OfferBuilder, rebuild_offers
+from velkgram.offers.adapters.channels_api import ChannelsApiPublicChannels
+from velkgram.offers.adapters.http.channel_pages import HttpxChannelPages
 from velkgram.offers.adapters.http.fetcher import HttpxFetcher, configure_fetch_logging
 from velkgram.offers.adapters.ingestion_api import IngestionApiMessageSource
 from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
+from velkgram.offers.adapters.sqlite.post_images import SqlitePostImageRepository
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
 from velkgram.offers.ports.fetcher import Fetcher
+from velkgram.offers.ports.post_images import ChannelPages
+from velkgram.offers.services.post_images import PostImageSync
 from velkgram.reporting.adapters.alerting_api import AlertingAlertStats, price_extractor
 from velkgram.reporting.adapters.ingestion_api import IngestionMessageStats
 from velkgram.reporting.services.metrics import build_report
@@ -148,6 +154,25 @@ def _make_fetcher() -> Fetcher:
     return HttpxFetcher()
 
 
+def _make_channel_pages() -> ChannelPages:
+    return HttpxChannelPages()
+
+
+def _run_post_images(settings: Settings, stop: threading.Event) -> None:
+    """Keep post image URLs fresh; its own connection, since it runs on its own thread."""
+    conn = connect(settings.db_path)
+    try:
+        PostImageSync(
+            ChannelsApiPublicChannels(SqliteChannelRepository(conn)),
+            _make_channel_pages(),
+            SqlitePostImageRepository(conn),
+            SystemClock(),
+            settings.retention_days,
+        ).run(stop)
+    finally:
+        conn.close()
+
+
 def cmd_enrich(args: argparse.Namespace) -> int:
     settings = load_settings(os.environ)
     configure_logging(settings.log_level)
@@ -158,7 +183,18 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     try:
         apply_migrations(conn, MIGRATION_PACKAGES)
         enricher = LinkEnricher(SqliteLinkRepository(conn), _make_fetcher(), SystemClock())
-        done = enricher.run(stop, limit=args.limit, until_idle=args.once)
+        images: threading.Thread | None = None
+        if not args.once:  # a one-shot batch is only about links
+            images = threading.Thread(
+                target=_run_post_images, args=(settings, stop), name="post-images", daemon=True
+            )
+            images.start()
+        try:
+            done = enricher.run(stop, limit=args.limit, until_idle=args.once)
+        finally:
+            stop.set()
+            if images is not None:
+                images.join(timeout=20)
     finally:
         signal.signal(signal.SIGTERM, previous)
         conn.close()

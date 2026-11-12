@@ -420,3 +420,33 @@ def test_match_card_product_url(conn: sqlite3.Connection) -> None:
     SqliteOfferRepository(conn).add_match(match(1, o))
     cards, _ = SqliteOfferQueries(conn).matches_page(1, None)
     assert cards[0].card.product_url == "https://m.test/p/abc"
+
+
+def _post_image(conn: sqlite3.Connection, channel_id: int, message_id: int, url: str) -> None:
+    with conn:
+        conn.execute(
+            "INSERT INTO post_images (channel_id, message_id, url, fetched_at) VALUES (?,?,?,?)",
+            (channel_id, message_id, url, T0.isoformat()),
+        )
+
+
+def test_card_falls_back_to_the_telegram_post_image(conn: sqlite3.Connection) -> None:
+    add_link(conn, "https://l/a", store="shopee", product_id="1.2", image_url=None)
+    add_link(conn, "https://l/b", store="shopee", product_id="3.4", image_url="https://img/b.jpg")
+    add_link(conn, "https://l/c", product_id="B0000WS6QI", image_url=None)
+    put(
+        conn,
+        offer(1, link="https://l/a"),
+        offer(2, link="https://l/b"),
+        offer(3, link="https://l/c"),
+        offer(4, link=None),
+        offer(5, link="https://l/unknown"),
+    )
+    for message_id in (1, 2, 3, 4):
+        _post_image(conn, 1, message_id, f"https://cdn1.telesco.pe/file/{message_id}.jpg")
+    cards = {c.message_id: c for c in SqliteOfferQueries(conn).feed(NOTHING, None, 50).cards}
+    assert cards[1].image_url == "https://cdn1.telesco.pe/file/1.jpg"  # no store image
+    assert cards[2].image_url == "https://img/b.jpg"  # the store image wins
+    assert cards[3].image_url == "https://cdn1.telesco.pe/file/3.jpg"  # before the ASIN image
+    assert cards[4].image_url == "https://cdn1.telesco.pe/file/4.jpg"  # offers with no link too
+    assert cards[5].image_url is None  # no stored image for that post

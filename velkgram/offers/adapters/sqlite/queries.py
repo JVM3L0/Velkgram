@@ -85,9 +85,18 @@ _SEEN_CHANNELS = (
 _AMAZON_ASIN_IMAGE = (
     "'https://m.media-amazon.com/images/P/' || pl.product_id || '.01._SCLZZZZZZZ_.jpg'"
 )
+# The picture Telegram shows on the post, read from the channel's public web view.
+_POST_IMAGE = (
+    "(SELECT pi.url FROM post_images pi "
+    "WHERE pi.channel_id = o.channel_id AND pi.message_id = o.message_id)"
+)
+# Order: the store's own image, the Telegram post's picture, then the Amazon ASIN image.
 _IMAGE = (
-    "CASE WHEN pl.kind = 'product' AND pl.product_id IS NOT NULL THEN COALESCE(pl.image_url, "
-    f"CASE WHEN pl.store = 'amazon' THEN {_AMAZON_ASIN_IMAGE} END) END AS image_url"
+    "COALESCE("
+    "CASE WHEN pl.kind = 'product' AND pl.product_id IS NOT NULL THEN pl.image_url END, "
+    f"{_POST_IMAGE}, "
+    "CASE WHEN pl.kind = 'product' AND pl.product_id IS NOT NULL AND pl.store = 'amazon' "
+    f"THEN {_AMAZON_ASIN_IMAGE} END) AS image_url"
     ", pl.store AS pl_store, pl.product_id AS pl_product_id, pl.kind AS pl_kind, "
     "pl.final_url AS pl_final_url"
 )

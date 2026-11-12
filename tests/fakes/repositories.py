@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from velkgram.alerting import Alert, AlertKind, AlertStatus, SuppressionRule
 from velkgram.channels import Channel, ChannelStatus
 from velkgram.ingestion import Heartbeat
+from velkgram.offers.domain.channel_page import PostImage
 from velkgram.offers.domain.models import Offer, OfferKind, OfferMatch, OfferText, RetroRun
 from velkgram.offers.domain.urls import host_of
 from velkgram.offers.ports.links import EnrichHeartbeat, LinkRow
@@ -444,3 +445,43 @@ class FakeMessageSource:
 
     def iter_messages(self) -> Iterator[SourceMessage]:
         yield from self.items
+
+
+class InMemoryPostImageRepository:
+    def __init__(self) -> None:
+        self._rows: dict[tuple[int, int], tuple[str, datetime]] = {}
+
+    def upsert(self, channel_id: int, images: Sequence[PostImage], now: datetime) -> None:
+        for image in images:
+            self._rows[(channel_id, image.message_id)] = (image.url, now)
+
+    def get(self, channel_id: int, message_id: int) -> str | None:
+        row = self._rows.get((channel_id, message_id))
+        return row[0] if row else None
+
+    def purge_before(self, cutoff: datetime) -> int:
+        old = [k for k, (_, at) in self._rows.items() if at < cutoff]
+        for key in old:
+            del self._rows[key]
+        return len(old)
+
+
+class FakePublicChannels:
+    def __init__(self, channels: list[tuple[int, str]]) -> None:
+        self._channels = channels
+
+    def public_channels(self) -> list[tuple[int, str]]:
+        return list(self._channels)
+
+
+class FakeChannelPages:
+    def __init__(self, pages: dict[str, str | Exception | None]) -> None:
+        self._pages = pages
+        self.fetched: list[str] = []
+
+    def fetch(self, username: str) -> str | None:
+        self.fetched.append(username)
+        page = self._pages.get(username)
+        if isinstance(page, Exception):
+            raise page
+        return page
