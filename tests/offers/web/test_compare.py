@@ -96,7 +96,7 @@ def test_the_page_shows_each_store_with_current_and_lowest_price(tmp_path: Path)
     for store in ("Amazon", "KaBuM", "Magalu"):  # display names, not the slugs
         assert store in text
     assert "R$ 1.399,00" in text  # kabum's old low is the lowest price ever seen
-    assert "Menor preço registrado" in text
+    assert "Menor preço (sempre)" in text
 
 
 def test_the_page_keeps_the_history_beyond_the_peer_window(tmp_path: Path) -> None:
@@ -148,3 +148,76 @@ def test_the_store_links_are_safe(tmp_path: Path) -> None:
     text = client.get("/produto/1/1").text
     assert "javascript:" not in text
     assert 'href="https://x.test/a"' in text and 'rel="noopener noreferrer"' in text
+
+
+# --- the same layout as a wish: insight, period switch and the lowest-price chart ------------
+
+
+def test_the_page_has_the_wish_layout_without_an_alert_line(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path)
+    text = client.get("/produto/1/1").text
+    assert "Preço atual" in text  # the insight block
+    assert "R$ 1.419,00" in text  # the cheapest current price across stores (magalu, 5 days ago)
+    for label in ("30 dias", "90 dias", "Tudo"):
+        assert label in text
+    assert 'href="/produto/1/1?range=30"' in text
+    assert "chart-step" in text and "menor preço do dia" in text
+    assert "seu alerta" not in text.lower()
+
+
+def test_the_period_switch_changes_which_days_are_charted(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path)
+    conn = _conn(tmp_path)
+    put(conn, offer(6, title=AOC, store="kabum", price=120000, at=NOW - timedelta(days=60)))
+    conn.close()
+    thirty = client.get("/produto/1/1?range=30").text
+    everything = client.get("/produto/1/1?range=all").text
+    # the chart's table lists one row per charted day; the old R$ 1.200 offer is outside 30 days
+    assert "<td>R$ 1.200,00</td>" not in thirty
+    assert "<td>R$ 1.200,00</td>" in everything
+    assert "Menor preço (sempre)" in thirty and "R$ 1.200,00" in thirty  # the all-time low stays
+    assert 'aria-current="true">30 dias' in thirty
+    assert 'aria-current="true">Tudo' in everything
+
+
+def test_the_chart_block_can_be_fetched_on_its_own_for_the_period_switch(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path)
+    block = client.get("/produto/1/1/chart?range=30")
+    assert block.status_code == 200
+    assert 'id="chart-block"' in block.text and "<html" not in block.text
+    assert 'hx-get="/produto/1/1/chart?range=30"' in block.text
+    assert "seu alerta" not in block.text.lower()
+
+
+def test_the_chart_partial_is_404_for_an_unknown_offer(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    assert client.get("/produto/1/999/chart").status_code == 404
+
+
+def test_the_offer_list_shows_every_offer_newest_first(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path)
+    text = client.get("/produto/1/1").text
+    section = text.split('id="offers-title"')[1]
+    assert section.index("R$ 1.500,00") < section.index("R$ 1.399,00")  # 3 h ago before 20 d ago
+
+
+def test_the_chart_ends_at_the_current_lowest_price_like_the_summary(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path)
+    text = client.get("/produto/1/1").text
+    # the newest day's cheapest offer is kabum's R$ 1.444, but magalu's R$ 1.419 (5 days ago) is
+    # still the lowest current price: the summary says so and the chart's last label agrees
+    assert "R$ 1.419,00" in text.split('id="chart-block"')[1].split("</section>")[0]
+    assert "Atual R$ 1.419,00" in text
+
+
+def test_the_page_shows_the_product_title_as_its_heading(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path)
+    text = client.get("/produto/1/1").text
+    assert "<h1>" in text and "U34g4c" in text.split("<h1>")[1].split("</h1>")[0]
+    assert "page-title" not in text  # nothing replaces the product name in the app bar

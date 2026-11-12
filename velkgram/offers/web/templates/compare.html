@@ -1,30 +1,52 @@
 {% extends "base.html" %}
-{% set page_title = "Produto" %}
-{% block title %}Produto - Velkgram{% endblock %}
+{% block title %}{{ title }} - Velkgram{% endblock %}
 {% block content %}
-<div class="list-page compare-page">
-<h1 class="compare-title">{{ title }}</h1>
-{% if lowest %}
-<p class="compare-lowest"><i aria-hidden="true">trending_down</i><span>Menor preço registrado: <strong>{{ lowest.price }}</strong> na {{ lowest.store }} em {{ lowest.when }}</span></p>
-{% endif %}
-{% if not other_stores %}
-<p class="muted">Não encontrei este produto em outras lojas. Só aparecem aqui produtos com um código de modelo no título (como U34G4C ou VG27AQME5F), e só quando o código identifica um modelo e não uma família inteira.</p>
-{% endif %}
-{% if rows %}
-<ul class="store-list">
-  {% for r in rows %}
-  <li class="alert-card store-row{% if r.cheapest_now %} store-cheapest{% endif %}">
-    <p class="store-head">
-      <span class="chip small store-chip" data-store="{{ r.store_key }}">{{ r.store }}</span>
-      {% if r.cheapest_now and rows|length > 1 %}<span class="chip small tonal-chip">mais barato agora</span>{% endif %}
-    </p>
-    <p class="store-price">{{ r.latest }}</p>
-    <p class="store-meta">menor {{ r.lowest }} em {{ r.lowest_when }} · {{ r.offers }} {{ "oferta" if r.offers == 1 else "ofertas" }} · última {{ r.last_seen }}</p>
-    {% if r.offers >= 2 %}<div class="store-spark">{{ r.spark }}</div>{% endif %}
-    {% if r.href %}<a class="button small" href="{{ r.href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">open_in_new</i><span>Abrir</span></a>{% endif %}
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
+<div class="product-page">
+  <header class="product-head">
+    <div class="product-title"><h1>{{ title }}</h1></div>
+    <p class="muted product-limit">Menor preço entre as lojas</p>
+  </header>
+
+  {% include "_product_chart.html" %}
+
+  {% if not other_stores %}
+  <p class="muted">Não encontrei este produto em outras lojas. Só aparecem aqui produtos com um código de modelo no título (como U34G4C ou VG27AQME5F), e só quando o código identifica um modelo e não uma família inteira.</p>
+  {% endif %}
+
+  {% if rows %}
+  <section aria-labelledby="stores-title">
+    <h2 id="stores-title" class="section-title">Por loja</h2>
+    <ul class="store-list">
+      {% for r in rows %}
+      <li class="alert-card store-row{% if r.cheapest_now %} store-cheapest{% endif %}">
+        <p class="store-head">
+          <span class="chip small store-chip" data-store="{{ r.store_key }}">{{ r.store }}</span>
+          {% if r.cheapest_now and rows|length > 1 %}<span class="chip small tonal-chip">mais barato agora</span>{% endif %}
+        </p>
+        <p class="store-price">{{ r.latest }}</p>
+        <p class="store-meta">menor {{ r.lowest }} em {{ r.lowest_when }} · {{ r.offers }} {{ "oferta" if r.offers == 1 else "ofertas" }} · última {{ r.last_seen }}</p>
+        {% if r.offers >= 2 %}<div class="store-spark">{{ r.spark }}</div>{% endif %}
+        {% if r.href %}<a class="button small" href="{{ r.href }}" rel="noopener noreferrer" target="_blank"><i aria-hidden="true">open_in_new</i><span>Abrir</span></a>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if offers %}
+  <section aria-labelledby="offers-title">
+    <h2 id="offers-title" class="section-title">Ofertas</h2>
+    <ul class="offer-history">
+      {% for o in offers %}
+      <li>
+        <span class="chip small store-chip" data-store="{{ o.store_key }}">{{ o.store }}</span>
+        <strong class="offer-history-price">{{ o.price }}</strong>
+        <time class="muted">{{ o.when }}</time>
+        {% if o.href %}<a class="button small border" href="{{ o.href }}" rel="noopener noreferrer" target="_blank" aria-label="Abrir a oferta da {{ o.store }}"><i aria-hidden="true">open_in_new</i><span>Abrir</span></a>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

@@ -134,7 +134,7 @@ def _step_path(coords: Sequence[tuple[float, float]]) -> str:
 
 def price_chart_svg(
     points: Sequence[PricePoint],
-    max_price_cents: int,
+    max_price_cents: int | None,
     *,
     width: int = 800,
     height: int = _HEIGHT,
@@ -153,11 +153,11 @@ def price_chart_svg(
     average = round(sum(prices) / len(prices))
     current = prices[-1]
     span = (data_hi - data_lo) or max(data_hi * 0.1, 1)
-    max_in_range = (
+    max_in_range = max_price_cents is not None and (
         data_lo - span * _MAX_LINE_REACH <= max_price_cents <= data_hi + span * _MAX_LINE_REACH
     )
-    lo_raw = min(data_lo, max_price_cents) if max_in_range else data_lo
-    hi_raw = max(data_hi, max_price_cents) if max_in_range else data_hi
+    lo_raw = min(data_lo, max_price_cents) if max_in_range and max_price_cents else data_lo
+    hi_raw = max(data_hi, max_price_cents) if max_in_range and max_price_cents else data_hi
     pad = (hi_raw - lo_raw) * 0.1 or max(hi_raw * 0.1, 1)
     lo, hi = lo_raw - pad, hi_raw + pad
     plot_w, plot_h = width - _LEFT - _RIGHT, height - _TOP - _BOTTOM
@@ -176,7 +176,8 @@ def price_chart_svg(
     desc = (
         f"{len(points)} preços de {first:%d/%m/%Y} a {last:%d/%m/%Y}. "
         f"Menor {brl(data_lo)}, maior {brl(data_hi)}, atual {brl(current)}, "
-        f"média {brl(average)}, seu alerta {brl(max_price_cents)}."
+        f"média {brl(average)}"
+        + (f", seu alerta {brl(max_price_cents)}." if max_price_cents is not None else ".")
     )
     parts = [_open(width, height, "Histórico de preços", desc, cls)]
     axis_y = height - _BOTTOM
@@ -215,7 +216,7 @@ def price_chart_svg(
                 'stroke-opacity="0.7"/>'
             )
     # Draw order: average, alert line, step line, dots, labels.
-    alert_y = y(max_price_cents)
+    alert_y = y(max_price_cents) if max_price_cents is not None else 0.0
     if max_in_range:
         parts.append(
             f'<line x1="{_LEFT}" y1="{_num(alert_y)}" x2="{right}" y2="{_num(alert_y)}" '
@@ -262,7 +263,9 @@ def price_chart_svg(
         lx, ly, anchor = _place(text, spots, taken, bounds)
         leaders.append(_leader(cx, cy, _text_box(lx, ly, text, anchor)))
         labels.append(_label(lx, ly, anchor, text))
-    if max_in_range:
+    if max_price_cents is None:
+        pass
+    elif max_in_range:
         # The full "Seu alerta R$ x" when it fits cleanly, else just "Seu alerta" (the page
         # header states the value), else the full text over the line with its halo.
         full = f"Seu alerta {brl(max_price_cents)}"
@@ -300,7 +303,7 @@ def price_chart_svg(
     return "".join(parts)
 
 
-def price_chart_responsive(points: Sequence[PricePoint], max_price_cents: int) -> str:
+def price_chart_responsive(points: Sequence[PricePoint], max_price_cents: int | None) -> str:
     """Compact, medium and wide charts; CSS shows one, so text stays ~12 px at every viewport."""
     sizes = (("compact", 340), ("medium", 520), ("wide", 800))
     return "".join(

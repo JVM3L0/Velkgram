@@ -1,5 +1,5 @@
 <section id="chart-block" class="chart-block" aria-label="Preços"
-  hx-get="/wishes/{{ wish.id }}/chart?range={{ range_key }}" hx-trigger="retro-done from:body" hx-swap="outerHTML">
+  {% if retro_refresh %}hx-get="{{ base_url }}/chart?range={{ range_key }}" hx-trigger="retro-done from:body" hx-swap="outerHTML"{% endif %}>
   <div class="insight insight-{{ insight.kind }}" role="status">
     <i aria-hidden="true">{{ insight.icon }}</i>
     <div class="insight-body">
@@ -18,10 +18,10 @@
   </div>
   <nav class="range-switch" aria-label="Período do gráfico">
     {% for key, label in ranges %}
-    <a href="/wishes/{{ wish.id }}?range={{ key }}" hx-get="/wishes/{{ wish.id }}/chart?range={{ key }}"
+    <a href="{{ base_url }}?range={{ key }}" hx-get="{{ base_url }}/chart?range={{ key }}"
       hx-target="#chart-block" hx-swap="outerHTML"{% if key == range_key %} aria-current="true"{% endif %}>{{ label }}</a>
     {% endfor %}
   </nav>
   <div class="chart-frame">{{ chart_svg }}</div>
-  <p class="chart-key muted"><span class="key-line" aria-hidden="true"></span>menor preço do dia<span class="key-avg" aria-hidden="true"></span>média do período<span class="key-dash" aria-hidden="true"></span>seu alerta</p>
+  <p class="chart-key muted"><span class="key-line" aria-hidden="true"></span>menor preço do dia<span class="key-avg" aria-hidden="true"></span>média do período{% if show_alert %}<span class="key-dash" aria-hidden="true"></span>seu alerta{% endif %}</p>
 </section>

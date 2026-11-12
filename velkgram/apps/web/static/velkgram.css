@@ -1538,3 +1538,23 @@ body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-li
 .compare-lowest > span { flex: 1 1 auto; min-inline-size: 0; }
 .compare-lowest > i { flex: none; }
 .offer-peers, .offer-peers a { text-align: start; justify-content: flex-start; }
+
+/* Product page: history of every offer, newest first. A grid keeps the open button on the row. */
+.offer-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.offer-history li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "store price open" "store when open";
+  align-items: center;
+  gap: 0 0.75rem;
+  padding-block: 0.5rem;
+  border-block-end: 1px solid var(--outline-variant);
+}
+.offer-history .store-chip { grid-area: store; align-self: center; }
+.offer-history .offer-history-price { grid-area: price; font-size: 1.0625rem; }
+.offer-history time { grid-area: when; font-size: 0.8125rem; }
+.offer-history .button { grid-area: open; margin: 0; min-block-size: 2.5rem; }
+@media (max-width: 599px) {
+  .offer-history .button { inline-size: 2.5rem; padding-inline: 0; }
+  .offer-history .button > span { display: none; }
+}

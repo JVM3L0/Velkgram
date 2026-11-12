@@ -282,3 +282,17 @@ def test_four_digit_labels_fit_the_viewbox_with_wide_fallback_fonts() -> None:
             assert boxes
             for left, w, text in boxes:
                 assert left >= 0 and left + w <= width, (width, text, left)
+
+
+def test_a_chart_without_an_alert_line_draws_no_alert_text_or_line() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from velkgram.offers.ports.queries import PricePoint
+    from velkgram.offers.web.chart import price_chart_responsive
+
+    t0 = datetime(2026, 11, 1, tzinfo=UTC)
+    points = [PricePoint(t0 + timedelta(days=i), 100_000 - i * 1000) for i in range(6)]
+    svg = price_chart_responsive(points, None)
+    assert "chart-step" in svg and "Menor" in svg
+    assert "alerta" not in svg.lower()
+    assert "stroke-dasharray" not in svg  # the dashed alert line

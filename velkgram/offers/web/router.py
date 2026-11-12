@@ -16,6 +16,7 @@ from markupsafe import Markup
 from velkgram.accounts import User
 from velkgram.offers.domain.coupon import best_tier, coupon_title
 from velkgram.offers.domain.insight import PriceVerdict, price_insight
+from velkgram.offers.domain.lowest import CURRENT_WINDOW_DAYS, current_lowest, daily_lowest
 from velkgram.offers.domain.models import (
     CouponTier,
     MatchSource,
@@ -59,6 +60,8 @@ _SOURCE_LABELS = {MatchSource.live: "ao vivo", MatchSource.retro: "histórico"}
 _DASH = "—"
 _COUPONS_TYPE = "cupons"  # the retired `tipo` filter value, redirected to the coupons tab
 _ACTIVE_HOURS = 24
+_OFFERS_SHOWN = 50
+_MAX_POINTS = 200
 
 
 @dataclass(frozen=True, slots=True)
@@ -391,6 +394,9 @@ def build_router(
             "chart_svg": Markup(price_chart_responsive(history.points, wish.max_price_cents)),
             "range_key": range_key,
             "ranges": _RANGE_LABELS,
+            "base_url": f"/wishes/{wish.id}",
+            "show_alert": True,
+            "retro_refresh": True,
         }
 
     @router.get("/wishes/{wish_id}", response_class=HTMLResponse)
@@ -705,37 +711,78 @@ def build_router(
         rows.sort(key=lambda r: latest_cents[r.store_key])
         return rows
 
+    def compare_context(
+        channel_id: int, message_id: int, range_key: str, conn: sqlite3.Connection
+    ) -> dict[str, object]:
+        if not all(abs(v) <= SQLITE_MAX_INT for v in (channel_id, message_id)):
+            raise HTTPException(status_code=404, detail="Produto não encontrado")
+        product = make_queries(conn).same_product(channel_id, message_id)
+        if product is None:
+            raise HTTPException(status_code=404, detail="Produto não encontrado")
+        now = clock.now()
+        offers = [(o.posted_at, o.price_cents, o.store) for o in product.offers]
+        days = _RANGES[range_key]
+        since = None if days is None else now - timedelta(days=days)
+        current = current_lowest(offers, now, CURRENT_WINDOW_DAYS)
+        series = [PricePoint(t, c) for t, c in daily_lowest(offers, since)][-_MAX_POINTS:]
+        if current is not None and series and series[-1].price_cents != current:
+            series.append(PricePoint(now, current))  # the chart ends where the summary says we are
+        points = tuple(series)
+        stats = ProductStats(
+            lowest_cents=min((o[1] for o in offers), default=None),
+            avg_30d_cents=None,
+            last_cents=current,
+            match_count=len(offers),
+        )
+        rows = store_rows(product.offers, now)
+        return {
+            "title": product.title,
+            "rows": rows,
+            "other_stores": len(rows) > 1
+            or (len(rows) == 1 and rows[0].store_key != product.store),
+            "offers": [
+                {
+                    "store": STORE_NAMES.get(o.store, o.store),
+                    "store_key": o.store,
+                    "price": brl(o.price_cents),
+                    "when": o.posted_at.astimezone(tz).strftime("%d/%m/%Y %H:%M"),
+                    "href": safe_href(o.link),
+                }
+                for o in reversed(product.offers[-_OFFERS_SHOWN:])
+            ],
+            "stats": _stats_view(stats),
+            "insight": _insight_view(stats, points),
+            "chart_svg": Markup(price_chart_responsive(points, None)),
+            "range_key": range_key,
+            "ranges": _RANGE_LABELS,
+            "base_url": f"/produto/{channel_id}/{message_id}",
+            "show_alert": False,
+            "retro_refresh": False,
+        }
+
     @router.get("/produto/{channel_id}/{message_id}", response_class=HTMLResponse)
     def compare(
         request: Request,
         channel_id: int,
         message_id: int,
         conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        range_raw: Annotated[str, Query(alias="range")] = _DEFAULT_RANGE,
     ) -> Response:
-        if not all(abs(v) <= SQLITE_MAX_INT for v in (channel_id, message_id)):
-            raise HTTPException(status_code=404, detail="Produto não encontrado")
-        product = make_queries(conn).same_product(channel_id, message_id)
-        if product is None:
-            raise HTTPException(status_code=404, detail="Produto não encontrado")
-        rows = store_rows(product.offers, clock.now())
-        lowest = min(product.offers, key=lambda o: (o.price_cents, o.posted_at), default=None)
-        return templates.TemplateResponse(
-            request,
-            "compare.html",
-            {
-                "title": product.title,
-                "rows": rows,
-                "other_stores": len(rows) > 1
-                or (len(rows) == 1 and rows[0].store_key != product.store),
-                "lowest": None
-                if lowest is None
-                else {
-                    "price": brl(lowest.price_cents),
-                    "store": STORE_NAMES.get(lowest.store, lowest.store),
-                    "when": lowest.posted_at.astimezone(tz).strftime("%d/%m/%Y"),
-                },
-            },
-        )
+        range_key = range_raw if range_raw in _RANGES else _DEFAULT_RANGE
+        context = compare_context(channel_id, message_id, range_key, conn)
+        return templates.TemplateResponse(request, "compare.html", context)
+
+    @router.get("/produto/{channel_id}/{message_id}/chart", response_class=HTMLResponse)
+    def compare_chart(
+        request: Request,
+        channel_id: int,
+        message_id: int,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        range_raw: Annotated[str, Query(alias="range")] = _DEFAULT_RANGE,
+    ) -> Response:
+        range_key = range_raw if range_raw in _RANGES else _DEFAULT_RANGE
+        context = compare_context(channel_id, message_id, range_key, conn)
+        return templates.TemplateResponse(request, "_product_chart.html", context)
 
     @router.get("/cupons", response_class=HTMLResponse)
     def coupons_page(
