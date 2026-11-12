@@ -113,6 +113,7 @@ def _wish_info(conn: sqlite3.Connection, wish_id: int) -> WishInfo | None:
         excluded_terms=w.excluded_terms,
         max_price_cents=w.max_price_cents,
         enabled=w.enabled,
+        user_id=w.user_id,
     )
 
 
@@ -281,6 +282,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(
         build_wishlist_router(
             get_conn=get_conn,
+            current_user=require_user,
             templates=templates,
             make_repo=SqliteWishRepository,
             summaries=_wish_card_stats,
@@ -330,6 +332,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(
         build_offers_router(
             get_conn=get_conn,
+            current_user=require_user,
             templates=templates,
             make_queries=SqliteOfferQueries,
             channel_names=_channel_names,

@@ -93,3 +93,25 @@ def test_failed_write_does_not_bump_version(tmp_path: Path) -> None:
     assert len(repo.list_all()) == 1  # insert rolled back with the failed bump
     assert not conn.in_transaction
     conn.execute("DROP TABLE state_versions")
+
+
+def test_user_id_round_trips_and_defaults_to_the_admin(handle: RepoHandle) -> None:
+    mine = handle.repo.add(replace(_wish("mine"), user_id=2))
+    default = handle.repo.add(_wish("default"))
+    assert handle.repo.get(mine.id or 0) == mine and mine.user_id == 2
+    assert default.user_id == 1
+
+
+def test_list_for_user_returns_only_that_users_wishes_in_id_order(handle: RepoHandle) -> None:
+    a1 = handle.repo.add(replace(_wish("a1"), user_id=2))
+    handle.repo.add(replace(_wish("b1"), user_id=3))
+    a2 = handle.repo.add(replace(_wish("a2"), user_id=2))
+    assert handle.repo.list_for_user(2) == [a1, a2]
+    assert handle.repo.list_for_user(99) == []
+
+
+def test_update_never_moves_a_wish_to_another_user(handle: RepoHandle) -> None:
+    stored = handle.repo.add(replace(_wish(), user_id=2))
+    handle.repo.update(replace(stored, name="renamed", user_id=3))
+    kept = handle.repo.get(stored.id or 0)
+    assert kept is not None and (kept.name, kept.user_id) == ("renamed", 2)

@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
+from velkgram.accounts import User
 from velkgram.offers.domain.coupon import best_tier, coupon_title
 from velkgram.offers.domain.insight import PriceVerdict, price_insight
 from velkgram.offers.domain.models import (
@@ -69,6 +70,7 @@ class WishInfo:
     excluded_terms: tuple[str, ...]
     max_price_cents: int
     enabled: bool
+    user_id: int = 1  # owner: the pages only open for them
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,6 +266,7 @@ def _int_or_none(raw: str) -> int | None:
 def build_router(
     *,
     get_conn: Callable[..., Iterator[sqlite3.Connection]],
+    current_user: Callable[..., User],
     templates: Jinja2Templates,
     make_queries: Callable[[sqlite3.Connection], OfferQueries],
     channel_names: Callable[[sqlite3.Connection], dict[int, str]],
@@ -314,10 +317,11 @@ def build_router(
             seen_count=len(card.seen_channel_ids),
         )
 
-    def wish_or_404(conn: sqlite3.Connection, raw_id: str) -> WishInfo:
+    def wish_or_404(conn: sqlite3.Connection, raw_id: str, user: User) -> WishInfo:
+        """The user's own wish; someone else's looks exactly like one that does not exist."""
         wish_id = _int_or_none(raw_id)
         wish = get_wish(conn, wish_id) if wish_id and 0 < wish_id <= SQLITE_MAX_INT else None
-        if wish is None:
+        if wish is None or wish.user_id != user.id:
             raise HTTPException(status_code=404, detail="Desejo não encontrado")
         return wish
 
@@ -356,9 +360,10 @@ def build_router(
         request: Request,
         wish_id: str,
         conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
         range_raw: Annotated[str, Query(alias="range")] = _DEFAULT_RANGE,
     ) -> Response:
-        wish = wish_or_404(conn, wish_id)
+        wish = wish_or_404(conn, wish_id, user)
         range_key = range_raw if range_raw in _RANGES else _DEFAULT_RANGE
         queries = make_queries(conn)
         now = clock.now()
@@ -400,9 +405,10 @@ def build_router(
         request: Request,
         wish_id: str,
         conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
         cursor: str = "",
     ) -> Response:
-        wish = wish_or_404(conn, wish_id)
+        wish = wish_or_404(conn, wish_id, user)
         parsed = _parse_cursor(cursor)
         queries = make_queries(conn)
         now = clock.now()
@@ -425,9 +431,10 @@ def build_router(
         request: Request,
         wish_id: str,
         conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
         range_raw: Annotated[str, Query(alias="range")] = _DEFAULT_RANGE,
     ) -> Response:
-        wish = wish_or_404(conn, wish_id)
+        wish = wish_or_404(conn, wish_id, user)
         range_key = range_raw if range_raw in _RANGES else _DEFAULT_RANGE
         history = make_queries(conn).product(wish.id, clock.now(), _RANGES[range_key], None, 1)
         context = chart_context(wish, history, range_key)
@@ -435,18 +442,24 @@ def build_router(
 
     @router.get("/wishes/{wish_id}/history", response_class=HTMLResponse)
     def product_history(
-        request: Request, wish_id: str, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
+        request: Request,
+        wish_id: str,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
     ) -> Response:
-        wish = wish_or_404(conn, wish_id)
+        wish = wish_or_404(conn, wish_id, user)
         run = make_queries(conn).product(wish.id, clock.now(), None, None, 1).retro
         poll = request.headers.get("HX-Request") == "true"
         return retro_response(request, wish.id, run.status if run else None, poll=poll)
 
     @router.post("/wishes/{wish_id}/history/retry", response_class=HTMLResponse)
     def product_retry(
-        request: Request, wish_id: str, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
+        request: Request,
+        wish_id: str,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
     ) -> Response:
-        wish = wish_or_404(conn, wish_id)
+        wish = wish_or_404(conn, wish_id, user)
         request_retro(conn, wish.id)
         return retro_response(request, wish.id, RetroStatus.running, poll=False)
 

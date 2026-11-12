@@ -34,3 +34,28 @@ def make_client(tmp_path: Path, *, login: bool = True, clock: Clock | None = Non
     if login:
         client.post("/login", data={"username": "admin", "password": PASSWORD})
     return client
+
+
+def make_user_client(
+    tmp_path: Path, username: str, password: str = "senha-forte-1", *, admin: bool = False
+) -> TestClient:
+    """A client logged in as `username`, created on the same database if it does not exist."""
+    from velkgram.accounts import Role, UserCommands
+    from velkgram.accounts.adapters.sqlite.repository import SqliteUserRepository
+    from velkgram.apps.web.auth import verify_password
+    from velkgram.shared.adapters.clock_system import SystemClock
+
+    settings = make_settings(tmp_path)
+    conn = connect(settings.db_path)
+    try:
+        apply_migrations(conn, MIGRATION_PACKAGES)
+        repo = SqliteUserRepository(conn)
+        if repo.get_by_username(username) is None:
+            commands = UserCommands(repo, SystemClock(), hash_password, verify_password)
+            commands.create(username, password, Role.ADMIN if admin else Role.USER)
+    finally:
+        conn.close()
+    client = TestClient(create_app(settings), follow_redirects=False)
+    response = client.post("/login", data={"username": username, "password": password})
+    assert response.status_code == 303
+    return client

@@ -17,8 +17,11 @@ class WishCommands:
         excluded_terms: tuple[str, ...],
         max_price_cents: int,
         enabled: bool = True,
+        user_id: int = 1,
     ) -> Wish:
-        wish = Wish(None, name.strip(), required_terms, excluded_terms, max_price_cents, enabled)
+        wish = Wish(
+            None, name.strip(), required_terms, excluded_terms, max_price_cents, enabled, user_id
+        )
         validate_wish(wish)
         return self._repo.add(wish)
 

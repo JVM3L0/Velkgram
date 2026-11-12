@@ -20,6 +20,7 @@ class Wish:
     excluded_terms: tuple[str, ...]
     max_price_cents: int
     enabled: bool
+    user_id: int = 1  # owner; 1 is the admin (see accounts)
 
 
 def split_alternatives(term: str) -> tuple[str, ...]:

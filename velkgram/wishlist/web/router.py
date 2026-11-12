@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
+from velkgram.accounts import User
 from velkgram.wishlist import InvalidWish, Wish, WishCommands, WishRepository
 from velkgram.wishlist.web.view import WishCardStats
 
@@ -37,6 +38,7 @@ def _lines(raw: str) -> tuple[str, ...]:
 def build_router(
     *,
     get_conn: Callable[..., Iterator[sqlite3.Connection]],
+    current_user: Callable[..., User],
     templates: Jinja2Templates,
     make_repo: Callable[[sqlite3.Connection], WishRepository],
     summaries: Callable[
@@ -54,6 +56,13 @@ def build_router(
     def commands(conn: sqlite3.Connection) -> tuple[WishRepository, WishCommands]:
         repo = make_repo(conn)
         return repo, WishCommands(repo)
+
+    def owned(repo: WishRepository, wish_id: int, user: User) -> Wish:
+        """The user's own wish; someone else's looks exactly like one that does not exist."""
+        wish = repo.get(wish_id)
+        if wish is None or wish.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Desejo não encontrado")
+        return wish
 
     def form_response(
         request: Request,
@@ -79,11 +88,13 @@ def build_router(
 
     @router.get("")
     def list_wishes(
-        request: Request, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
+        request: Request,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
     ) -> Response:
         repo, _ = commands(conn)
         return templates.TemplateResponse(
-            request, "wishes.html", {"cards": card_context(conn, repo.list_all())}
+            request, "wishes.html", {"cards": card_context(conn, repo.list_for_user(user.id or 0))}
         )
 
     @router.get("/new")
@@ -107,6 +118,7 @@ def build_router(
     def create(
         request: Request,
         conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
         name: str = Form(""),
         required_terms: str = Form(""),
         excluded_terms: str = Form(""),
@@ -123,19 +135,22 @@ def build_router(
             return form_response(request, wish_id=None, values=values, error=_INVALID_PRICE)
         _, cmds = commands(conn)
         try:
-            cmds.create(name, _lines(required_terms), _lines(excluded_terms), cents)
+            cmds.create(
+                name, _lines(required_terms), _lines(excluded_terms), cents, user_id=user.id or 0
+            )
         except InvalidWish as exc:
             return form_response(request, wish_id=None, values=values, error=exc.message_pt)
         return RedirectResponse("/wishes", status_code=303)
 
     @router.get("/{wish_id}/edit")
     def edit_form(
-        request: Request, wish_id: int, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
+        request: Request,
+        wish_id: int,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
     ) -> Response:
         repo, _ = commands(conn)
-        wish = repo.get(wish_id)
-        if wish is None:
-            raise HTTPException(status_code=404, detail="Desejo não encontrado")
+        wish = owned(repo, wish_id, user)
         return form_response(request, wish_id=wish_id, values=wish_values(wish))
 
     @router.post("/{wish_id}/edit")
@@ -143,15 +158,14 @@ def build_router(
         request: Request,
         wish_id: int,
         conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
         name: str = Form(""),
         required_terms: str = Form(""),
         excluded_terms: str = Form(""),
         max_price: str = Form(""),
     ) -> Response:
         repo, cmds = commands(conn)
-        current = repo.get(wish_id)
-        if current is None:
-            raise HTTPException(status_code=404, detail="Desejo não encontrado")
+        current = owned(repo, wish_id, user)
         values = {
             "name": name,
             "required_terms": required_terms,
@@ -176,12 +190,13 @@ def build_router(
 
     @router.post("/{wish_id}/toggle")
     def toggle(
-        request: Request, wish_id: int, conn: Annotated[sqlite3.Connection, Depends(get_conn)]
+        request: Request,
+        wish_id: int,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
     ) -> Response:
         repo, cmds = commands(conn)
-        current = repo.get(wish_id)
-        if current is None:
-            raise HTTPException(status_code=404, detail="Desejo não encontrado")
+        current = owned(repo, wish_id, user)
         cmds.toggle(wish_id, not current.enabled)
         updated = repo.get(wish_id)
         if updated is None:
@@ -190,8 +205,13 @@ def build_router(
         return templates.TemplateResponse(request, "_wish_row.html", card)
 
     @router.post("/{wish_id}/delete")
-    def delete(wish_id: int, conn: Annotated[sqlite3.Connection, Depends(get_conn)]) -> Response:
-        _, cmds = commands(conn)
+    def delete(
+        wish_id: int,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
+    ) -> Response:
+        repo, cmds = commands(conn)
+        owned(repo, wish_id, user)
         cmds.delete(wish_id)
         on_deleted(conn, wish_id)
         return RedirectResponse("/wishes", status_code=303)

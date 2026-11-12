@@ -31,7 +31,7 @@ class InMemoryWishRepository:
 
     def update(self, w: Wish) -> None:
         if w.id is not None and w.id in self._wishes:
-            self._wishes[w.id] = w
+            self._wishes[w.id] = replace(w, user_id=self._wishes[w.id].user_id)  # owner is fixed
         self.version += 1
 
     def delete(self, id: int) -> None:
@@ -46,6 +46,9 @@ class InMemoryWishRepository:
 
     def list_enabled(self) -> list[Wish]:
         return [w for w in self.list_all() if w.enabled]
+
+    def list_for_user(self, user_id: int) -> list[Wish]:
+        return [w for w in self.list_all() if w.user_id == user_id]
 
 
 class InMemoryChannelRepository:
