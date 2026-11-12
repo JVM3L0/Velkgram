@@ -190,9 +190,9 @@ _PRICED = re.compile(r"\bpor\s+R\$", re.IGNORECASE)
 
 
 def is_coupon_title(title: str) -> bool:
-    """A coupon post's title: it starts with "Cupom" or "Cupons", or it is a short name followed straight by
-    a discount and a code ("iFood R$ 20 OFF Mercados: ATACADOBF"). A title that gives a product
-    price ("por R$ 3999") is never a coupon."""
+    """A coupon post's title: it starts with "Cupom" or "Cupons", or it is a short name followed
+    straight by a discount and a code ("iFood R$ 20 OFF Mercados: ATACADOBF"). A title that gives
+    a product price ("por R$ 3999") is never a coupon."""
     head = unicodedata.normalize("NFKD", title.strip().lower())
     plain = "".join(c for c in head if unicodedata.category(c) != "Mn")
     if plain.startswith(("cupom", "cupons")):
