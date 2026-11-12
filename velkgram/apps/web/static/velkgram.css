@@ -1558,3 +1558,7 @@ body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-li
   .offer-history .button { inline-size: 2.5rem; padding-inline: 0; }
   .offer-history .button > span { display: none; }
 }
+
+/* The card title opens the product page. */
+.offer-title-link { color: inherit; text-decoration: none; }
+.offer-title-link:hover, .offer-title-link:focus-visible { text-decoration: underline; text-underline-offset: 0.2em; }

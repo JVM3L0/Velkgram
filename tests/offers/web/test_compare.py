@@ -221,3 +221,35 @@ def test_the_page_shows_the_product_title_as_its_heading(tmp_path: Path) -> None
     text = client.get("/produto/1/1").text
     assert "<h1>" in text and "U34g4c" in text.split("<h1>")[1].split("</h1>")[0]
     assert "page-title" not in text  # nothing replaces the product name in the app bar
+
+
+# --- the title of every priced product card opens its page ----------------------------------
+
+
+def test_every_priced_product_card_title_links_to_its_page(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    conn = _conn(tmp_path)
+    put(
+        conn,
+        offer(1, title="Camiseta Dry Fit Preta", store="amazon", price=5000, at=NOW),
+        offer(2, title=AOC, store="kabum", price=144400, at=NOW),
+        offer(3, title="Cupom Shopee 10 OFF", kind=OfferKind.coupon, at=NOW),
+        offer(4, title="Brinde sem preço", store="amazon", price=None, at=NOW),
+    )
+    conn.close()
+    page = client.get("/").text
+    assert 'class="offer-title-link" href="/produto/1/1"' in page  # no code, no peers: still linked
+    assert 'class="offer-title-link" href="/produto/1/2"' in page
+    assert 'href="/produto/1/3"' not in page  # a coupon has no product page
+    assert 'href="/produto/1/4"' not in page  # nor an offer without a price
+
+
+def test_a_product_without_a_model_code_has_a_page_with_its_own_price(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    conn = _conn(tmp_path)
+    put(conn, offer(1, title="Camiseta Dry Fit Preta", store="amazon", price=5000, at=NOW))
+    conn.close()
+    page = client.get("/produto/1/1")
+    assert page.status_code == 200
+    assert "R$ 50,00" in page.text and "Camiseta Dry Fit Preta" in page.text
+    assert "outras lojas" in page.text  # and says there is nothing to compare

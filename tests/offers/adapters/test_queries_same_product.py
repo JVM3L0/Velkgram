@@ -179,3 +179,64 @@ def test_same_product_with_no_other_store_still_returns_the_offer_itself(
     history = SqliteOfferQueries(conn).same_product(1, 1)
     assert history is not None and [o.store for o in history.offers] == ["amazon"]
     assert (history.title, history.store) == (AOC, "amazon")
+
+
+# --- products without a model code: the store's own product id, and at least the offer itself ---
+
+
+def _linked_offer(
+    conn: sqlite3.Connection, message_id: int, url: str, product_id: str, **kw
+) -> None:  # type: ignore[no-untyped-def]
+    from tests.offers.adapters._queries_helpers import add_link
+
+    add_link(conn, url, store=kw.get("store", "amazon"), product_id=product_id)
+    put(conn, offer(message_id, link=url, **{k: v for k, v in kw.items() if k != "store"}))
+
+
+def test_offers_with_the_same_store_product_id_share_a_history_without_a_code(
+    conn: sqlite3.Connection,
+) -> None:
+    t = "Creatina Monohidratada 300g Pura"
+    _linked_offer(conn, 1, "https://l/a1", "B000AAA", title=t, price=8000, at=T0)
+    _linked_offer(
+        conn,
+        2,
+        "https://l/a2",
+        "B000AAA",
+        title=t + " Dark Lab",
+        price=7500,
+        at=T0 + timedelta(days=2),
+    )
+    _linked_offer(conn, 3, "https://l/b", "B000BBB", title="Outra creatina 500g", price=9000, at=T0)
+    history = SqliteOfferQueries(conn).same_product(1, 2)
+    assert history is not None
+    assert [(o.store, o.price_cents) for o in history.offers] == [
+        ("amazon", 8000),
+        ("amazon", 7500),
+    ]
+
+
+def test_a_product_with_no_code_and_no_id_still_shows_its_own_price(
+    conn: sqlite3.Connection,
+) -> None:
+    put(conn, offer(1, title="Camiseta Dry Fit Preta", store="amazon", price=5000))
+    history = SqliteOfferQueries(conn).same_product(1, 1)
+    assert history is not None
+    assert [(o.store, o.price_cents) for o in history.offers] == [("amazon", 5000)]
+
+
+def test_an_unpriced_offer_has_a_page_with_no_prices(conn: sqlite3.Connection) -> None:
+    put(conn, offer(1, title="Camiseta Dry Fit Preta", store="amazon", price=None))
+    history = SqliteOfferQueries(conn).same_product(1, 1)
+    assert history is not None and history.offers == ()
+
+
+def test_the_store_id_history_does_not_become_a_peer(conn: sqlite3.Connection) -> None:
+    t = "Creatina Monohidratada 300g Pura"
+    _linked_offer(
+        conn, 1, "https://l/a1", "B000AAA", title=t, price=8000, at=NOW - timedelta(hours=2)
+    )
+    _linked_offer(
+        conn, 2, "https://l/a2", "B000AAA", title=t, price=7500, at=NOW - timedelta(hours=1)
+    )
+    assert SqliteOfferQueries(conn).peers([(1, 1)], NOW) == {}  # peers are other stores only

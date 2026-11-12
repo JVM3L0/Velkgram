@@ -123,6 +123,7 @@ class CardView:
     other_product: bool = False
     peers: tuple["PeerView", ...] = ()
     compare_href: str | None = None
+    detail_href: str | None = None  # the product page: its price history, other stores when found
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,6 +328,11 @@ def build_router(
                 for p in peers
             ),
             compare_href=f"/produto/{card.channel_id}/{card.message_id}" if peers else None,
+            detail_href=(
+                f"/produto/{card.channel_id}/{card.message_id}"
+                if card.kind is OfferKind.product and card.price_cents is not None
+                else None
+            ),
             title=coupon_title(card.title) if card.kind is OfferKind.coupon else card.title,
             price=brl(card.price_cents),
             priced=card.price_cents is not None,

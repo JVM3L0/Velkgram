@@ -371,6 +371,57 @@ class SqliteOfferQueries:
         Candidates share a rare model code with the base; the title vetoes (brand, capacity, size,
         kit, variant code) then drop what is provably another product.
         """
+        found = {(o.channel_id, o.message_id): o for o in self._by_model_code(base, since)}
+        for o in self._by_store_product(base, since):
+            found.setdefault((o.channel_id, o.message_id), o)
+        own = self._as_store_price(base)
+        if own is not None and (since is None or base.posted_at >= since):
+            found.setdefault((base.channel_id, base.message_id), own)
+        return sorted(found.values(), key=lambda o: (o.posted_at, o.channel_id, o.message_id))
+
+    @staticmethod
+    def _as_store_price(o: Offer) -> StorePrice | None:
+        if o.price_cents is None or o.store is None or o.deleted or o.kind is not OfferKind.product:
+            return None
+        return StorePrice(
+            o.store, o.price_cents, o.posted_at, o.channel_id, o.message_id, o.title, o.main_link
+        )
+
+    def _by_store_product(self, base: Offer, since: datetime | None) -> list[StorePrice]:
+        """Offers whose link the enricher resolved to the same product id in the same store."""
+        if base.main_link is None:
+            return []
+        window = "AND o.posted_at >= ? " if since is not None else ""
+        params: list[object] = [base.main_link]
+        if since is not None:
+            params.append(to_iso(since))
+        rows = self._conn.execute(
+            "SELECT o.channel_id, o.message_id, o.posted_at, o.title, o.price_cents, o.store, "
+            "o.main_link FROM product_links me "
+            "JOIN product_links p ON p.store = me.store AND p.product_id = me.product_id "
+            "AND p.kind = 'product' "
+            "JOIN offers o ON o.main_link = p.url "
+            "WHERE me.url = ? AND me.kind = 'product' AND me.product_id IS NOT NULL "
+            "AND o.kind = 'product' AND o.deleted = 0 AND o.price_cents IS NOT NULL "
+            f"AND o.store IS NOT NULL AND o.origin_message_id IS NULL {window}"
+            "GROUP BY o.channel_id, o.message_id",
+            tuple(params),
+        ).fetchall()
+        return [self._row_price(r) for r in rows]
+
+    @staticmethod
+    def _row_price(r: sqlite3.Row) -> StorePrice:
+        return StorePrice(
+            store=str(r["store"]),
+            price_cents=int(r["price_cents"]),
+            posted_at=from_iso(str(r["posted_at"])),
+            channel_id=int(r["channel_id"]),
+            message_id=int(r["message_id"]),
+            title=str(r["title"]),
+            link=r["main_link"],
+        )
+
+    def _by_model_code(self, base: Offer, since: datetime | None) -> list[StorePrice]:
         sig = signature(base.title)
         codes = sorted(sig.codes)
         frequency = self._code_frequencies(codes)
@@ -398,17 +449,7 @@ class SqliteOfferQueries:
         for r in rows:
             other = signature(str(r["title"]))
             if compatible(sig, other) and specific_codes(sig, other, frequency, RARE_MAX_OFFERS):
-                found.append(
-                    StorePrice(
-                        store=str(r["store"]),
-                        price_cents=int(r["price_cents"]),
-                        posted_at=from_iso(str(r["posted_at"])),
-                        channel_id=int(r["channel_id"]),
-                        message_id=int(r["message_id"]),
-                        title=str(r["title"]),
-                        link=r["main_link"],
-                    )
-                )
+                found.append(self._row_price(r))
         return found
 
     def peers(

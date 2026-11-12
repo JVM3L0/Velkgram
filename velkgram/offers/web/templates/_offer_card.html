@@ -11,7 +11,7 @@
       <time class="offer-when" datetime="{{ row.posted_iso }}">{{ row.posted_text }}</time>
       {% if row.source %}<span class="chip small {{ 'source-retro' if row.historic else 'source-live' }}" title="{{ 'Encontrada na busca retroativa ao criar ou editar o desejo' if row.historic else 'Recebida em tempo real' }}" aria-describedby="{{ 'source-retro-desc' if row.historic else 'source-live-desc' }}">{{ row.source }}</span>{% endif %}
     </p>
-    <h2 class="offer-title">{{ row.title }}</h2>
+    <h2 class="offer-title">{% if row.detail_href %}<a class="offer-title-link" href="{{ row.detail_href }}" title="Ver o histórico de preço deste produto">{{ row.title }}</a>{% else %}{{ row.title }}{% endif %}</h2>
     <p class="offer-price{% if not row.priced %} offer-price-unknown{% endif %}">{{ row.price }}{% if row.coupons %}<span class="offer-with-coupon">com cupom</span>{% endif %}</p>
     {% if row.peers %}
     <p class="offer-peers"><a href="{{ row.compare_href }}" title="Comparar este produto entre lojas">Também em {% for p in row.peers[:2] %}<span class="peer{% if p.cheaper %} peer-cheaper{% endif %}">{{ p.store }} {{ p.price }}</span>{% endfor %}<i aria-hidden="true">chevron_right</i></a></p>

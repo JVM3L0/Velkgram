@@ -75,7 +75,7 @@ def test_min_stores_one_also_lists_single_store_products(
     main(["products", "--min-stores", "1"])
     out = capsys.readouterr().out
     assert "1 loja" in out and "K552-RGB" in out  # the single-store keyboard shows up
-    assert "Camiseta" not in out  # no model code, so it never has a product page
+    assert "Camiseta" in out  # every priced product has a page now, code or not
 
 
 def test_limit_caps_the_number_of_lines(
