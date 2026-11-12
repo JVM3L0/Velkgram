@@ -146,4 +146,4 @@ def test_channel_row_shows_when_the_last_message_arrived(tmp_path: Path) -> None
         conn.commit()
     finally:
         conn.close()
-    assert "última mensagem há 5 min" in client.get("/channels").text
+    assert "última mensagem há 5\u00a0min" in client.get("/channels").text

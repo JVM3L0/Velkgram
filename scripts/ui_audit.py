@@ -68,6 +68,10 @@ MEASURE = _MEASURE_JS.replace("MIN", str(MIN_TAP))
 
 def _render(client: TestClient, path: str, css: str) -> str:
     html = client.get(path).text
+    beer = (
+        (STATIC / "beer.min.css").read_text().replace("url(fonts/", f"url(file://{STATIC}/fonts/")
+    )
+    html = re.sub(r"<link[^>]*beer\.min\.css[^>]*>", lambda _: f"<style>{beer}</style>", html)
     html = re.sub(r"<link[^>]*velkgram\.css[^>]*>", lambda _: f"<style>{css}</style>", html)
     return re.sub(r"<script[^>]*velkgram\.js[^>]*></script>", "", html)
 

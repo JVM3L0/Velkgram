@@ -190,14 +190,14 @@ def test_status_banner_reflects_collector_health(tmp_path: Path) -> None:
     _heartbeat(tmp_path, age_s=30)
     page = client.get("/status").text
     assert "health-ok" in page and "Coletor funcionando" in page
-    assert "(há 30 s)" in page  # relative time beside the absolute one
+    assert "(há 30\u00a0s)" in page  # relative time beside the absolute one
 
 
 def test_status_banner_is_amber_when_stale_and_red_when_fatal(tmp_path: Path) -> None:
     client = _client(tmp_path)
     _heartbeat(tmp_path, age_s=600)
     page = client.get("/status").text
-    assert "health-warning" in page and "Sem sinal há 10 min" in page
+    assert "health-warning" in page and "Sem sinal há 10\u00a0min" in page
     conn = connect(make_settings(tmp_path).db_path)
     conn.execute(
         "UPDATE collector_heartbeat SET connection_state='fatal', last_seen=?", (_iso(NOW),)
@@ -210,7 +210,7 @@ def test_status_banner_is_amber_when_stale_and_red_when_fatal(tmp_path: Path) ->
 def test_status_channel_rows_show_relative_last_message(tmp_path: Path) -> None:
     client = _client(tmp_path)
     _channel(tmp_path, created_at=NOW - timedelta(days=5), last_message=NOW - timedelta(hours=2))
-    assert "(há 2 h)" in client.get("/status").text
+    assert "(há 2\u00a0h)" in client.get("/status").text
 
 
 def _enrich_state(tmp_path: Path, *, age_s: int | None) -> None:

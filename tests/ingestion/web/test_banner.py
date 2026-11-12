@@ -16,8 +16,8 @@ def test_banner_is_green_when_the_collector_is_working() -> None:
 
 
 def test_banner_is_amber_with_minutes_when_the_signal_is_stale() -> None:
-    assert _banner("connected", 5 * 60) == ("warning", "Sem sinal há 5 min")
-    assert _banner("connected", 91) == ("warning", "Sem sinal há 1 min")
+    assert _banner("connected", 5 * 60) == ("warning", "Sem sinal há 5\u00a0min")
+    assert _banner("connected", 91) == ("warning", "Sem sinal há 1\u00a0min")
 
 
 def test_banner_is_red_for_a_fatal_session_even_with_a_fresh_signal() -> None:
