@@ -32,7 +32,7 @@ from velkgram.shared.db import connect
 from velkgram.shared.migrate import apply_migrations
 
 PASSWORD = "audit-password"
-THEMES = ("mocha", "latte", "gruvbox-dark", "gruvbox-light")
+THEMES = ("dark", "light")
 WIDTHS = (320, 360, 390, 768, 1139, 1440)
 PHONE_MAX = 600
 MIN_TAP = 40

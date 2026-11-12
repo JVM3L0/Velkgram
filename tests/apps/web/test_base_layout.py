@@ -13,7 +13,6 @@ PINNED = (
     "https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js",
     "https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.css",
     "https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js",
-    "https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap",
     "/static/velkgram.css",
     "/static/velkgram.js",
 )
@@ -127,14 +126,15 @@ def test_static_css_is_served(tmp_path: Path) -> None:
     response = client.get("/static/velkgram.css")
     assert response.status_code == 200
     assert "text/css" in response.headers["content-type"]
-    assert "Catppuccin" in response.text
+    assert "Bricolage Grotesque" in response.text
 
 
 def test_logged_in_bar_has_theme_menu_and_logout(tmp_path: Path) -> None:
     page = _page(make_client(tmp_path))
     assert "Sair" in page
-    for mode in ("system", "latte", "frappe", "macchiato", "mocha"):
+    for mode in ("system", "dark", "light"):
         assert f'name="mode" value="{mode}"' in page
+    assert 'value="mocha"' not in page
 
 
 @pytest.mark.parametrize("path", PAGES)

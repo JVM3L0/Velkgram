@@ -1,22 +1,27 @@
 /*
  * Velkgram stylesheet: theme tokens and the Material 3 Expressive layer on top of Beer CSS 5.0.3.
  *
- * Colours come from Catppuccin (https://catppuccin.com/palette, MIT License,
- * Copyright (c) 2021 Catppuccin). Each flavour maps the palette onto Beer CSS's M3 roles:
- * primary sapphire, secondary lavender, tertiary mauve, error red, success green,
- * warning peach, surfaces base/mantle/crust and surface0..2, on-surface text/subtext1,
- * outline overlay1/overlay0. Containers are the role colour mixed with the surface in OKLab
- * (30% on dark flavours, 20% on Latte), precomputed as hex.
- *
- * A value that failed WCAG AA keeps its hue and chroma and moves only in OKLCH lightness
- * (steps of 0.01): roles darker on Latte and lighter on the dark flavours, containers and
- * neutral surfaces toward the page surface. Each such value carries a comment naming the
- * original colour. tests/apps/web/test_contrast.py checks every pair.
+ * Two themes, one token set of light-dark() pairs. The base is Gruvbox Material (soft), with
+ * accents washed toward the text ("bem pastel"); on light, text roles are darkened for AA and
+ * only their containers are pastel. tests/apps/web/test_contrast.py checks every pair.
  */
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("/static/fonts/bricolage-latin-ext.woff2") format("woff2");
+  font-weight: 200 800; font-stretch: 75% 100%; font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("/static/fonts/bricolage-latin.woff2") format("woff2");
+  font-weight: 200 800; font-stretch: 75% 100%; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 /* ---- Fonts, shape and motion tokens ---- */
 :root {
-  --font: "Roboto Flex", system-ui, sans-serif;
+  --font: "Bricolage Grotesque", system-ui, sans-serif;
   --shape-xl: 12px;      /* cards, sheets, panels */
   --shape-control: 8px;  /* buttons, chips, fields, segmented controls */
   --shape-pressed: 4px;
@@ -24,356 +29,62 @@
   --spring-time: 360ms;
 }
 
-/* ---- Latte (light). Also the default when no flavour class is set. ---- */
-body.latte,
-body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) {
-  color-scheme: light;
-  /* Latte sapphire #209fb5, darker for AA on every container */
-  --primary: #006b7e;
-  --on-primary: #eff1f5;
-  --primary-container: #c6d8e0;
-  --on-primary-container: #4c4f69;
-  /* Latte lavender #7287fd, darker for AA */
-  --secondary: #5161d4;
-  --on-secondary: #eff1f5;
-  --secondary-container: #ccd5f1;
-  --on-secondary-container: #4c4f69;
-  --tertiary: #8839ef;
-  --on-tertiary: #eff1f5;
-  --tertiary-container: #d8d0f7;
-  --on-tertiary-container: #4c4f69;
-  --error: #d20f39;
-  --on-error: #eff1f5;
-  --error-container: #f0ccce;
-  --on-error-container: #4c4f69;
-  /* Latte green #40a02b, darker for AA */
-  --success: #157e00;
-  /* Latte peach #fe640b, darker for AA */
-  --warning: #cc3200;
-  /* Amber for "attention, not failure": clearly apart from --error; Latte yellow #df8e1d darkened for AA as text/icon */
-  --amber: #a75a00;
-  --amber-fill: #df8e1d;
-  --background: #eff1f5;
-  --on-background: #4c4f69;
-  --surface: #eff1f5;
-  --on-surface: #4c4f69;
-  --surface-variant: #d9dde9;
-  --on-surface-variant: #5c5f77;
-  /* Latte overlay1 #8c8fa1, darker for AA */
-  --outline: #86899b;
-  --outline-variant: #9ca0b0;
-  --shadow: #000000;
-  --scrim: #000000;
-  --inverse-surface: #4c4f69;
-  --inverse-on-surface: #eff1f5;
-  /* Latte inverse-primary #74c7ec, moved toward surface for AA */
-  --inverse-primary: #7acef3;
-  --surface-dim: #e6e9ef;
-  --surface-bright: #bfc3d1;
-  --surface-container-lowest: #dce0e8;
-  /* Latte surface-container-low #ccd0da, moved toward surface for AA */
-  --surface-container-low: #d9dde7;
-  /* Latte surface-container #bcc0cc, moved toward surface for AA */
-  --surface-container: #d9dde9;
-  /* Latte surface-container-high #acb0be, moved toward surface for AA */
-  --surface-container-high: #bfc3d1;
-  /* Latte surface-container-highest #a4a8b7, moved toward surface for AA */
-  --surface-container-highest: #c0c4d4;
-}
-
-/* ---- Frappé (dark) ---- */
-body.frappe {
-  color-scheme: dark;
-  --primary: #85c1dc;
-  --on-primary: #232634;
-  --primary-container: #495b70;
-  --on-primary-container: #c6d0f5;
-  --secondary: #babbf1;
-  --on-secondary: #232634;
-  /* Frappé secondary-container #565975, moved toward surface for AA */
-  --secondary-container: #535672;
-  --on-secondary-container: #c6d0f5;
-  --tertiary: #ca9ee6;
-  --on-tertiary: #232634;
-  --tertiary-container: #5b5272;
-  --on-tertiary-container: #c6d0f5;
-  --error: #e78284;
-  --on-error: #232634;
-  --error-container: #644c59;
-  --on-error-container: #c6d0f5;
-  --success: #a6d189;
-  --warning: #ef9f76;
-  --amber: #e5c890;
-  --amber-fill: #e5c890;
-  --background: #303446;
-  --on-background: #c6d0f5;
-  --surface: #303446;
-  --on-surface: #c6d0f5;
-  --surface-variant: #464c62;
-  --on-surface-variant: #b5bfe2;
-  --outline: #838ba7;
-  --outline-variant: #737994;
-  --shadow: #000000;
-  --scrim: #000000;
-  --inverse-surface: #c6d0f5;
-  --inverse-on-surface: #232634;
-  /* Frappé inverse-primary #209fb5, moved toward surface for AA */
-  --inverse-primary: #006377;
-  --surface-dim: #292c3c;
-  --surface-bright: #51576e;
-  --surface-container-lowest: #232634;
-  --surface-container-low: #414559;
-  /* Frappé surface-container #51576d, moved toward surface for AA */
-  --surface-container: #464c62;
-  /* Frappé surface-container-high #626880, moved toward surface for AA */
-  --surface-container-high: #51576e;
-  /* Frappé surface-container-highest #6a708a, moved toward surface for AA */
-  --surface-container-highest: #545972;
-}
-
-/* ---- Macchiato (dark) ---- */
-body.macchiato {
-  color-scheme: dark;
-  --primary: #7dc4e4;
-  --on-primary: #181926;
-  --primary-container: #3e5269;
-  --on-primary-container: #cad3f5;
-  --secondary: #b7bdf8;
-  --on-secondary: #181926;
-  --secondary-container: #4c506e;
-  --on-secondary-container: #cad3f5;
-  --tertiary: #c6a0f6;
-  --on-tertiary: #181926;
-  --tertiary-container: #50486d;
-  --on-tertiary-container: #cad3f5;
-  --error: #ed8796;
-  --on-error: #181926;
-  --error-container: #5c4355;
-  --on-error-container: #cad3f5;
-  --success: #a6da95;
-  --warning: #f5a97f;
-  --amber: #eed49f;
-  --amber-fill: #eed49f;
-  --background: #24273a;
-  --on-background: #cad3f5;
-  --surface: #24273a;
-  --on-surface: #cad3f5;
-  --surface-variant: #494d64;
-  --on-surface-variant: #b8c0e0;
-  --outline: #8087a2;
-  --outline-variant: #6e738d;
-  --shadow: #000000;
-  --scrim: #000000;
-  --inverse-surface: #cad3f5;
-  --inverse-on-surface: #181926;
-  /* Macchiato inverse-primary #209fb5, moved toward surface for AA */
-  --inverse-primary: #00657a;
-  --surface-dim: #1e2030;
-  --surface-bright: #555a72;
-  --surface-container-lowest: #181926;
-  --surface-container-low: #363a4f;
-  --surface-container: #494d64;
-  /* Macchiato surface-container-high #5b6078, moved toward surface for AA */
-  --surface-container-high: #555a72;
-  /* Macchiato surface-container-highest #646982, moved toward surface for AA */
-  --surface-container-highest: #565b73;
-}
-
-/* ---- Mocha (dark) ---- */
-body.mocha {
-  color-scheme: dark;
-  --primary: #74c7ec;
-  --on-primary: #11111b;
-  --primary-container: #384b61;
-  --on-primary-container: #cdd6f4;
-  --secondary: #b4befe;
-  --on-secondary: #11111b;
-  --secondary-container: #464966;
-  --on-secondary-container: #cdd6f4;
-  --tertiary: #cba6f7;
-  --on-tertiary: #11111b;
-  --tertiary-container: #4c4364;
-  --on-tertiary-container: #cdd6f4;
-  --error: #f38ba8;
-  --on-error: #11111b;
-  --error-container: #583d50;
-  --on-error-container: #cdd6f4;
-  --success: #a6e3a1;
-  --warning: #fab387;
-  --amber: #f9e2af;
-  --amber-fill: #f9e2af;
-  --background: #1e1e2e;
-  --on-background: #cdd6f4;
-  --surface: #1e1e2e;
-  --on-surface: #cdd6f4;
-  --surface-variant: #45475a;
-  --on-surface-variant: #bac2de;
-  --outline: #7f849c;
-  --outline-variant: #6c7086;
-  --shadow: #000000;
-  --scrim: #000000;
-  --inverse-surface: #cdd6f4;
-  --inverse-on-surface: #11111b;
-  /* Mocha inverse-primary #209fb5, moved toward surface for AA */
-  --inverse-primary: #00657a;
-  --surface-dim: #181825;
-  --surface-bright: #585b70;
-  --surface-container-lowest: #11111b;
-  --surface-container-low: #313244;
-  --surface-container: #45475a;
-  --surface-container-high: #585b70;
-  /* Mocha surface-container-highest #62657b, moved toward surface for AA */
-  --surface-container-highest: #575a6f;
-}
-
-/* ---- Gruvbox dark: Gruvbox Material (soft), accents washed 40% toward the text ("bem pastel") ---- */
-/* Surfaces and text are Gruvbox Material; roles are the pastel accents. */
-body.gruvbox-dark {
-  color-scheme: dark;
-  --primary: #bab979;
-  --on-primary: #1b1b1b;
-  --primary-container: #48483a;
-  --on-primary-container: #d4be98;
-  --secondary: #d6b071;
-  --on-secondary: #1b1b1b;
-  --secondary-container: #4e4638;
-  --on-secondary-container: #d4be98;
-  --tertiary: #a0b49f;
-  --on-tertiary: #1b1b1b;
-  --tertiary-container: #424742;
-  --on-tertiary-container: #d4be98;
-  --error: #e18b78;
-  --on-error: #1b1b1b;
-  --error-container: #513e3a;
-  --on-error-container: #d4be98;
-  --success: #bab979;
-  --warning: #df9f6c;
-  --amber: #d6b071;
-  --amber-fill: #d6b071;
-  --background: #282828;
-  --on-background: #d4be98;
-  --surface: #282828;
-  --on-surface: #d4be98;
-  --surface-variant: #45403d;
-  --on-surface-variant: #b9ad9d;
-  --outline: #928374;
-  --outline-variant: #7c6f64;
-  --shadow: #000000;
-  --scrim: #000000;
-  --inverse-surface: #fbf1c7;
-  --inverse-on-surface: #654735;
-  --inverse-primary: #6c782e;
-  --surface-dim: #1b1b1b;
-  --surface-bright: #504945;
-  --surface-container-lowest: #1b1b1b;
-  --surface-container-low: #32302f;
-  --surface-container: #45403d;
-  --surface-container-high: #504945;
-  --surface-container-highest: #554d48;
-}
-
-/* ---- Gruvbox light: Gruvbox Material (soft); text roles darkened for AA, containers washed pastel ---- */
-/* Role colours stay dark enough to read as text on cream; only their containers are pastel. */
-body.gruvbox-light {
-  color-scheme: light;
-  --primary: #5d6728;
-  --on-primary: #f9f5d7;
-  --primary-container: #d7d6b0;
-  --on-primary-container: #654735;
-  --secondary: #895607;
-  --on-secondary: #f9f5d7;
-  --secondary-container: #e0d2a9;
-  --on-secondary-container: #654735;
-  --tertiary: #3f6770;
-  --on-tertiary: #f9f5d7;
-  --tertiary-container: #d0d6c0;
-  --on-tertiary-container: #654735;
-  --error: #a64040;
-  --on-error: #f9f5d7;
-  --error-container: #e7cdb6;
-  --on-error-container: #654735;
-  --success: #5d6728;
-  --warning: #9c4b08;
-  --amber: #895607;
-  --amber-fill: #b47109;
-  --background: #f2e5bc;
-  --on-background: #654735;
-  --surface: #f2e5bc;
-  --on-surface: #654735;
-  --surface-variant: #eddeb5;
-  --on-surface-variant: #6b5f56;
-  --outline: #8a7a69;
-  --outline-variant: #b5a688;
-  --shadow: #000000;
-  --scrim: #000000;
-  --inverse-surface: #32302f;
-  --inverse-on-surface: #d4be98;
-  --inverse-primary: #a9b665;
-  --surface-dim: #e6d5ae;
-  --surface-bright: #fbf1c7;
-  --surface-container-lowest: #f9f5d7;
-  --surface-container-low: #fbf1c7;
-  --surface-container: #eddeb5;
-  --surface-container-high: #e6d5ae;
-  --surface-container-highest: #dccb9f;
-}
-
-/* ---- System mode in a dark OS: Mocha ---- */
-@media (prefers-color-scheme: dark) {
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) {
-    color-scheme: dark;
-    --primary: #74c7ec;
-    --on-primary: #11111b;
-    --primary-container: #384b61;
-    --on-primary-container: #cdd6f4;
-    --secondary: #b4befe;
-    --on-secondary: #11111b;
-    --secondary-container: #464966;
-    --on-secondary-container: #cdd6f4;
-    --tertiary: #cba6f7;
-    --on-tertiary: #11111b;
-    --tertiary-container: #4c4364;
-    --on-tertiary-container: #cdd6f4;
-    --error: #f38ba8;
-    --on-error: #11111b;
-    --error-container: #583d50;
-    --on-error-container: #cdd6f4;
-    --success: #a6e3a1;
-    --warning: #fab387;
-    --amber: #f9e2af;
-    --amber-fill: #f9e2af;
-    --background: #1e1e2e;
-    --on-background: #cdd6f4;
-    --surface: #1e1e2e;
-    --on-surface: #cdd6f4;
-    --surface-variant: #45475a;
-    --on-surface-variant: #bac2de;
-    --outline: #7f849c;
-    --outline-variant: #6c7086;
-    --shadow: #000000;
-    --scrim: #000000;
-    --inverse-surface: #cdd6f4;
-    --inverse-on-surface: #11111b;
-    /* Mocha inverse-primary #209fb5, moved toward surface for AA */
-    --inverse-primary: #00657a;
-    --surface-dim: #181825;
-    --surface-bright: #585b70;
-    --surface-container-lowest: #11111b;
-    --surface-container-low: #313244;
-    --surface-container: #45475a;
-    --surface-container-high: #585b70;
-    /* Mocha surface-container-highest #62657b, moved toward surface for AA */
-    --surface-container-highest: #575a6f;
-  }
-}
-
-/* ---- Base ---- */
-body {
+/* ---- Colour: one token set, light-dark() pairs. Base is Gruvbox Material "bem pastel".
+   System mode follows the device; the body.light / body.dark classes force a theme. ---- */
+/* `:not(.themed)` lifts specificity to tie Beer CSS's body.light / body.dark, which this file wins by order. */
+body:not(.themed) {
+  color-scheme: light dark;
+  --primary: light-dark(#5d6728, #bab979);
+  --on-primary: light-dark(#f9f5d7, #1b1b1b);
+  --primary-container: light-dark(#d7d6b0, #48483a);
+  --on-primary-container: light-dark(#654735, #d4be98);
+  --secondary: light-dark(#895607, #d6b071);
+  --on-secondary: light-dark(#f9f5d7, #1b1b1b);
+  --secondary-container: light-dark(#e0d2a9, #4e4638);
+  --on-secondary-container: light-dark(#654735, #d4be98);
+  --tertiary: light-dark(#3f6770, #a0b49f);
+  --on-tertiary: light-dark(#f9f5d7, #1b1b1b);
+  --tertiary-container: light-dark(#d0d6c0, #424742);
+  --on-tertiary-container: light-dark(#654735, #d4be98);
+  --error: light-dark(#a64040, #e18b78);
+  --on-error: light-dark(#f9f5d7, #1b1b1b);
+  --error-container: light-dark(#e7cdb6, #513e3a);
+  --on-error-container: light-dark(#654735, #d4be98);
+  --success: light-dark(#5d6728, #bab979);
+  --warning: light-dark(#9c4b08, #df9f6c);
+  --amber: light-dark(#895607, #d6b071);
+  --amber-fill: light-dark(#b47109, #d6b071);
+  --background: light-dark(#f2e5bc, #282828);
+  --on-background: light-dark(#654735, #d4be98);
+  --surface: light-dark(#f2e5bc, #282828);
+  --on-surface: light-dark(#654735, #d4be98);
+  --surface-variant: light-dark(#eddeb5, #45403d);
+  --on-surface-variant: light-dark(#6b5f56, #b9ad9d);
+  --outline: light-dark(#8a7a69, #928374);
+  --outline-variant: light-dark(#b5a688, #7c6f64);
+  --shadow: light-dark(#000000, #000000);
+  --scrim: light-dark(#000000, #000000);
+  --inverse-surface: light-dark(#32302f, #fbf1c7);
+  --inverse-on-surface: light-dark(#d4be98, #654735);
+  --inverse-primary: light-dark(#a9b665, #6c782e);
+  --surface-dim: light-dark(#e6d5ae, #1b1b1b);
+  --surface-bright: light-dark(#fbf1c7, #504945);
+  --surface-container-lowest: light-dark(#f9f5d7, #1b1b1b);
+  --surface-container-low: light-dark(#fbf1c7, #32302f);
+  --surface-container: light-dark(#eddeb5, #45403d);
+  --surface-container-high: light-dark(#e6d5ae, #504945);
+  --surface-container-highest: light-dark(#dccb9f, #554d48);
+  --elev-a: light-dark(rgb(101 71 53 / 0.16), transparent);
+  --elev-b: light-dark(rgb(101 71 53 / 0.1), transparent);
   font-family: var(--font);
   font-optical-sizing: auto;
   background-color: var(--surface);
   color: var(--on-surface);
 }
+body.light { color-scheme: light; }
+body.dark { color-scheme: dark; }
+
+/* ---- Base ---- */
 
 :focus-visible {
   outline: 3px solid var(--primary);
@@ -542,7 +253,7 @@ nav.bottom a, nav.left a {
   color: var(--on-secondary-container);
 }
 
-/* Swatches show each flavour's base with its sapphire; "system" is split Latte | Mocha. */
+/* Swatches: system is split light | dark; the others show the theme's base and primary. */
 .swatch {
   flex: none;
   inline-size: 1.5rem;
@@ -550,13 +261,9 @@ nav.bottom a, nav.left a {
   border-radius: 50%;
   border: 2px solid var(--outline);
 }
-.swatch-system { background: linear-gradient(90deg, #eff1f5 50%, #1e1e2e 50%); }
-.swatch-latte { background: linear-gradient(135deg, #eff1f5 50%, #209fb5 50%); }
-.swatch-frappe { background: linear-gradient(135deg, #303446 50%, #85c1dc 50%); }
-.swatch-macchiato { background: linear-gradient(135deg, #24273a 50%, #7dc4e4 50%); }
-.swatch-mocha { background: linear-gradient(135deg, #1e1e2e 50%, #74c7ec 50%); }
-.swatch-gruvbox-dark { background: linear-gradient(135deg, #282828 50%, #bab979 50%); }
-.swatch-gruvbox-light { background: linear-gradient(135deg, #f2e5bc 50%, #5d6728 50%); }
+.swatch-system { background: linear-gradient(90deg, #f2e5bc 50%, #282828 50%); }
+.swatch-light { background: linear-gradient(135deg, #f2e5bc 50%, #5d6728 50%); }
+.swatch-dark { background: linear-gradient(135deg, #282828 50%, #bab979 50%); }
 
 /* ---- Shared page bits ---- */
 .error { color: var(--error); margin: 0.5rem 0; }
@@ -1049,24 +756,9 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .auth { min-block-size: 100dvh; display: flex; flex-direction: column; justify-content: center; }
 .form-page .stack { gap: 1.25rem; }
 
-/* Cards lift off the page on Latte; dark flavours rely on tone alone. */
-body.latte .offer, body.latte .wish-card, body.latte .status-card,
-body.latte .table-wrap, body.latte .chart-frame, body.latte .login-card,
-body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .offer,
-body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .wish-card,
-body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .status-card,
-body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .table-wrap,
-body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .chart-frame,
-body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .login-card {
-  box-shadow: 0 1px 2px rgb(76 79 105 / 0.14), 0 2px 8px rgb(76 79 105 / 0.1);
-}
-@media (prefers-color-scheme: dark) {
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .offer,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .wish-card,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .status-card,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .table-wrap,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .chart-frame,
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .login-card { box-shadow: none; }
+/* Cards lift off the page in the light theme; dark relies on tone alone. */
+.offer, .wish-card, .status-card, .table-wrap, .chart-frame, .login-card, .channel-list, .alert-card {
+  box-shadow: 0 1px 2px var(--elev-a), 0 2px 8px var(--elev-b);
 }
 
 /* Compact offer rows: tighter, price and open action share a line on the product page. */
@@ -1102,8 +794,6 @@ form.inline { margin: 0 !important; }
 .channel-switch { flex: none; margin: 0; }
 .row-menu-wrap { flex: none; display: flex; align-items: center; }
 .row-menu-wrap > button { margin: 0; }
-body.latte .channel-list, body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .channel-list { box-shadow: 0 1px 2px rgb(76 79 105 / 0.14), 0 2px 8px rgb(76 79 105 / 0.1); }
-@media (prefers-color-scheme: dark) { body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .channel-list { box-shadow: none; } }
 
 /* ---- Shell: on compact the app bar names the page, so the big H1 steps aside ---- */
 .appbar .title { display: flex; align-items: baseline; gap: 0.5rem; }
@@ -1402,13 +1092,6 @@ nav.tabs.feed-tabs { margin-block: 0 1rem; border-block-end: 1px solid var(--out
   .feed-list .offer-product .offer-title { -webkit-line-clamp: 2; line-clamp: 2; }
 }
 
-/* Cards lift off the page on the light Gruvbox, as on Latte. */
-body.gruvbox-light .offer, body.gruvbox-light .wish-card, body.gruvbox-light .status-card,
-body.gruvbox-light .table-wrap, body.gruvbox-light .chart-frame, body.gruvbox-light .login-card,
-body.gruvbox-light .channel-list {
-  box-shadow: 0 1px 2px rgb(101 71 53 / 0.16), 0 2px 8px rgb(101 71 53 / 0.1);
-}
-
 /* ---- Wishes: aligned cards, terms as chips, one footer line ---- */
 .feed > .wish-card { margin: 0 !important; }
 .wish-terms { display: flex; flex-wrap: wrap; gap: 0.25rem; }
@@ -1464,13 +1147,6 @@ body.gruvbox-light .channel-list {
 @media (min-width: 600px) {
   .alert-card { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "icon body actions"; align-items: center; }
   .alert-actions { flex-wrap: nowrap; }
-}
-body.latte .alert-card, body.gruvbox-light .alert-card,
-body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .alert-card {
-  box-shadow: 0 1px 2px rgb(76 79 105 / 0.14), 0 2px 8px rgb(76 79 105 / 0.1);
-}
-@media (prefers-color-scheme: dark) {
-  body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .alert-card { box-shadow: none; }
 }
 
 /* A failed alert whose cause the user can fix (e.g. no Telegram chat configured). */

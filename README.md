@@ -2,7 +2,7 @@
 
 Personal app that reads Telegram deal channels and alerts you in real time when an offer matches your wishlist: required/excluded keywords plus a maximum price.
 
-> **Status: v0.2.0.** On top of v1 (collector, alert pipeline, web UI, usage report, Docker), it now builds an offers catalog with search, a feed, product pages with price history and a Material 3 UI with Catppuccin themes. Alerts go to the log only (WhatsApp is a separate spec). See [Status](#status).
+> **Status: v0.2.0.** On top of v1 (collector, alert pipeline, web UI, usage report, Docker), it now builds an offers catalog with search, a feed, product pages with price history and a Material 3 UI with a light and a dark theme. Alerts go to the log only (WhatsApp is a separate spec). See [Status](#status).
 
 - Design spec: [docs/superpowers/specs/2026-11-04-velkgram-design.md](docs/superpowers/specs/2026-11-04-velkgram-design.md)
 - v0.2.0 design spec: [docs/superpowers/specs/2026-11-04-velkgram-v0.2.0-design.md](docs/superpowers/specs/2026-11-04-velkgram-v0.2.0-design.md)
@@ -120,7 +120,7 @@ uv run velkgram report                                                   # usage
 
 - **Feed (`/`):** the offers catalog with search, filters and infinite scroll. "Acompanhar" opens a new wish pre-filled from the offer.
 - **Product page (`/wishes/{id}`):** stats, price chart (30 days, 90 days or all), matches and the retroactive status of the wish.
-- **Wishes, channels, alerts, status and login** use Beer CSS 5.0.3 (Material 3 Expressive). The theme menu offers system, Latte, Frappé, Macchiato and Mocha (Catppuccin), plus Gruvbox dark and light (Gruvbox Material, "bem pastel" accents).
+- **Wishes, channels, alerts, status and login** use Beer CSS 5.0.3 (Material 3 Expressive). The theme menu offers system, dark and light (Gruvbox Material, "bem pastel" accents); the font is Bricolage Grotesque, self-hosted.
 
 > The usage report only sees message text from the last `RETENTION_DAYS`, because older text is purged. Token-cost numbers for older dates undercount.
 
@@ -206,7 +206,7 @@ The architecture is a modular monolith with hexagonal modules (`channels`, `wish
 | Offers (one per message, FTS5 search, match history, retention, `rebuild-offers`) | ✅ done |
 | Offers feed (search, filters, infinite scroll, "Acompanhar") | ✅ done |
 | Product page (stats, price chart, matches, retro status) | ✅ done |
-| New UI (Beer CSS M3 Expressive, Catppuccin themes) | ✅ done |
+| New UI (Beer CSS M3 Expressive, dark and light themes) | ✅ done |
 | Usage report (`velkgram report`) | ✅ done |
 | Docker / compose, healthcheck | ✅ done |
 | Railway deploy (`velkgram serve`, `railway.toml`) | ✅ done |
