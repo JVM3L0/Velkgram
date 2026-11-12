@@ -78,3 +78,10 @@ def test_product_link_ignores_a_labelled_link_of_an_unknown_store() -> None:
 def test_product_link_does_not_borrow_a_link_from_a_later_line() -> None:
     text = f"-Link produto:\n-Anúncio\nhttps://bit.ly/x\n-Resgate aqui: {COUPONS}"
     assert product_link(text, ("https://bit.ly/x", COUPONS)) is None
+
+
+def test_link_amazon_short_links_belong_to_amazon() -> None:
+    assert store_of("https://link.amazon/B0dysqBQ9") == "amazon"
+    assert main_link(("https://bit.ly/a", "https://link.amazon/B0dysqBQ9")) == (
+        "https://link.amazon/B0dysqBQ9"
+    )

@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from velkgram.shared.text import URL_PATTERN
 
 STORES: Mapping[str, tuple[str, ...]] = {
-    "amazon": ("amazon.com.br", "amzn.to", "amzn.divulgador.link"),
+    "amazon": ("amazon.com.br", "amzn.to", "amzn.divulgador.link", "link.amazon"),
     "mercadolivre": ("mercadolivre.com.br", "mercadolivre.com", "mercadolibre.com", "meli.la"),
     "shopee": ("shopee.com.br", "s.shopee.com.br", "shope.ee"),
     "magalu": ("magazineluiza.com.br", "magazinevoce.com.br", "magalu.com"),
