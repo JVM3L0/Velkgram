@@ -32,5 +32,5 @@ def make_client(tmp_path: Path, *, login: bool = True, clock: Clock | None = Non
         conn.close()
     client = TestClient(create_app(settings, clock=clock), follow_redirects=False)
     if login:
-        client.post("/login", data={"password": PASSWORD})
+        client.post("/login", data={"username": "admin", "password": PASSWORD})
     return client

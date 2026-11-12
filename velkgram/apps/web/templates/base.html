@@ -14,7 +14,7 @@
   <script type="module" src="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js" integrity="sha384-7xZPd8qp8XUHrLKlKeZKr5yHcqeQ0Juz7GLT0AOsAIMhtHNqKJg5bfFCj782KnFh" crossorigin="anonymous"></script>
 </head>
 <body class="{{ theme_classes(request.cookies.get('theme')) }}">
-  {% if request.session.get("user") %}
+  {% if request.session.get("user_id") %}
   {% set current_theme = request.cookies.get("theme") if request.cookies.get("theme") in theme_modes else "system" %}
   {% set theme_labels = {"system": "Sistema", "latte": "Latte", "frappe": "Frappé", "macchiato": "Macchiato", "mocha": "Mocha", "gruvbox-dark": "Gruvbox escuro", "gruvbox-light": "Gruvbox claro"} %}
   <a class="sr-only" href="#conteudo">Pular para o conteúdo</a>
@@ -52,8 +52,8 @@
     </nav>
 
     {% endif %}
-    <main id="conteudo"{% if not request.session.get("user") %} class="auth"{% elif page_title %} class="has-page-title"{% endif %}>{% block content %}{% endblock %}</main>
-    {% if request.session.get("user") %}
+    <main id="conteudo"{% if not request.session.get("user_id") %} class="auth"{% elif page_title %} class="has-page-title"{% endif %}>{% block content %}{% endblock %}</main>
+    {% if request.session.get("user_id") %}
     <nav class="bottom" aria-label="Navegação principal">
       {% for item in nav_items(request.url.path) %}
       <a href="{{ item.href }}"{% if item.current %} class="active" aria-current="page"{% endif %}>

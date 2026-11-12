@@ -1,11 +1,13 @@
 """Web app factory: `uvicorn --factory velkgram.apps.web.main:create_app`."""
 
 import hashlib
+import logging
 import os
 import sqlite3
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -19,11 +21,13 @@ import velkgram.channels.web as channels_web
 import velkgram.ingestion.web as ingestion_web
 import velkgram.offers.web as offers_web
 import velkgram.wishlist.web as wishlist_web
+from velkgram.accounts import UserCommands, ensure_admin
+from velkgram.accounts.adapters.sqlite.repository import SqliteUserRepository
 from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.alerting.web.router import build_router as build_alerts_router
-from velkgram.apps.web.auth import verify_password
-from velkgram.apps.web.deps import SESSION_KEY, SESSION_USER, get_conn, require_user
+from velkgram.apps.web.auth import hash_password, verify_password
+from velkgram.apps.web.deps import SESSION_KEY, get_conn, require_user
 from velkgram.apps.web.nav import nav_items
 from velkgram.apps.web.theme import (
     THEME_COOKIE,
@@ -46,7 +50,7 @@ from velkgram.offers.web.router import WishInfo
 from velkgram.offers.web.router import build_router as build_offers_router
 from velkgram.shared.adapters.clock_system import SystemClock
 from velkgram.shared.config import Settings, load_settings
-from velkgram.shared.db import bump_version, transaction
+from velkgram.shared.db import bump_version, connect, transaction
 from velkgram.shared.ports import Clock
 from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 from velkgram.wishlist.web.router import build_router as build_wishlist_router
@@ -62,6 +66,7 @@ _MODULE_TEMPLATE_DIRS = (
     Path(offers_web.__file__).parent / "templates",
 )
 
+log = logging.getLogger(__name__)
 
 _RECENT_FAILURES = 10
 
@@ -173,13 +178,27 @@ def _notifier_status(conn: sqlite3.Connection) -> dict[str, object] | None:
     return {"status": row[0].value, "detail": row[1]}
 
 
+def _seed_admin(settings: Settings) -> None:
+    """Fill the seeded admin from WEB_PASSWORD_HASH / ALERT_CHAT_ID; skip an unmigrated database."""
+    try:
+        conn = connect(settings.db_path)
+        try:
+            ensure_admin(
+                SqliteUserRepository(conn),
+                password_hash=settings.web_password_hash,
+                chat_id=settings.alert_chat_id,
+            )
+        finally:
+            conn.close()
+    except sqlite3.OperationalError:
+        log.warning("admin_seed_skipped")
+
+
 def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
     settings = settings or load_settings(os.environ)
     if not settings.web_secret_key:
         raise ValueError("WEB_SECRET_KEY is required to run the web app")
-    if not settings.web_password_hash:
-        raise ValueError("WEB_PASSWORD_HASH is required to run the web app")
-    password_hash = settings.web_password_hash
+    _seed_admin(settings)
 
     app = FastAPI(title="Velkgram", docs_url=None, redoc_url=None, openapi_url=None)
     # same_site="strict" is the CSRF protection for POST forms: the browser never
@@ -203,8 +222,22 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         return templates.TemplateResponse(request, "login.html", {"error": None})
 
     @app.post("/login")
-    def login(request: Request, password: str = Form("")) -> Response:
-        outcome = throttle.attempt(lambda: verify_password(password_hash, password))
+    def login(
+        request: Request,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        username: str = Form(""),
+        password: str = Form(""),
+    ) -> Response:
+        commands = UserCommands(SqliteUserRepository(conn), clock, hash_password, verify_password)
+        found: list[int] = []
+
+        def verify() -> bool:
+            user = commands.authenticate(username, password)
+            if user is not None and user.id is not None:
+                found.append(user.id)
+            return bool(found)
+
+        outcome = throttle.attempt(verify, key=username.strip().lower()[:64])
         if outcome == "locked":
             return templates.TemplateResponse(
                 request,
@@ -214,9 +247,13 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             )
         if outcome == "fail":
             return templates.TemplateResponse(
-                request, "login.html", {"error": "Senha incorreta"}, status_code=401
+                request,
+                "login.html",
+                {"error": "Usuário ou senha incorretos"},
+                status_code=401,
             )
-        request.session[SESSION_KEY] = SESSION_USER
+        request.session.clear()  # never keep another account's session data
+        request.session[SESSION_KEY] = found[0]
         return RedirectResponse("/", status_code=303)
 
     @app.post("/logout")

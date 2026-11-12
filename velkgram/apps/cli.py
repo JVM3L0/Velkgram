@@ -14,6 +14,8 @@ from datetime import UTC, date, datetime
 
 from telethon.sessions import StringSession
 
+from velkgram.accounts import InvalidUser, Role, UserCommands, ensure_admin
+from velkgram.accounts.adapters.sqlite.repository import SqliteUserRepository
 from velkgram.alerting.adapters.notify_telegram import TelegramBotNotifier
 from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
@@ -21,7 +23,7 @@ from velkgram.alerting.ports.notifier import NotifierError
 from velkgram.alerting.ports.notifier_state import NotifierStatus
 from velkgram.apps import notifier_wiring
 from velkgram.apps.notifier_wiring import ChatHolder, MemoryNotifierStateStore
-from velkgram.apps.web.auth import hash_password
+from velkgram.apps.web.auth import hash_password, verify_password
 from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.adapters.telethon.client import build_client
@@ -65,6 +67,11 @@ def _migrate(_args: argparse.Namespace) -> int:
     conn = connect(settings.db_path)
     try:
         applied = apply_migrations(conn, MIGRATION_PACKAGES)
+        ensure_admin(
+            SqliteUserRepository(conn),
+            password_hash=settings.web_password_hash,
+            chat_id=settings.alert_chat_id,
+        )
     finally:
         conn.close()
     for name in applied:
@@ -98,6 +105,66 @@ def _hash_password(_args: argparse.Namespace) -> int:
         print("passwords do not match", file=sys.stderr)
         return 1
     print(hash_password(first))
+    return 0
+
+
+def _read_new_password() -> str | None:
+    first = getpass.getpass("Password: ")
+    if getpass.getpass("Repeat password: ") != first:
+        print("passwords do not match", file=sys.stderr)
+        return None
+    return first
+
+
+def _user_cmd(args: argparse.Namespace) -> int:
+    settings = load_settings(os.environ)
+    conn = connect(settings.db_path)
+    try:
+        apply_migrations(conn, MIGRATION_PACKAGES)
+        repo = SqliteUserRepository(conn)
+        commands = UserCommands(repo, SystemClock(), hash_password, verify_password)
+        try:
+            return _run_user_action(args, repo, commands)
+        except InvalidUser as e:
+            print(e.message_pt, file=sys.stderr)
+            return 1
+    finally:
+        conn.close()
+
+
+def _run_user_action(
+    args: argparse.Namespace, repo: SqliteUserRepository, commands: UserCommands
+) -> int:
+    action: str = args.action
+    if action == "list":
+        for u in repo.list_all():
+            state = "active" if u.enabled else "disabled"
+            chat = u.telegram_chat_id if u.telegram_chat_id is not None else "-"
+            print(f"{u.id}\t{u.username}\t{u.role.value}\t{state}\tchat={chat}")
+        return 0
+    user = repo.get_by_username(args.name)
+    if action == "add":
+        password = _read_new_password()
+        if password is None:
+            return 1
+        commands.create(args.name, password, Role.ADMIN if args.admin else Role.USER)
+        return 0
+    if user is None or user.id is None:
+        print(f"unknown user: {args.name}", file=sys.stderr)
+        return 1
+    if action == "passwd":
+        password = _read_new_password()
+        if password is None:
+            return 1
+        commands.set_password(user.id, password)
+    elif action in ("disable", "enable"):
+        commands.set_enabled(user.id, action == "enable")
+    elif action == "chat":
+        try:
+            commands.set_chat_id(user.id, int(args.chat_id))
+        except ValueError:
+            print("chat id must be an integer", file=sys.stderr)
+            return 1
     return 0
 
 
@@ -268,6 +335,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "login": _login_cmd,
     "hash-password": _hash_password,
     "collector": _collector,
+    "user": _user_cmd,
     "serve": _serve,
     "report": _report,
     "rebuild-offers": cmd_rebuild_offers,
@@ -283,6 +351,21 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("login", help="interactive Telegram login; prints a StringSession")
     sub.add_parser("hash-password", help="hash a web password for WEB_PASSWORD_HASH")
     sub.add_parser("collector", help="run the Telegram collector")
+    user = sub.add_parser("user", help="manage web accounts")
+    actions = user.add_subparsers(dest="action", required=True)
+    add = actions.add_parser("add", help="create an account (prompts for the password)")
+    add.add_argument("name")
+    add.add_argument("--admin", action="store_true", help="give the account the admin role")
+    for name, text in (
+        ("passwd", "set a new password"),
+        ("disable", "block logins for the account"),
+        ("enable", "allow logins again"),
+    ):
+        actions.add_parser(name, help=text).add_argument("name")
+    chat = actions.add_parser("chat", help="set the Telegram chat id that receives the alerts")
+    chat.add_argument("name")
+    chat.add_argument("chat_id")
+    actions.add_parser("list", help="list the accounts")
     sub.add_parser("serve", help="migrate, then run collector, enricher and web in one container")
     sub.add_parser("rebuild-offers", help="rebuild offers and wish matches from stored messages")
     sub.add_parser("notify-test", help="send a test alert through the Telegram bot")

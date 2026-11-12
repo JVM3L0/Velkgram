@@ -18,7 +18,7 @@ def test_requires_login_redirects(tmp_path: Path) -> None:
 
 def test_login_correct_password_sets_session(tmp_path: Path) -> None:
     client = make_client(tmp_path, login=False)
-    response = client.post("/login", data={"password": "secret"})
+    response = client.post("/login", data={"username": "admin", "password": "secret"})
     assert response.status_code == 303
     assert response.headers["location"] == "/"
     assert client.get("/wishes").status_code == 200
@@ -27,9 +27,9 @@ def test_login_correct_password_sets_session(tmp_path: Path) -> None:
 
 def test_login_wrong_password_shows_error(tmp_path: Path) -> None:
     client = make_client(tmp_path, login=False)
-    response = client.post("/login", data={"password": "nope"})
+    response = client.post("/login", data={"username": "admin", "password": "nope"})
     assert response.status_code == 401
-    assert "Senha incorreta" in response.text
+    assert "Usuário ou senha incorretos" in response.text
     assert client.get("/wishes").status_code == 303
 
 
@@ -44,17 +44,10 @@ def test_login_page_renders_form(tmp_path: Path) -> None:
     assert "Entrar" in client.get("/login").text
 
 
-@pytest.mark.parametrize("missing", ["web_secret_key", "web_password_hash"])
-def test_create_app_fails_fast_without_web_secrets(tmp_path: Path, missing: str) -> None:
+def test_create_app_fails_fast_without_the_secret_key(tmp_path: Path) -> None:
     base = make_settings(tmp_path)
-    values = {
-        "db_path": base.db_path,
-        "web_password_hash": base.web_password_hash,
-        "web_secret_key": base.web_secret_key,
-        missing: None,
-    }
-    with pytest.raises(ValueError, match="WEB_"):
-        create_app(Settings(**values))  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="WEB_SECRET_KEY"):
+        create_app(Settings(db_path=base.db_path, web_password_hash=base.web_password_hash))
 
 
 def test_openapi_and_docs_are_disabled(tmp_path: Path) -> None:
@@ -73,8 +66,10 @@ def _clock() -> FakeClock:
 def test_login_throttled_after_five_failures(tmp_path: Path) -> None:
     client = make_client(tmp_path, login=False, clock=_clock())
     for _ in range(5):
-        assert client.post("/login", data={"password": "bad"}).status_code == 401
-    response = client.post("/login", data={"password": "secret"})
+        assert (
+            client.post("/login", data={"username": "admin", "password": "bad"}).status_code == 401
+        )
+    response = client.post("/login", data={"username": "admin", "password": "secret"})
     assert response.status_code == 429
     assert _THROTTLE_MSG in response.text
 
@@ -83,30 +78,40 @@ def test_throttle_expires_after_five_minutes(tmp_path: Path) -> None:
     clock = _clock()
     client = make_client(tmp_path, login=False, clock=clock)
     for _ in range(5):
-        client.post("/login", data={"password": "bad"})
+        client.post("/login", data={"username": "admin", "password": "bad"})
     clock.advance(4 * 60)
-    assert client.post("/login", data={"password": "secret"}).status_code == 429
+    assert (
+        client.post("/login", data={"username": "admin", "password": "secret"}).status_code == 429
+    )
     clock.advance(61)
-    assert client.post("/login", data={"password": "secret"}).status_code == 303
+    assert (
+        client.post("/login", data={"username": "admin", "password": "secret"}).status_code == 303
+    )
 
 
 def test_successful_login_resets_failures(tmp_path: Path) -> None:
     client = make_client(tmp_path, login=False, clock=_clock())
     for _ in range(4):
-        client.post("/login", data={"password": "bad"})
-    assert client.post("/login", data={"password": "secret"}).status_code == 303
+        client.post("/login", data={"username": "admin", "password": "bad"})
+    assert (
+        client.post("/login", data={"username": "admin", "password": "secret"}).status_code == 303
+    )
     for _ in range(4):
-        assert client.post("/login", data={"password": "bad"}).status_code == 401
+        assert (
+            client.post("/login", data={"username": "admin", "password": "bad"}).status_code == 401
+        )
 
 
 def test_failures_outside_window_are_forgotten(tmp_path: Path) -> None:
     clock = _clock()
     client = make_client(tmp_path, login=False, clock=clock)
     for _ in range(4):
-        client.post("/login", data={"password": "bad"})
+        client.post("/login", data={"username": "admin", "password": "bad"})
     clock.advance(16 * 60)
-    assert client.post("/login", data={"password": "bad"}).status_code == 401
-    assert client.post("/login", data={"password": "secret"}).status_code == 303
+    assert client.post("/login", data={"username": "admin", "password": "bad"}).status_code == 401
+    assert (
+        client.post("/login", data={"username": "admin", "password": "secret"}).status_code == 303
+    )
 
 
 def test_htmx_request_without_session_gets_hx_redirect(tmp_path: Path) -> None:
