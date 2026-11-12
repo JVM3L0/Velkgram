@@ -16,6 +16,7 @@ from velkgram.offers.domain.models import (
     RetroRun,
     RetroStatus,
 )
+from velkgram.offers.domain.product_match import model_codes
 from velkgram.offers.domain.urls import real_product_url
 from velkgram.shared.db import transaction
 
@@ -171,6 +172,15 @@ class SqliteOfferRepository:
         )
         with transaction(self._conn) as c:
             c.execute(_UPSERT, params)
+            c.execute(
+                "DELETE FROM offer_codes WHERE channel_id = ? AND message_id = ?",
+                (o.channel_id, o.message_id),
+            )
+            if OfferKind(o.kind) is OfferKind.product:
+                c.executemany(
+                    "INSERT INTO offer_codes (channel_id, message_id, code) VALUES (?, ?, ?)",
+                    [(o.channel_id, o.message_id, code) for code in sorted(model_codes(o.title))],
+                )
 
     def get(self, channel_id: int, message_id: int) -> Offer | None:
         row = self._conn.execute(

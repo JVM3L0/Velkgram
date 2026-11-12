@@ -14,7 +14,8 @@ from velkgram.offers.adapters.sqlite.repository import (
     to_offer,
 )
 from velkgram.offers.domain.coupon_targets import applicable_tier
-from velkgram.offers.domain.models import MatchSource, OfferKind
+from velkgram.offers.domain.models import MatchSource, Offer, OfferKind
+from velkgram.offers.domain.product_match import compatible, signature, specific_codes
 from velkgram.offers.domain.stats import product_stats
 from velkgram.offers.domain.urls import real_product_url
 from velkgram.offers.ports.queries import (
@@ -28,8 +29,16 @@ from velkgram.offers.ports.queries import (
     OfferCard,
     PricePoint,
     ProductHistory,
+    SameProduct,
+    StorePrice,
     WishSummary,
 )
+
+# Same-product matching: a code carried by more offers than this names a chip or a family, not a
+# model (RTX5060 is on dozens of different cards), so it never links two offers.
+RARE_MAX_OFFERS = 20
+PEER_DAYS = 14
+PEERS_SHOWN = 3
 
 _MIN_DAYS_FOR_DAILY = 3  # fewer distinct days: plot every priced match
 _MAX_POINTS = 200
@@ -340,6 +349,91 @@ class SqliteOfferQueries:
             (to_iso(now - timedelta(hours=hours)),),
         ).fetchall()
         return {str(r[0]): int(r[1]) for r in rows}
+
+    # --- same product across stores ----------------------------------------------------------
+
+    def _code_frequencies(self, codes: Sequence[str]) -> dict[str, int]:
+        if not codes:
+            return {}
+        marks = ", ".join("?" * len(codes))
+        rows = self._conn.execute(
+            "SELECT c.code, COUNT(DISTINCT o.store || '|' || lower(o.title)) FROM offer_codes c "
+            "JOIN offers o ON o.channel_id = c.channel_id AND o.message_id = c.message_id "
+            f"WHERE c.code IN ({marks}) AND o.kind = 'product' AND o.deleted = 0 "
+            "AND o.store IS NOT NULL GROUP BY c.code",
+            tuple(codes),
+        ).fetchall()
+        return {str(r[0]): int(r[1]) for r in rows}
+
+    def _linked(self, base: Offer, since: datetime | None) -> list[StorePrice]:
+        """Priced offers of the same product (any store, the base itself included), oldest first.
+
+        Candidates share a rare model code with the base; the title vetoes (brand, capacity, size,
+        kit, variant code) then drop what is provably another product.
+        """
+        sig = signature(base.title)
+        codes = sorted(sig.codes)
+        frequency = self._code_frequencies(codes)
+        rare = [c for c in codes if 0 < frequency.get(c, 0) <= RARE_MAX_OFFERS]
+        if not rare:
+            return []
+        marks = ", ".join("?" * len(rare))
+        params: list[object] = list(rare)
+        window = ""
+        if since is not None:
+            window = "AND o.posted_at >= ? "
+            params.append(to_iso(since))
+        rows = self._conn.execute(
+            "SELECT o.channel_id, o.message_id, o.posted_at, o.title, o.price_cents, o.store, "
+            "o.main_link FROM offer_codes c "
+            "JOIN offers o ON o.channel_id = c.channel_id AND o.message_id = c.message_id "
+            f"WHERE c.code IN ({marks}) AND o.kind = 'product' AND o.deleted = 0 "
+            "AND o.price_cents IS NOT NULL AND o.store IS NOT NULL "
+            f"AND o.origin_message_id IS NULL {window}"
+            "GROUP BY o.channel_id, o.message_id "
+            "ORDER BY o.posted_at, o.channel_id, o.message_id",
+            tuple(params),
+        ).fetchall()
+        found: list[StorePrice] = []
+        for r in rows:
+            other = signature(str(r["title"]))
+            if compatible(sig, other) and specific_codes(sig, other, frequency, RARE_MAX_OFFERS):
+                found.append(
+                    StorePrice(
+                        store=str(r["store"]),
+                        price_cents=int(r["price_cents"]),
+                        posted_at=from_iso(str(r["posted_at"])),
+                        channel_id=int(r["channel_id"]),
+                        message_id=int(r["message_id"]),
+                        title=str(r["title"]),
+                        link=r["main_link"],
+                    )
+                )
+        return found
+
+    def peers(
+        self, keys: Sequence[tuple[int, int]], now: datetime
+    ) -> dict[tuple[int, int], tuple[StorePrice, ...]]:
+        since = now - timedelta(days=PEER_DAYS)
+        out: dict[tuple[int, int], tuple[StorePrice, ...]] = {}
+        for channel_id, message_id in keys:
+            base = self._repo.get(channel_id, message_id)
+            if base is None or base.kind is not OfferKind.product or base.store is None:
+                continue
+            latest: dict[str, StorePrice] = {}
+            for offer in self._linked(base, since):  # oldest first: a newer price replaces
+                if offer.store != base.store:
+                    latest[offer.store] = offer
+            if latest:
+                ranked = sorted(latest.values(), key=lambda o: (o.price_cents, o.store))
+                out[(channel_id, message_id)] = tuple(ranked[:PEERS_SHOWN])
+        return out
+
+    def same_product(self, channel_id: int, message_id: int) -> SameProduct | None:
+        base = self._repo.get(channel_id, message_id)
+        if base is None or base.kind is not OfferKind.product:
+            return None
+        return SameProduct(base.title, base.store, tuple(self._linked(base, None)))
 
     def product(
         self,

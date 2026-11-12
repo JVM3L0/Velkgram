@@ -70,6 +70,10 @@ def test_specifications_are_not_model_codes(title: str) -> None:
         ("Monitor Gamer AOC 27 300Hz", "Monitor Gamer AOC 27 280Hz"),  # refresh rate
         ("Kit Upgrade Ryzen 7 5700X + Placa Mãe A520M", "Ryzen 7 5700x"),  # kit against a unit
         ("Monitor Gamer LG 24 pol", "Monitor Gamer LG 32 pol"),  # screen size
+        (
+            "Samsung Galaxy A57 128Gb + Galaxy Fit3 Grafite",
+            "Galaxy A57 128Gb + Galaxy Watch8 Bt 40mm",
+        ),  # combo contents
     ],
 )
 def test_titles_that_contradict_each_other_are_incompatible(a: str, b: str) -> None:
@@ -89,6 +93,10 @@ def test_titles_that_contradict_each_other_are_incompatible(a: str, b: str) -> N
         ),
         ("SSD Kingston NV3 1TB", "Ssd Nvme Kingston Nv3 1Tb 6000Mb/S"),
         ("Caixa de Som JBL Boombox 4 210W", "Caixa de Som Jbl Boombox 4 Portátil 210W Bivolt"),
+        (
+            "Kit Upgrade Ryzen 7 5700X + Placa Mãe Chipset A520M",
+            "Kit Upgrade, Amd Ryzen 7 5700X + Placa Mãe Chipset A520M",
+        ),
     ],
 )
 def test_the_same_product_worded_differently_is_compatible(a: str, b: str) -> None:

@@ -58,6 +58,9 @@ _CAPACITY = re.compile(r"\b(\d+(?:[.,]\d+)?)\s?(TB|GB)\b")
 _INCHES = re.compile(r"\b(\d{2}(?:[.,]\d)?)\s?(?:POL\b|POLEGADAS?\b|IN\b)")
 # Same unit, different value: 20 L against 28 L, 750 W against 850 W, 300 Hz against 280 Hz.
 _UNIT_VALUES = re.compile(r"\b(\d+(?:[.,]\d+)?)\s?(L|W|HZ|MM|KG|BTUS?|PSI|MAH|MP)\b")
+# What follows the first "+", KIT or COMBO: two combos match only if they hold similar things.
+_BUNDLE_PART = re.compile(r"(?:\s\+\s|\bKIT\b|\bCOMBO\b|\bPACK\b)(.*)$")
+_BUNDLE_MIN_SIMILARITY = 0.3
 _BUNDLE = re.compile(r"\b(?:KIT|COMBO|PACK|LEVE|BUNDLE)\b|\s\+\s")
 _QUANTITY = re.compile(
     r"\b(?:KIT|PACK|LEVE|C/|COM)\s?(\d{1,3})\b|\b(\d{1,3})\s?(?:UN|UNID|UNIDADES|PCS|PECAS)\b"
@@ -185,6 +188,7 @@ class Signature:
     units: frozenset[tuple[str, float]]
     category: str | None
     bundle: bool
+    bundle_grams: frozenset[str]
     quantity: int | None
     grams: frozenset[str]
 
@@ -192,6 +196,11 @@ class Signature:
 def _grams(text: str) -> frozenset[str]:
     padded = f"  {_SPACES.sub(' ', re.sub(r'[^A-Z0-9]+', ' ', text)).strip()}  "
     return frozenset(padded[i : i + 3] for i in range(len(padded) - 2))
+
+
+def _bundle_part(padded_text: str) -> str:
+    found = _BUNDLE_PART.search(padded_text)
+    return found.group(1) if found else ""
 
 
 def signature(title: str) -> Signature:
@@ -215,6 +224,7 @@ def signature(title: str) -> Signature:
         ),
         category=category,
         bundle=_BUNDLE.search(padded) is not None,
+        bundle_grams=_grams(_bundle_part(padded)),
         quantity=qty,
         grams=_grams(text),
     )
@@ -264,6 +274,10 @@ def compatible(a: Signature, b: Signature) -> bool:
         return False
     if a.bundle != b.bundle:
         return False
+    if a.bundle_grams and b.bundle_grams:
+        both = len(a.bundle_grams & b.bundle_grams) / len(a.bundle_grams | b.bundle_grams)
+        if both < _BUNDLE_MIN_SIMILARITY:
+            return False  # a Galaxy A57 + Fit3 is not a Galaxy A57 + Watch8
     if a.quantity is not None and b.quantity is not None and a.quantity != b.quantity:
         return False
     if _conflict(a.capacities_gb, b.capacities_gb) or _conflict(a.inches, b.inches):

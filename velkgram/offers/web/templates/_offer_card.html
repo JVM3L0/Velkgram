@@ -13,6 +13,9 @@
     </p>
     <h2 class="offer-title">{{ row.title }}</h2>
     <p class="offer-price{% if not row.priced %} offer-price-unknown{% endif %}">{{ row.price }}{% if row.coupons %}<span class="offer-with-coupon">com cupom</span>{% endif %}</p>
+    {% if row.peers %}
+    <p class="offer-peers"><a href="{{ row.compare_href }}" title="Comparar este produto entre lojas">Também em {% for p in row.peers[:2] %}<span class="peer{% if p.cheaper %} peer-cheaper{% endif %}">{{ p.store }} {{ p.price }}</span>{% endfor %}<i aria-hidden="true">chevron_right</i></a></p>
+    {% endif %}
     {% if row.sold_out or row.deleted or row.reposts or row.seen_count >= 2 or row.other_product or row.store_coupons or (row.source and not row.comparable) %}
     <p class="offer-flags">
       {% if row.sold_out %}<span class="chip small flag-warn">esgotado</span>{% endif %}

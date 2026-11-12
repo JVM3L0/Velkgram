@@ -34,8 +34,9 @@ from velkgram.offers.ports.queries import (
     OfferQueries,
     PricePoint,
     ProductHistory,
+    StorePrice,
 )
-from velkgram.offers.web.chart import price_chart_responsive
+from velkgram.offers.web.chart import price_chart_responsive, sparkline_svg
 from velkgram.offers.web.format import (
     SQLITE_MAX_INT,
     STORE_NAMES,
@@ -117,6 +118,33 @@ class CardView:
     seen_in: tuple[str, ...] = ()
     seen_count: int = 1
     other_product: bool = False
+    peers: tuple["PeerView", ...] = ()
+    compare_href: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PeerView:
+    """The same product in another store, for the line under a card's price."""
+
+    store: str
+    price: str
+    cheaper: bool  # cheaper than this card's own price
+
+
+@dataclass(frozen=True, slots=True)
+class StoreRow:
+    """One store on the product page: where it stands now and what it has been."""
+
+    store: str
+    store_key: str
+    latest: str
+    lowest: str
+    lowest_when: str
+    offers: int
+    last_seen: str
+    spark: Markup
+    href: str | None
+    cheapest_now: bool
 
 
 def _parse_cursor(raw: str) -> FeedCursor | None:
@@ -283,9 +311,19 @@ def build_router(
         now: datetime,
         names: dict[int, str],
         store_counts: dict[str, int] | None = None,
+        peers: tuple[StorePrice, ...] = (),
     ) -> CardView:
         is_coupon = card.kind is OfferKind.coupon
         return CardView(
+            peers=tuple(
+                PeerView(
+                    STORE_NAMES.get(p.store, p.store),
+                    brl(p.price_cents),
+                    card.price_cents is not None and p.price_cents < card.price_cents,
+                )
+                for p in peers
+            ),
+            compare_href=f"/produto/{card.channel_id}/{card.message_id}" if peers else None,
             title=coupon_title(card.title) if card.kind is OfferKind.coupon else card.title,
             price=brl(card.price_cents),
             priced=card.price_cents is not None,
@@ -605,7 +643,11 @@ def build_router(
         page = queries.feed(flt, _parse_cursor(cursor), _PAGE_SIZE)
         now = clock.now()
         counts = queries.coupon_counts(now, _ACTIVE_HOURS)
-        rows = [card_view(c, now, names, counts) for c in page.cards]
+        peers = queries.peers([(c.channel_id, c.message_id) for c in page.cards], now)
+        rows = [
+            card_view(c, now, names, counts, peers.get((c.channel_id, c.message_id), ()))
+            for c in page.cards
+        ]
         next_url: str | None = None
         if rows and page.next_cursor is not None:
             params = feed_params(flt, view)
@@ -635,6 +677,65 @@ def build_router(
             }
         )
         return templates.TemplateResponse(request, "feed.html", context)
+
+    def store_rows(offers: tuple[StorePrice, ...], now: datetime) -> list[StoreRow]:
+        by_store: dict[str, list[StorePrice]] = {}
+        for o in offers:  # oldest first
+            by_store.setdefault(o.store, []).append(o)
+        latest_cents = {s: history[-1].price_cents for s, history in by_store.items()}
+        cheapest = min(latest_cents.values(), default=0)
+        rows: list[StoreRow] = []
+        for store, history in by_store.items():
+            low = min(history, key=lambda o: (o.price_cents, o.posted_at))
+            last = history[-1]
+            rows.append(
+                StoreRow(
+                    store=STORE_NAMES.get(store, store),
+                    store_key=store,
+                    latest=brl(last.price_cents),
+                    lowest=brl(low.price_cents),
+                    lowest_when=low.posted_at.astimezone(tz).strftime("%d/%m/%Y"),
+                    offers=len(history),
+                    last_seen=relative_time(last.posted_at, now, tz),
+                    spark=Markup(sparkline_svg([o.price_cents for o in history][-40:])),
+                    href=safe_href(last.link),
+                    cheapest_now=last.price_cents == cheapest,
+                )
+            )
+        rows.sort(key=lambda r: latest_cents[r.store_key])
+        return rows
+
+    @router.get("/produto/{channel_id}/{message_id}", response_class=HTMLResponse)
+    def compare(
+        request: Request,
+        channel_id: int,
+        message_id: int,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    ) -> Response:
+        if not all(abs(v) <= SQLITE_MAX_INT for v in (channel_id, message_id)):
+            raise HTTPException(status_code=404, detail="Produto não encontrado")
+        product = make_queries(conn).same_product(channel_id, message_id)
+        if product is None:
+            raise HTTPException(status_code=404, detail="Produto não encontrado")
+        rows = store_rows(product.offers, clock.now())
+        lowest = min(product.offers, key=lambda o: (o.price_cents, o.posted_at), default=None)
+        return templates.TemplateResponse(
+            request,
+            "compare.html",
+            {
+                "title": product.title,
+                "rows": rows,
+                "other_stores": len(rows) > 1
+                or (len(rows) == 1 and rows[0].store_key != product.store),
+                "lowest": None
+                if lowest is None
+                else {
+                    "price": brl(lowest.price_cents),
+                    "store": STORE_NAMES.get(lowest.store, lowest.store),
+                    "when": lowest.posted_at.astimezone(tz).strftime("%d/%m/%Y"),
+                },
+            },
+        )
 
     @router.get("/cupons", response_class=HTMLResponse)
     def coupons_page(

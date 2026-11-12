@@ -67,6 +67,28 @@ class OfferCard:
 
 
 @dataclass(frozen=True, slots=True)
+class StorePrice:
+    """One priced offer of a product, as seen in some store."""
+
+    store: str
+    price_cents: int
+    posted_at: datetime
+    channel_id: int
+    message_id: int
+    title: str
+    link: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SameProduct:
+    """The offer asked about, plus every priced offer of the same product (itself included)."""
+
+    title: str
+    store: str | None
+    offers: tuple[StorePrice, ...]  # oldest first; never windowed: the product's price history
+
+
+@dataclass(frozen=True, slots=True)
 class FeedPage:
     cards: tuple[OfferCard, ...]
     next_cursor: FeedCursor | None
@@ -121,6 +143,18 @@ NEWS_COUNT_CAP = 100
 
 
 class OfferQueries(Protocol):
+    def peers(
+        self, keys: Sequence[tuple[int, int]], now: datetime
+    ) -> dict[tuple[int, int], tuple[StorePrice, ...]]:
+        """For each offer, the same product in OTHER stores: the latest recent price of each,
+        cheapest first. Offers with no peer are left out."""
+        ...
+
+    def same_product(self, channel_id: int, message_id: int) -> SameProduct | None:
+        """The product's price history across stores. None when the offer is unknown or not a
+        product; an empty `offers` when nothing links it to a model code."""
+        ...
+
     def feed(self, f: FeedFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage: ...
 
     def coupons(self, f: CouponFilter, cursor: FeedCursor | None, limit: int = 30) -> FeedPage:
