@@ -34,11 +34,14 @@ from velkgram.offers.adapters.http.fetcher import HttpxFetcher, configure_fetch_
 from velkgram.offers.adapters.ingestion_api import IngestionApiMessageSource
 from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
 from velkgram.offers.adapters.sqlite.post_images import SqlitePostImageRepository
+from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
 from velkgram.offers.ports.fetcher import Fetcher
 from velkgram.offers.ports.post_images import ChannelPages
+from velkgram.offers.ports.queries import FeedFilter
 from velkgram.offers.services.post_images import PostImageSync
+from velkgram.offers.web.format import brl
 from velkgram.reporting.adapters.alerting_api import AlertingAlertStats, price_extractor
 from velkgram.reporting.adapters.ingestion_api import IngestionMessageStats
 from velkgram.reporting.services.metrics import build_report
@@ -165,6 +168,66 @@ def _run_user_action(
         except ValueError:
             print("chat id must be an integer", file=sys.stderr)
             return 1
+    return 0
+
+
+_GROUP_OVERLAP = 0.7
+
+
+def _overlapping(
+    group: frozenset[tuple[int, int]], seen: Sequence[frozenset[tuple[int, int]]]
+) -> int | None:
+    """Index of a listed group that mostly contains `group` (or is mostly contained by it).
+
+    That is the same product seen from another offer's title: the vetoes depend on which title
+    is the base, so the sets differ a little. None when `group` is a new product.
+    """
+    for i, other in enumerate(seen):
+        if len(group & other) / min(len(group), len(other)) >= _GROUP_OVERLAP:
+            return i
+    return None
+
+
+def _products(args: argparse.Namespace) -> int:
+    """List the products that have a page with the same product in several stores."""
+    settings = load_settings(os.environ)
+    conn = connect(settings.db_path)
+    try:
+        apply_migrations(conn, MIGRATION_PACKAGES)
+        queries = SqliteOfferQueries(conn)
+        page = queries.feed(FeedFilter(None, None, None, (), False, None), None, args.scan)
+        groups: list[frozenset[tuple[int, int]]] = []
+        entries: list[tuple[int, str]] = []  # (stores, line), parallel to `groups`
+        for card in page.cards:
+            product = queries.same_product(card.channel_id, card.message_id)
+            if product is None or not product.offers:
+                continue
+            group = frozenset((o.channel_id, o.message_id) for o in product.offers)
+            stores = len({o.store for o in product.offers})
+            prices = [o.price_cents for o in product.offers]
+            word = "loja" if stores == 1 else "lojas"
+            path = f"{args.base_url.rstrip('/')}/produto/{card.channel_id}/{card.message_id}"
+            span = f"{brl(min(prices))} a {brl(max(prices))}"
+            line = f"{path}  {stores} {word}  {span}  {product.title[:70]}"
+            at = _overlapping(group, groups)
+            if at is None:
+                groups.append(group)
+                entries.append((stores, line))
+            elif len(group) > len(groups[at]):  # keep the fuller view of the same product
+                groups[at] = group
+                entries[at] = (stores, line)
+    finally:
+        conn.close()
+    rows = [e for e in entries if e[0] >= args.min_stores]
+    if not rows:
+        print(
+            f"Nenhum produto com {args.min_stores} ou mais lojas encontrado. "
+            "Se você acabou de atualizar, rode 'velkgram rebuild-offers' primeiro."
+        )
+        return 0
+    rows.sort(key=lambda r: -r[0])  # most stores first; newest first within a tie (stable)
+    for _, line in rows[: args.limit]:
+        print(line)
     return 0
 
 
@@ -335,6 +398,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "login": _login_cmd,
     "hash-password": _hash_password,
     "collector": _collector,
+    "products": _products,
     "user": _user_cmd,
     "serve": _serve,
     "report": _report,
@@ -351,6 +415,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("login", help="interactive Telegram login; prints a StringSession")
     sub.add_parser("hash-password", help="hash a web password for WEB_PASSWORD_HASH")
     sub.add_parser("collector", help="run the Telegram collector")
+    products = sub.add_parser(
+        "products", help="list products compared across stores, with page paths"
+    )
+    products.add_argument("--min-stores", type=int, default=2, help="at least this many stores")
+    products.add_argument("--limit", type=int, default=30, help="how many lines to print")
+    products.add_argument("--scan", type=int, default=800, help="how many recent cards to look at")
+    products.add_argument(
+        "--base-url", default="", help="print full links, e.g. https://x.up.railway.app"
+    )
     user = sub.add_parser("user", help="manage web accounts")
     actions = user.add_subparsers(dest="action", required=True)
     add = actions.add_parser("add", help="create an account (prompts for the password)")
