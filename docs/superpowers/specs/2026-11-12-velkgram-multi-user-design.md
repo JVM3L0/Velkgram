@@ -1,6 +1,6 @@
 # Velkgram multi-user design
 
-Status: proposed. Decisions taken with the owner on 2026-11-12:
+Status: implemented (stages 1 to 5). Decisions taken with the owner on 2026-11-12:
 
 - **Audience:** a few trusted people (2 to 10). Accounts are created by the owner. No open signup.
 - **Channels:** global. One list of Telegram channels and one collector session, both the owner's.

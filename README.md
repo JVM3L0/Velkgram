@@ -49,7 +49,7 @@ Edit `.env`. Empty values count as unset and fall back to the default.
 | `LOG_LEVEL` | `INFO` |
 | `RETENTION_DAYS` | days to keep message text (default `90`, minimum `30`) |
 | `APP_TIMEZONE` | IANA timezone for the daily purge and the web UI (default `America/Sao_Paulo`) |
-| `WEB_PASSWORD_HASH`, `WEB_SECRET_KEY` | for the web UI. Generate the hash with `uv run velkgram hash-password`; `WEB_SECRET_KEY` is any long random string |
+| `WEB_PASSWORD_HASH`, `WEB_SECRET_KEY` | for the web UI. `WEB_PASSWORD_HASH` (from `uv run velkgram hash-password`) becomes the password of the `admin` account the first time the app starts; `WEB_SECRET_KEY` is any long random string |
 
 The app reads settings from environment variables only. Export them before running:
 
@@ -124,6 +124,24 @@ uv run velkgram report                                                   # usage
 
 > The usage report only sees message text from the last `RETENTION_DAYS`, because older text is purged. Token-cost numbers for older dates undercount.
 
+## Users
+
+Several people can use one Velkgram. Channels, the collector and the offers are shared; each user has their own wishes, alerts and Telegram chat.
+
+- **First login:** the user is `admin` and the password is the one behind `WEB_PASSWORD_HASH` (copied to the account at `velkgram migrate` and at web start, only while the account has no password). Your existing wishes belong to `admin`.
+- **Create accounts** on the web (`/usuarios`, admin only: the password is generated and shown once) or from a shell:
+
+  ```bash
+  velkgram user add ana              # prompts for the password; add --admin for an administrator
+  velkgram user passwd ana
+  velkgram user disable ana          # also: enable, list, chat ana <telegram id>
+  ```
+
+- **Alerts go to each user's own chat.** Each person opens the bot in Telegram, taps **Iniciar**, and saves their numeric Telegram id on `/perfil` (get it from `@userinfobot`); the same page has a "send a test alert" button. A user with no chat gets a failed alert marked "Telegram não configurado" and nothing is sent to anyone else. `admin` keeps receiving alerts at `ALERT_CHAT_ID` (or the owner's own account) without setting an id.
+- **Admin only:** channels, status and users. Regular users see the feed, coupons, their wishes and their alerts.
+- A disabled user loses access on the next request and their wishes stop alerting. Someone else's wish answers 404.
+- Alerts of a deleted wish disappear from the alerts page, since the page lists alerts by the user's current wishes.
+
 ## Docker
 
 `docker compose up -d` runs everything: a one-shot `migrate`, the `collector` (with a healthcheck and `restart: unless-stopped`) and the `web` UI.
@@ -161,7 +179,7 @@ Railway volumes attach to a single service and the processes share one SQLite fi
 
 - Railway injects `PORT`; `serve` binds the web UI to it and trusts the proxy headers.
 - Run only one replica. Two collectors on the same `TG_SESSION` break the session, and the volume is single-instance anyway. Stop the local container before the first deploy for the same reason.
-- The UI is public on Railway, protected only by the password and the login throttle. Use a strong password.
+- The UI is public on Railway, protected by the login (username and password, throttled per username) and the roles above. Use strong passwords. After the update, log in as `admin` with the password you already had.
 - Copy the local `data/velkgram.db` into the volume only if you want to keep history (for example with `railway ssh`); otherwise it starts empty.
 - Run one-off commands with `railway ssh` and `velkgram report --since YYYY-MM-DD`.
 
@@ -184,6 +202,7 @@ The architecture is a modular monolith with hexagonal modules (`channels`, `wish
 | Telethon adapter, CLI (`migrate`, `login`, `hash-password`) | ✅ done |
 | Collector runtime (`velkgram collector`) | ✅ done |
 | Web UI (login, wishes, channels, alerts, status) | ✅ done |
+| Multi-user (accounts, per-user wishes, alerts and Telegram chat, admin pages) | ✅ done |
 | Offers (one per message, FTS5 search, match history, retention, `rebuild-offers`) | ✅ done |
 | Offers feed (search, filters, infinite scroll, "Acompanhar") | ✅ done |
 | Product page (stats, price chart, matches, retro status) | ✅ done |
