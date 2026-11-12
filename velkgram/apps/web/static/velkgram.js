@@ -161,3 +161,30 @@
     menu.style.top = `${fitsBelow ? anchor.bottom + GAP : Math.max(anchor.top - GAP - box.height, MARGIN)}px`;
   }, true);
 })();
+
+// Dialogs: [data-dialog-open="id"] opens a modal, [data-dialog-close] closes the one around it,
+// and a click outside its box (on the backdrop) closes it too.
+(() => {
+  const closest = (event, selector) =>
+    event.target instanceof Element ? event.target.closest(selector) : null;
+  document.addEventListener("click", (event) => {
+    const opener = closest(event, "[data-dialog-open]");
+    if (opener) {
+      const dialog = document.getElementById(opener.dataset.dialogOpen ?? "");
+      if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
+      return;
+    }
+    if (closest(event, "[data-dialog-close]")) {
+      closest(event, "dialog")?.close();
+      return;
+    }
+    // A click on the backdrop lands on the dialog or, in some engines, on the root element.
+    const dialog = document.querySelector("dialog:modal");
+    if (!dialog || (event.target !== dialog && event.target !== document.documentElement)) return;
+    const box = dialog.getBoundingClientRect();
+    const inside =
+      event.clientX >= box.left && event.clientX <= box.right &&
+      event.clientY >= box.top && event.clientY <= box.bottom;
+    if (!inside) dialog.close();
+  });
+})();

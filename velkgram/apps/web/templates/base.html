@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="/static/velkgram.css?v={{ css_version }}">
   <script src="/static/velkgram.js?v={{ js_version }}" defer></script>
   <script src="/static/htmx.min.js?v={{ js_version }}" defer></script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js" integrity="sha384-7xZPd8qp8XUHrLKlKeZKr5yHcqeQ0Juz7GLT0AOsAIMhtHNqKJg5bfFCj782KnFh" crossorigin="anonymous"></script>
 </head>
 <body class="{{ theme_classes(request.cookies.get('theme')) }}">
   {% if request.session.get("user_id") %}

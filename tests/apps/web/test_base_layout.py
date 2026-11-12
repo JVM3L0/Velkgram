@@ -11,7 +11,6 @@ from velkgram.apps.web.nav import nav_items
 
 PINNED = (
     "https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.css",
-    "https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js",
     "/static/velkgram.css",
     "/static/velkgram.js",
 )
@@ -74,14 +73,13 @@ def test_base_assets_have_sri(tmp_path: Path) -> None:
     found = {}
     for name, attrs in tags:
         target = attrs.get("src") or attrs.get("href") or ""
-        for key in ("beer.min.css", "beer.min.js"):
+        for key in ("beer.min.css",):
             if name in ("script", "link") and target.endswith(key):
                 found[key] = attrs
-    assert set(found) == {"beer.min.css", "beer.min.js"}
+    assert set(found) == {"beer.min.css"}
     for attrs in found.values():
         assert re.fullmatch(r"sha384-[A-Za-z0-9+/]{64}", attrs.get("integrity") or "")
         assert attrs.get("crossorigin") == "anonymous"
-    assert found["beer.min.js"].get("type") == "module"
 
 
 def test_nav_marks_current_page(tmp_path: Path) -> None:

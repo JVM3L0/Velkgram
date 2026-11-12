@@ -416,6 +416,26 @@ table.data .button.small { min-block-size: 3rem; margin: 0; }
 .filter-channel, .filter-prices .field { margin: 0; }
 .filters-done { align-self: stretch; min-block-size: 3rem; }
 
+/* Compact: a native modal <dialog>, a bottom sheet. Its backdrop and Escape come with the platform. */
+@media (max-width: 599.98px) {
+  dialog.filters-panel {
+    position: fixed;
+    inset: auto 0 0 0;
+    margin: 0;
+    inline-size: 100%;
+    max-inline-size: none;
+    border: 0;
+    border-radius: var(--shape-xl) var(--shape-xl) 0 0;
+    background-color: var(--surface-container-low);
+    color: var(--on-surface);
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+  }
+  dialog.filters-panel:not([open]) { display: none; }
+  dialog.filters-panel::backdrop { background: rgb(0 0 0 / 0.5); }
+}
+
 @media (min-width: 600px) {
   .filters-open, .filters-done, .filters-panel-head { display: none; }
   dialog.filters-panel {

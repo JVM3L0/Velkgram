@@ -13,7 +13,7 @@
       <i>search</i>
       <input type="search" id="q" name="q" value="{{ q }}" placeholder="Buscar ofertas" aria-label="Buscar ofertas" enterkeyhint="search">
     </div>
-    <button class="filters-open" type="button" data-ui="#filters-panel" aria-haspopup="dialog">
+    <button class="filters-open" type="button" data-dialog-open="filters-panel" aria-haspopup="dialog">
       <i>tune</i><span>Filtros</span>
     </button>
     <div class="view-toggle" role="group" aria-label="Exibição">
@@ -28,10 +28,10 @@
     </div>
   </div>
 
-  <dialog id="filters-panel" class="bottom filters-panel" aria-label="Filtros">
+  <dialog id="filters-panel" class="filters-panel" aria-label="Filtros">
     <div class="filters-panel-head">
       <h2>Filtros</h2>
-      <button class="circle transparent" type="button" data-ui="#filters-panel" aria-label="Fechar filtros"><i>close</i></button>
+      <button class="circle transparent" type="button" data-dialog-close aria-label="Fechar filtros"><i>close</i></button>
     </div>
     {% if store_options %}
     <div class="filter-group" role="group" aria-labelledby="stores-label">
@@ -70,7 +70,7 @@
         <label for="max">Máximo (R$)</label>
       </div>
     </div>
-    <button class="filters-done" type="button" data-ui="#filters-panel">Ver ofertas</button>
+    <button class="filters-done" type="button" data-dialog-close>Ver ofertas</button>
   </dialog>
 </form>
 
