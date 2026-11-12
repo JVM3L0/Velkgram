@@ -31,6 +31,25 @@
   </form>
 </article>
 
+<article class="border profile-section">
+  <h2>Testar os alertas</h2>
+  <p class="muted">Envia uma mensagem de teste para todos os usuários ativos que já salvaram o id do Telegram.</p>
+  <form method="post" action="/usuarios/teste">
+    <button class="border" type="submit"><i aria-hidden="true">send</i><span>Enviar teste para todos</span></button>
+  </form>
+</article>
+
+{% if test_results %}
+<article class="border profile-section" role="status">
+  <h2>Resultado do teste</h2>
+  <ul class="test-results">
+    {% for name, ok, text in test_results %}
+    <li class="{{ 'test-ok' if ok else 'test-fail' }}"><i aria-hidden="true">{{ "check_circle" if ok else "error" }}</i> <strong>{{ name }}</strong>: {{ text }}</li>
+    {% endfor %}
+  </ul>
+</article>
+{% endif %}
+
 <ul class="alert-list">
   {% for u in users %}
   <li class="alert-card">

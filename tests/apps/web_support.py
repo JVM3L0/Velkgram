@@ -1,5 +1,6 @@
 """Shared helpers for web tests: a client over a freshly migrated temp DB."""
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -16,15 +17,19 @@ PASSWORD = "secret"
 
 
 class FakeTestSender:
-    """Stands in for the Telegram test alert: records chat ids, answers with `result`."""
+    """Stands in for the Telegram test alert: records chats, answers per chat or with `result`."""
 
     def __init__(self, result: str | None = None) -> None:
         self.chats: list[int] = []
         self.result = result
+        self.results: dict[int, str | None] = {}  # per chat; wins over `result`
 
-    async def __call__(self, chat_id: int) -> str | None:
-        self.chats.append(chat_id)
-        return self.result
+    async def send_one(self, chat_id: int) -> str | None:
+        return (await self.send_many([chat_id]))[chat_id]
+
+    async def send_many(self, chat_ids: Sequence[int]) -> dict[int, str | None]:
+        self.chats.extend(chat_ids)
+        return {c: self.results.get(c, self.result) for c in chat_ids}
 
 
 def make_settings(tmp_path: Path) -> Settings:
@@ -43,7 +48,7 @@ def make_client(tmp_path: Path, *, login: bool = True, clock: Clock | None = Non
     finally:
         conn.close()
     client = TestClient(
-        create_app(settings, clock=clock, test_sender=FakeTestSender()), follow_redirects=False
+        create_app(settings, clock=clock, tester=FakeTestSender()), follow_redirects=False
     )
     if login:
         client.post("/login", data={"username": "admin", "password": PASSWORD})
@@ -69,7 +74,7 @@ def make_user_client(
             commands.create(username, password, Role.ADMIN if admin else Role.USER)
     finally:
         conn.close()
-    client = TestClient(create_app(settings, test_sender=FakeTestSender()), follow_redirects=False)
+    client = TestClient(create_app(settings, tester=FakeTestSender()), follow_redirects=False)
     response = client.post("/login", data={"username": username, "password": password})
     assert response.status_code == 303
     return client
@@ -81,6 +86,6 @@ def sender_of(client: TestClient) -> FakeTestSender:
 
     from fastapi import FastAPI
 
-    sender = cast(FastAPI, client.app).state.test_sender
+    sender = cast(FastAPI, client.app).state.tester
     assert isinstance(sender, FakeTestSender)
     return sender

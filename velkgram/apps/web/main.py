@@ -31,7 +31,7 @@ from velkgram.alerting.web.router import build_router as build_alerts_router
 from velkgram.apps.web.auth import hash_password, verify_password
 from velkgram.apps.web.deps import SESSION_KEY, get_conn, require_admin, require_user
 from velkgram.apps.web.nav import nav_items
-from velkgram.apps.web.telegram_test import TestSender, make_test_sender
+from velkgram.apps.web.telegram_test import TelegramTester, Tester
 from velkgram.apps.web.theme import (
     THEME_COOKIE,
     THEME_MAX_AGE,
@@ -206,7 +206,7 @@ def _seed_admin(settings: Settings) -> None:
 def create_app(
     settings: Settings | None = None,
     clock: Clock | None = None,
-    test_sender: TestSender | None = None,
+    tester: Tester | None = None,
 ) -> FastAPI:
     settings = settings or load_settings(os.environ)
     if not settings.web_secret_key:
@@ -227,7 +227,7 @@ def create_app(
     app.state.templates = templates
     clock = clock or SystemClock()
     app.state.clock = clock
-    app.state.test_sender = test_sender or make_test_sender(settings)
+    app.state.tester = tester or TelegramTester(settings)
     throttle = LoginThrottle(clock)
     app.state.login_throttle = throttle
 
@@ -296,7 +296,10 @@ def create_app(
         return UserCommands(SqliteUserRepository(conn), clock, hash_password, verify_password)
 
     async def send_test(chat_id: int) -> str | None:
-        return await app.state.test_sender(chat_id)
+        return await app.state.tester.send_one(chat_id)
+
+    async def send_test_many(chat_ids: Sequence[int]) -> dict[int, str | None]:
+        return await app.state.tester.send_many(chat_ids)
 
     app.include_router(
         build_profile_router(
@@ -316,6 +319,7 @@ def create_app(
             templates=templates,
             make_commands=make_commands,
             make_repo=SqliteUserRepository,
+            send_test_many=send_test_many,
         ),
         prefix="/usuarios",
         dependencies=[Depends(require_admin)],

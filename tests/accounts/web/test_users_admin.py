@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.apps.web_support import make_client, make_settings, make_user_client
+from tests.apps.web_support import make_client, make_settings, make_user_client, sender_of
 from velkgram.shared.db import connect
 
 
@@ -138,3 +138,57 @@ def test_unknown_user_ids_are_404(admin: TestClient) -> None:
     assert admin.post("/usuarios/999/senha").status_code == 404
     assert admin.post("/usuarios/999/ativo", data={"enabled": "0"}).status_code == 404
     assert admin.post("/usuarios/999/telegram", data={"chat_id": "5"}).status_code == 404
+
+
+def _set_chat(admin: TestClient, tmp_path: Path, username: str, chat: str) -> int:
+    row = _row(tmp_path, username)
+    assert row is not None
+    admin.post(f"/usuarios/{row[0]}/telegram", data={"chat_id": chat})
+    return int(str(row[0]))
+
+
+def test_regular_users_cannot_broadcast_a_test(tmp_path: Path) -> None:
+    make_client(tmp_path)
+    ana = make_user_client(tmp_path, "ana")
+    assert ana.post("/usuarios/teste").status_code == 403
+    assert sender_of(ana).chats == []
+
+
+def test_the_test_goes_to_every_enabled_user_with_a_chat(tmp_path: Path, admin: TestClient) -> None:
+    make_user_client(tmp_path, "ana")
+    make_user_client(tmp_path, "bia")
+    make_user_client(tmp_path, "cris")
+    admin.post("/perfil/telegram", data={"chat_id": "100"})
+    _set_chat(admin, tmp_path, "ana", "200")
+    _set_chat(admin, tmp_path, "cris", "400")
+    cris = _row(tmp_path, "cris")
+    assert cris is not None
+    admin.post(f"/usuarios/{cris[0]}/ativo", data={"enabled": "0"})  # disabled: left out
+    response = admin.post("/usuarios/teste")
+    assert response.status_code == 200
+    assert sender_of(admin).chats == [100, 200]
+    page = response.text
+    assert page.count("enviado") >= 2
+    assert "bia" in page and "sem id do Telegram" in page  # tells who is missing
+    results = page.split("Resultado do teste")[1].split("</article>")[0]
+    assert "ana" in results and "cris" not in results  # a disabled user is not tested
+
+
+def test_failures_are_reported_per_user_with_what_to_do(tmp_path: Path, admin: TestClient) -> None:
+    make_user_client(tmp_path, "ana")
+    admin.post("/perfil/telegram", data={"chat_id": "100"})
+    _set_chat(admin, tmp_path, "ana", "200")
+    sender_of(admin).results = {200: "needs_start"}
+    page = admin.post("/usuarios/teste").text
+    assert "Iniciar" in page  # ana never pressed Start
+    assert page.count("enviado") >= 1  # the admin still got theirs
+
+
+def test_the_broadcast_needs_at_least_one_chat(tmp_path: Path, admin: TestClient) -> None:
+    make_user_client(tmp_path, "ana")
+    row = _row(tmp_path, "admin")
+    assert row is not None and row[3] is None
+    response = admin.post("/usuarios/teste")
+    assert response.status_code == 422
+    assert "id do Telegram" in response.text
+    assert sender_of(admin).chats == []

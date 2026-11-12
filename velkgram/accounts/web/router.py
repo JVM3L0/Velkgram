@@ -2,7 +2,7 @@
 
 import secrets
 import sqlite3
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -126,6 +126,7 @@ def build_users_router(
     templates: Jinja2Templates,
     make_commands: Callable[[sqlite3.Connection], UserCommands],
     make_repo: Callable[[sqlite3.Connection], UserRepository],
+    send_test_many: Callable[[Sequence[int]], Awaitable[dict[int, str | None]]],
 ) -> APIRouter:
     router = APIRouter()
 
@@ -135,11 +136,17 @@ def build_users_router(
         *,
         error: str | None = None,
         generated: tuple[str, str] | None = None,
+        test_results: list[tuple[str, bool, str]] | None = None,
     ) -> Response:
         return templates.TemplateResponse(
             request,
             "users.html",
-            {"users": make_repo(conn).list_all(), "error": error, "generated": generated},
+            {
+                "users": make_repo(conn).list_all(),
+                "error": error,
+                "generated": generated,
+                "test_results": test_results,
+            },
             status_code=422 if error else 200,
         )
 
@@ -173,6 +180,31 @@ def build_users_router(
         except InvalidUser as exc:
             return page(request, conn, error=exc.message_pt)
         return page(request, conn, generated=(created.username, password))
+
+    @router.post("/teste")
+    async def broadcast_test(
+        request: Request,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        _admin: Annotated[User, Depends(admin_user)],
+    ) -> Response:
+        """A test alert to every enabled user that has a Telegram id; say who was left out."""
+        active = [u for u in make_repo(conn).list_all() if u.enabled]
+        chats = [u.telegram_chat_id for u in active if u.telegram_chat_id is not None]
+        if not chats:
+            return page(request, conn, error="Nenhum usuário ativo tem o id do Telegram salvo")
+        results = await send_test_many(chats)
+        rows: list[tuple[str, bool, str]] = []
+        for u in active:
+            if u.telegram_chat_id is None:
+                rows.append((u.username, False, "sem id do Telegram"))
+                continue
+            failure = results.get(u.telegram_chat_id, "sem resposta")
+            rows.append(
+                (u.username, True, "enviado")
+                if failure is None
+                else (u.username, False, _test_failure(failure))
+            )
+        return page(request, conn, test_results=rows)
 
     @router.post("/{user_id}/senha")
     def reset_password(
