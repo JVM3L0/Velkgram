@@ -25,6 +25,17 @@ def test_fetch_returns_the_html_of_the_public_web_view() -> None:
     assert seen[0].headers["user-agent"].startswith("Velkgram/")
 
 
+def test_fetch_an_older_page_passes_the_before_id() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, text="ok")
+
+    assert _pages(httpx.MockTransport(handler)).fetch("fumotom", before=48835) == "ok"
+    assert str(seen[0].url) == "https://t.me/s/fumotom?before=48835"
+
+
 @pytest.mark.parametrize("status", [301, 403, 404, 429, 500])
 def test_fetch_is_none_on_a_non_200_answer(status: int) -> None:
     transport = httpx.MockTransport(lambda r: httpx.Response(status, text="x"))

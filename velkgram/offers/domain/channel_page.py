@@ -39,3 +39,9 @@ def parse_channel_page(html: str) -> list[PostImage]:
         if _trusted(url):
             found.append(PostImage(int(post.group(1)), url))
     return found
+
+
+def oldest_post_id(html: str) -> int | None:
+    """The lowest post id on the page, photo or not: where the next older page starts."""
+    ids = [int(m.group(1)) for m in _POST.finditer(html)]
+    return min(ids) if ids else None

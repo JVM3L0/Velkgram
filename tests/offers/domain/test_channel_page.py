@@ -1,4 +1,4 @@
-from velkgram.offers.domain.channel_page import PostImage, parse_channel_page
+from velkgram.offers.domain.channel_page import PostImage, oldest_post_id, parse_channel_page
 
 CDN = "https://cdn1.telesco.pe/file/abc123_-XYZ.jpg"
 
@@ -67,3 +67,9 @@ def test_parse_keeps_the_first_photo_of_an_album_post() -> None:
 def test_parse_skips_malformed_post_ids_and_empty_pages() -> None:
     assert parse_channel_page("") == []
     assert parse_channel_page('<div data-post="c/notanumber">x</div>') == []
+
+
+def test_oldest_post_id_counts_posts_without_a_photo_too() -> None:
+    assert oldest_post_id(PAGE) == 114265
+    assert oldest_post_id("") is None
+    assert oldest_post_id('<div data-post="c/notanumber">x</div>') is None

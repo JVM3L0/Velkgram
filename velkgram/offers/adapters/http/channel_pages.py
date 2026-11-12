@@ -17,11 +17,12 @@ class HttpxChannelPages:
     def __init__(self, client: httpx.Client | None = None) -> None:
         self._client = client or httpx.Client(timeout=_TIMEOUT, headers=_HEADERS)
 
-    def fetch(self, username: str) -> str | None:
+    def fetch(self, username: str, before: int | None = None) -> str | None:
         if not _USERNAME.fullmatch(username):
             return None  # the name goes into the URL path: never build one from anything odd
+        url = f"https://t.me/s/{username}" + (f"?before={int(before)}" if before else "")
         try:
-            response = self._client.get(f"https://t.me/s/{username}", headers=_HEADERS)
+            response = self._client.get(url, headers=_HEADERS)
         except httpx.HTTPError:
             return None
         return response.text if response.status_code == 200 else None

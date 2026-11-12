@@ -16,8 +16,9 @@ class PostImageRepository(Protocol):
 
 
 class ChannelPages(Protocol):
-    def fetch(self, username: str) -> str | None:
-        """The HTML of the channel's public web view, or None when it is not available."""
+    def fetch(self, username: str, before: int | None = None) -> str | None:
+        """The HTML of the channel's public web view (the page of posts older than `before`),
+        or None when it is not available."""
         ...
 
 

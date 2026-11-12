@@ -475,13 +475,16 @@ class FakePublicChannels:
 
 
 class FakeChannelPages:
+    """Pages keyed by username, or `username:<before id>` for an older page."""
+
     def __init__(self, pages: dict[str, str | Exception | None]) -> None:
         self._pages = pages
         self.fetched: list[str] = []
 
-    def fetch(self, username: str) -> str | None:
-        self.fetched.append(username)
-        page = self._pages.get(username)
+    def fetch(self, username: str, before: int | None = None) -> str | None:
+        key = username if before is None else f"{username}:{before}"
+        self.fetched.append(key)
+        page = self._pages.get(key)
         if isinstance(page, Exception):
             raise page
         return page

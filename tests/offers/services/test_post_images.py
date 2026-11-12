@@ -67,7 +67,7 @@ def test_run_syncs_then_waits_until_stopped() -> None:
         return True
 
     sync.run(stop, interval_s=300.0, wait=wait)
-    assert pages.fetched == ["promotom"]
+    assert pages.fetched == ["promotom", "promotom:7"]  # the window, then one older page
     assert repo.get(-100, 7) == f"{CDN}a.jpg"
     assert waits == [300.0]
 
@@ -82,3 +82,45 @@ def test_sync_drops_images_older_than_the_retention() -> None:
     assert repo.get(-100, 1) is None
     assert repo.get(-100, 2) == f"{CDN}young.jpg"
     assert repo.get(-100, 7) == f"{CDN}a.jpg"
+
+
+def _posts(first: int, last: int) -> str:
+    return "".join(_page(i, f"p{i}") for i in range(first, last + 1))
+
+
+def test_catch_up_walks_back_through_older_pages_until_one_is_empty() -> None:
+    sync, repo, pages = _sync(
+        [(-100, "promotom")],
+        {"promotom": _posts(50, 52), "promotom:50": _posts(47, 49), "promotom:47": ""},
+    )
+    sync.sync_once()
+    assert sync.catch_up(max_pages=10, pause_s=0.0, wait=lambda _s: False) == 3
+    assert pages.fetched == ["promotom", "promotom:50", "promotom:47"]
+    assert repo.get(-100, 48) == f"{CDN}p48.jpg"
+
+
+def test_catch_up_never_goes_past_the_page_cap() -> None:
+    sync, _, pages = _sync(
+        [(-100, "promotom")],
+        {"promotom": _posts(50, 52), "promotom:50": _posts(47, 49), "promotom:47": _posts(44, 46)},
+    )
+    sync.catch_up(max_pages=2, pause_s=0.0, wait=lambda _s: False)
+    assert pages.fetched == ["promotom", "promotom:50"]  # first page plus one older, then stop
+
+
+def test_catch_up_stops_when_asked_to_stop_between_pages() -> None:
+    sync, _, pages = _sync(
+        [(-100, "promotom")],
+        {"promotom": _posts(50, 52), "promotom:50": _posts(47, 49), "promotom:47": _posts(44, 46)},
+    )
+    sync.catch_up(max_pages=10, pause_s=1.0, wait=lambda _s: True)
+    assert pages.fetched == ["promotom", "promotom:50"]
+
+
+def test_catch_up_survives_a_failing_channel() -> None:
+    sync, repo, _ = _sync(
+        [(-100, "boom"), (-200, "fumotom")],
+        {"boom": RuntimeError("x"), "fumotom": _posts(10, 11), "fumotom:10": ""},
+    )
+    sync.catch_up(max_pages=3, pause_s=0.0, wait=lambda _s: False)
+    assert repo.get(-200, 10) == f"{CDN}p10.jpg"
