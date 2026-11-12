@@ -10,7 +10,7 @@ from tests.apps.web_support import make_client
 from velkgram.apps.web.nav import nav_items
 
 PINNED = (
-    "https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.css",
+    "/static/beer.min.css",
     "/static/velkgram.css",
     "/static/velkgram.js",
 )
@@ -68,18 +68,20 @@ def test_base_has_no_inline_style(tmp_path: Path) -> None:
     assert "<style" not in _page(make_client(tmp_path))
 
 
-def test_base_assets_have_sri(tmp_path: Path) -> None:
-    tags = _parse(_page(make_client(tmp_path))).tags
-    found = {}
-    for name, attrs in tags:
-        target = attrs.get("src") or attrs.get("href") or ""
-        for key in ("beer.min.css",):
-            if name in ("script", "link") and target.endswith(key):
-                found[key] = attrs
-    assert set(found) == {"beer.min.css"}
-    for attrs in found.values():
-        assert re.fullmatch(r"sha384-[A-Za-z0-9+/]{64}", attrs.get("integrity") or "")
-        assert attrs.get("crossorigin") == "anonymous"
+def test_pages_request_nothing_from_other_sites(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    for path in PAGES:
+        for name, attrs in _parse(_page(client, path)).tags:
+            target = attrs.get("src") or attrs.get("href") or ""
+            if name in ("script", "link", "img"):
+                assert not re.match(r"(https?:)?//", target), f"{path}: {name} loads {target}"
+
+
+def test_vendored_assets_are_served_and_self_contained(tmp_path: Path) -> None:
+    client = make_client(tmp_path, login=False)
+    beer = client.get("/static/beer.min.css")
+    assert beer.status_code == 200 and "http" not in beer.text.replace("http-equiv", "")
+    assert client.get("/static/fonts/material-symbols-subset.woff2").status_code == 200
 
 
 def test_nav_marks_current_page(tmp_path: Path) -> None:
@@ -145,7 +147,7 @@ def test_icon_only_buttons_have_labels(tmp_path: Path, path: str) -> None:
 def test_login_page_uses_base_theme(tmp_path: Path) -> None:
     page = make_client(tmp_path, login=False).get("/login").text
     assert "/static/velkgram.css" in page
-    assert "beercss@5.0.3/dist/cdn/beer.min.css" in page
+    assert "/static/beer.min.css" in page
     assert 'class="auth"' in page
     assert "login-card" in page
     assert "Entrar" in page
