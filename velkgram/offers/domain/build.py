@@ -25,7 +25,7 @@ def _classify(m: MessageData) -> tuple[str | None, str | None, str, CouponDeal |
     store = store_of(link) if link else None
     title = title_of(m.text, store)
     text = m.text if m.text.strip() else None
-    deal = coupon_deal(title, text, m.links)
+    deal = coupon_deal(title, text, m.links, m.has_photo)
     if deal is not None and store is None:
         store = store_in_title(title)  # short links (tidd.ly) hide the store; the title names it
     # A list of products has no single price or product link: the first link is a promo page.
@@ -34,6 +34,14 @@ def _classify(m: MessageData) -> tuple[str | None, str | None, str, CouponDeal |
         link = None
         store = next((s for x in m.links if (s := store_of(x))), None)
     return link, store, title, deal, listing
+
+
+def _codes(text: str, deal: CouponDeal | None) -> tuple[str, ...]:
+    """Codes named in the post; a coupon recognised by its shape also reads them from its tiers."""
+    codes = extract_coupons(text)
+    if codes or deal is None:
+        return codes
+    return tuple(dict.fromkeys(c for tier in deal.tiers for c in tier.codes))
 
 
 def classify_message(m: MessageData) -> MessageClass:
@@ -65,9 +73,9 @@ def offer_from_message(
         sold_out=sold_out,
         deleted=deleted,
         updated_at=now,
-        comparable=is_comparable(title, text),
+        comparable=False if deal else is_comparable(title, text),
         kind=OfferKind.coupon if deal else OfferKind.product,
-        coupons=extract_coupons(m.text),
+        coupons=_codes(m.text, deal),
         coupon_discount=(deal.discount or None) if deal else None,
         coupon_min_cents=deal.min_cents if deal else None,
         coupon_scope=deal.scope if deal else None,

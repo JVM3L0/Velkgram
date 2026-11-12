@@ -240,3 +240,32 @@ def test_a_similar_looking_product_post_stays_a_product() -> None:
     )
     offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
     assert offer is not None and offer.kind is OfferKind.product
+
+
+WORDY = "Desconto especial no iFood hoje R$ 20 OFF: ATACADOBF"
+
+
+def test_a_shape_only_coupon_with_a_wordy_title_is_a_coupon() -> None:
+    offer = offer_from_message(_msg(WORDY, has_photo=False), sold_out=False, deleted=False, now=NOW)
+    assert offer is not None
+    assert offer.kind is OfferKind.coupon
+    assert offer.price_cents is None and offer.comparable is False
+    assert offer.coupons == ("ATACADOBF",)
+
+
+def test_the_structural_signal_needs_every_part() -> None:
+    # a photo or a link means it is selling something: stays a product
+    with_photo = _msg(WORDY, has_photo=True)
+    with_link = _msg(WORDY, ("https://www.ifood.com.br/x",), has_photo=False)
+    priced = _msg("Desconto especial iFood por R$ 90 e R$ 20 OFF: ATACADOBF", has_photo=False)
+    no_code = _msg("Desconto especial no iFood hoje R$ 20 OFF", has_photo=False)
+    for m in (with_photo, with_link, priced, no_code):
+        offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
+        assert offer is not None and offer.kind is OfferKind.product, m.text
+
+
+def test_classify_message_applies_the_same_structural_signal() -> None:
+    from velkgram.offers.domain.build import classify_message
+
+    assert classify_message(_msg(WORDY, has_photo=False)).is_coupon_post
+    assert not classify_message(_msg(WORDY, has_photo=True)).is_coupon_post

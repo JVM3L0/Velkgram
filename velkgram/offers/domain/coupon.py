@@ -132,8 +132,31 @@ def _links_after_keywords(text: str, links: Sequence[str]) -> tuple[str | None, 
     return found.get("redeem"), found.get("cart")
 
 
-def coupon_deal(title: str, text: str | None, links: Sequence[str]) -> CouponDeal | None:
-    if not starts_with_coupon_word(title):
+_PRICED = re.compile(r"\bpor\s+R\$", re.IGNORECASE)
+
+
+def is_coupon_post(title: str, links: Sequence[str], has_photo: bool) -> bool:
+    """A coupon post by its title, or by its shape when the title is worded freely.
+
+    A post with no photo, no link, a discount and a code in its title ("Desconto no iFood hoje
+    R$ 20 OFF: CODE") sells nothing, so it is a coupon. A photo, a link or a product price means
+    it is selling something.
+    """
+    if is_coupon_title(title):
+        return True
+    return (
+        not has_photo
+        and not links
+        and _PRICED.search(title) is None
+        and _DISCOUNT.search(title) is not None
+        and bool(line_coupons(title))
+    )
+
+
+def coupon_deal(
+    title: str, text: str | None, links: Sequence[str], has_photo: bool = True
+) -> CouponDeal | None:
+    if not is_coupon_post(title, links, has_photo):
         return None
     if text is None:
         return CouponDeal("", None, None, None, None)

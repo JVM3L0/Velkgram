@@ -1498,3 +1498,13 @@ body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-li
 .test-results li { display: flex; align-items: center; gap: 0.5rem; }
 .test-ok > i { color: var(--primary); }
 .test-fail > i { color: var(--error); }
+
+/* Very narrow phones (320px): the admin's five destinations and the extra top icons must fit. */
+@media (max-width: 359px) {
+  .appbar { gap: 0.125rem; padding-inline: 0.75rem 0.25rem; }
+  .appbar form.inline button { min-inline-size: 0; padding-inline: 0.5rem; }
+  .appbar form.inline button > span { display: none !important; }
+  nav.bottom { gap: 0; padding-inline: 0.25rem; }
+  nav.bottom a { flex: 1 1 0; min-inline-size: 0; padding-inline: 0; }
+  nav.bottom a > span { font-size: 0.6875rem; }
+}
