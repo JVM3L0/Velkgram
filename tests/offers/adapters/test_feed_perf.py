@@ -1,4 +1,3 @@
-import os
 import sqlite3
 import statistics
 import time
@@ -9,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tests.offers.adapters._queries_helpers import T0
+from tests.timing import within
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import to_iso
@@ -78,6 +78,6 @@ def test_feed_first_page_under_300ms_with_200k_offers(conn: sqlite3.Connection) 
         page = q.feed(f, None)
         timings.append(time.perf_counter() - start)
     assert len(page.cards) == 30
-    bound = 0.3 * (5 if os.environ.get("CI") else 1)
+    bound = 0.3
     print(f"feed first page timings (s): {timings}")
-    assert statistics.median(timings) < bound
+    within(statistics.median(timings), bound, "feed first page")

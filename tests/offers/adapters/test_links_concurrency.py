@@ -1,6 +1,5 @@
 """The enricher's writes must never starve or fail the collector's offer upserts."""
 
-import os
 import sqlite3
 import threading
 import time
@@ -10,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.timing import within
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository, to_iso
@@ -62,7 +62,7 @@ def test_upserts_and_link_saves_do_not_lock_each_other(tmp_path: Path) -> None:
 def test_upserts_and_link_saves_do_not_lock_each_other_at_50k(tmp_path: Path) -> None:
     # A real lock fight shows up as errors or stalls near the 5 s busy_timeout, both still caught
     # here; a shared CI runner can add a one-off spike to the first write, so it gets more room.
-    _run_scenario(tmp_path, bulk=50_000, rounds=20, limit_s=3.0 if os.environ.get("CI") else 0.5)
+    _run_scenario(tmp_path, bulk=50_000, rounds=20, limit_s=0.5)
 
 
 def _run_scenario(tmp_path: Path, *, bulk: int, rounds: int, limit_s: float | None) -> None:
@@ -138,6 +138,6 @@ def _run_scenario(tmp_path: Path, *, bulk: int, rounds: int, limit_s: float | No
     assert len(save_times) == 200 and len(upsert_times) == 200
     assert discover_phase_upserts, "discover phase must overlap with upserts"
     if limit_s is not None:
-        assert max(save_times) < limit_s
-        assert max(upsert_times) < limit_s
-        assert max(discover_phase_upserts) < limit_s
+        within(max(save_times), limit_s, "link save")
+        within(max(upsert_times), limit_s, "offer upsert")
+        within(max(discover_phase_upserts), limit_s, "upsert while discovering")

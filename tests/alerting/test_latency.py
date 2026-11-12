@@ -13,6 +13,7 @@ from tests.fakes.repositories import (
     InMemoryOfferRepository,
     InMemoryWishRepository,
 )
+from tests.timing import within
 from velkgram.alerting.adapters.wishlist_api import WishlistApiReader
 from velkgram.alerting.domain.dedup import DedupCache
 from velkgram.alerting.services.evaluate import Evaluator
@@ -59,7 +60,7 @@ async def test_internal_path_under_200ms() -> None:
     elapsed = time.perf_counter() - start
     runner.cancel()
     await evaluator.wait_idle()
-    assert elapsed < 0.2
+    within(elapsed, 0.2, "alert latency")
 
 
 class _SlowRepo(InMemoryOfferRepository):
@@ -135,7 +136,7 @@ async def test_notify_starts_before_offer_work() -> None:
     await asyncio.sleep(0.1)
     await rig.close()
     assert rig.repo.calls_at_upsert[0] >= 1
-    assert elapsed < 0.2
+    within(elapsed, 0.2, "alert latency")
 
 
 async def test_backfill_burst_does_not_delay_live_alert() -> None:
@@ -146,7 +147,7 @@ async def test_backfill_burst_does_not_delay_live_alert() -> None:
     await rig.bus.publish(MessageReceived(msg(5, 10, "Oferta item25 por R$ 99,90")))
     elapsed = await rig.notified_within(0.2)
     await rig.close()
-    assert elapsed < 0.2
+    within(elapsed, 0.2, "alert latency")
 
 
 async def test_offer_worker_survives_failing_event() -> None:
@@ -270,4 +271,4 @@ async def test_coupon_burst_does_not_delay_persisting_a_live_alert() -> None:
     worker.cancel()
     await asyncio.gather(runner, worker, return_exceptions=True)
     await evaluator.wait_idle()
-    assert elapsed < 0.2
+    within(elapsed, 0.2, "alert latency")

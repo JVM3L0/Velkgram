@@ -9,6 +9,7 @@ import pytest
 
 from tests.fakes.clock import FakeClock
 from tests.fakes.repositories import FakeWishReader, InMemoryOfferRepository
+from tests.timing import within
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository, to_iso
 from velkgram.offers.domain.build import wish_fingerprint
@@ -298,8 +299,8 @@ async def test_retro_180k_offers_under_10s(tmp_path: Path) -> None:
     count = conn.execute("SELECT COUNT(*) FROM offer_matches WHERE wish_id = 1").fetchone()[0]
     print(f"retro 180k: total={total:.2f}s worst_chunk={worst * 1000:.1f}ms matches={count}")
     assert count == 20_000
-    assert total < 10 * factor
-    assert worst < 0.05 * factor
+    within(total, 10 * factor, "retro match total")
+    within(worst, 0.05 * factor, "retro match worst chunk")
     conn.close()
 
 

@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import httpx
 import pytest
 
+from tests.timing import within
 from velkgram.offers.adapters.http import fetcher as fetcher_module
 from velkgram.offers.adapters.http.fetcher import HttpxFetcher, configure_fetch_logging
 from velkgram.offers.domain.links import FetchPlan
@@ -375,7 +376,7 @@ def test_stream_is_closed_at_the_budget_over_a_real_socket(
         started = time.monotonic()
         plan = FetchPlan(follow=True, first_hop_only=False, body_budget=64 * 1024)
         out = f.fetch(f"http://127.0.0.1:{server.server_port}/", plan, noop, lambda _u: 0)
-        assert time.monotonic() - started < 2
+        within(time.monotonic() - started, 2, "local fetch")
         assert out.status == 200
         assert out.body is not None
         assert 0 < len(out.body.encode()) <= 64 * 1024

@@ -17,7 +17,6 @@ The collapse EXISTS needs `INDEXED BY idx_offers_main_link`, otherwise SQLite sc
 """
 
 import json
-import os
 import re
 import sqlite3
 import statistics
@@ -29,6 +28,7 @@ from pathlib import Path
 import pytest
 
 from tests.offers.adapters._queries_helpers import T0
+from tests.timing import within
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository, to_iso
@@ -45,7 +45,7 @@ from velkgram.shared.migrate import apply_migrations
 ROWS = 50_000
 LINKS = 5_000  # distinct main links; the even ones are enriched in product_links
 # Shared CI runners are 2-3x slower and noisy; the plan checks (no SCAN) still guard the structure.
-BOUND_S = 0.150 * (2 if os.environ.get("CI") else 1)
+BOUND_S = 0.150
 DEEP_PAGE = 100
 STORES = ("amazon", "kabum", "magalu", "shopee", None)
 NOTHING = FeedFilter(None, None, None, (), False, None)
@@ -160,7 +160,7 @@ def _cold(db_path: Path, run: Callable[[SqliteOfferQueries], object], name: str)
     finally:
         fresh.close()
     print(f"{name} (cold): {elapsed * 1000:.1f} ms")
-    assert elapsed < BOUND_S, f"{name} cold: {elapsed * 1000:.1f} ms"
+    within(elapsed, BOUND_S, f"{name} cold")
 
 
 def _check(
@@ -192,7 +192,7 @@ def _check(
         timings.append(time.perf_counter() - start)
     median = statistics.median(timings)
     print(f"{name}: {median * 1000:.1f} ms")
-    assert median < BOUND_S, f"{name}: {median * 1000:.1f} ms"
+    within(median, BOUND_S, name)
     return median
 
 
@@ -311,7 +311,7 @@ def test_volume_product_summaries_and_keyed_matches(conn: sqlite3.Connection) ->
         median = statistics.median(runs)
         timings.append(median)
         print(f"{name}: {median * 1000:.1f} ms")
-        assert median < BOUND_S, f"{name}: {median * 1000:.1f} ms"
+        within(median, BOUND_S, name)
     statements: list[str] = []
     conn.set_trace_callback(statements.append)
     try:
@@ -332,7 +332,7 @@ def test_volume_stale_cursor_count_is_capped_and_fast(conn: sqlite3.Connection) 
     elapsed = time.perf_counter() - start
     print(f"count_feed_after stale cursor: {elapsed * 1000:.1f} ms")
     assert count == NEWS_COUNT_CAP
-    assert elapsed < BOUND_S, f"{elapsed * 1000:.1f} ms"
+    within(elapsed, BOUND_S, "count_feed_after")
 
 
 @pytest.mark.slow
