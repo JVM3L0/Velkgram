@@ -50,6 +50,7 @@ from velkgram.wishlist.adapters.sqlite.repository import SqliteWishRepository
 
 MIGRATION_PACKAGES = (
     "velkgram.shared",
+    "velkgram.accounts",
     "velkgram.channels",
     "velkgram.wishlist",
     "velkgram.ingestion",

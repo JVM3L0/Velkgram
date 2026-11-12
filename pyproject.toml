@@ -52,6 +52,20 @@ include_external_packages = true
 # Rules 3/5: one contract per module. Other modules' packages (public API) stay importable;
 # indirect imports through a package __init__ are allowed.
 [[tool.importlinter.contracts]]
+name = "accounts boundary"
+type = "forbidden"
+source_modules = ["velkgram.accounts"]
+forbidden_modules = [
+  "velkgram.channels.domain", "velkgram.channels.ports", "velkgram.channels.services", "velkgram.channels.adapters", "velkgram.channels.web",
+  "velkgram.wishlist.domain", "velkgram.wishlist.ports", "velkgram.wishlist.services", "velkgram.wishlist.adapters", "velkgram.wishlist.web",
+  "velkgram.ingestion.domain", "velkgram.ingestion.ports", "velkgram.ingestion.services", "velkgram.ingestion.adapters", "velkgram.ingestion.web",
+  "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
+  "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
+  "velkgram.reporting.domain", "velkgram.reporting.ports", "velkgram.reporting.services", "velkgram.reporting.adapters", "velkgram.reporting.web",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
 name = "channels boundary"
 type = "forbidden"
 source_modules = ["velkgram.channels"]
@@ -61,6 +75,7 @@ forbidden_modules = [
   "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
   "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
   "velkgram.reporting",
+  "velkgram.accounts.domain", "velkgram.accounts.ports", "velkgram.accounts.services", "velkgram.accounts.adapters", "velkgram.accounts.web",
 ]
 allow_indirect_imports = true
 
@@ -74,6 +89,7 @@ forbidden_modules = [
   "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
   "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
   "velkgram.reporting",
+  "velkgram.accounts.domain", "velkgram.accounts.ports", "velkgram.accounts.services", "velkgram.accounts.adapters", "velkgram.accounts.web",
 ]
 allow_indirect_imports = true
 
@@ -87,6 +103,7 @@ forbidden_modules = [
   "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
   "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
   "velkgram.reporting",
+  "velkgram.accounts.domain", "velkgram.accounts.ports", "velkgram.accounts.services", "velkgram.accounts.adapters", "velkgram.accounts.web",
 ]
 allow_indirect_imports = true
 
@@ -100,6 +117,7 @@ forbidden_modules = [
   "velkgram.ingestion.domain", "velkgram.ingestion.ports", "velkgram.ingestion.services", "velkgram.ingestion.adapters", "velkgram.ingestion.web",
   "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
   "velkgram.reporting",
+  "velkgram.accounts.domain", "velkgram.accounts.ports", "velkgram.accounts.services", "velkgram.accounts.adapters", "velkgram.accounts.web",
 ]
 allow_indirect_imports = true
 
@@ -113,6 +131,7 @@ forbidden_modules = [
   "velkgram.ingestion.domain", "velkgram.ingestion.ports", "velkgram.ingestion.services", "velkgram.ingestion.adapters", "velkgram.ingestion.web",
   "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
   "velkgram.offers.domain", "velkgram.offers.ports", "velkgram.offers.services", "velkgram.offers.adapters", "velkgram.offers.web",
+  "velkgram.accounts.domain", "velkgram.accounts.ports", "velkgram.accounts.services", "velkgram.accounts.adapters", "velkgram.accounts.web",
 ]
 allow_indirect_imports = true
 
@@ -126,6 +145,7 @@ forbidden_modules = [
   "velkgram.ingestion.domain", "velkgram.ingestion.ports", "velkgram.ingestion.services", "velkgram.ingestion.adapters", "velkgram.ingestion.web",
   "velkgram.alerting.domain", "velkgram.alerting.ports", "velkgram.alerting.services", "velkgram.alerting.adapters", "velkgram.alerting.web",
   "velkgram.reporting",
+  "velkgram.accounts.domain", "velkgram.accounts.ports", "velkgram.accounts.services", "velkgram.accounts.adapters", "velkgram.accounts.web",
 ]
 allow_indirect_imports = true
 

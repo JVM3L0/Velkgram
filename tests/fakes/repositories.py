@@ -2,6 +2,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 
+from velkgram.accounts import Role, User
 from velkgram.alerting import Alert, AlertKind, AlertStatus, SuppressionRule
 from velkgram.channels import Channel, ChannelStatus
 from velkgram.ingestion import Heartbeat
@@ -488,3 +489,38 @@ class FakeChannelPages:
         if isinstance(page, Exception):
             raise page
         return page
+
+
+class InMemoryUserRepository:
+    def __init__(self) -> None:
+        self._users: dict[int, User] = {}
+        self._next_id = 1
+
+    def add_admin_without_password(self) -> User:
+        """What the migration seeds: the admin row with no password yet."""
+        return self.add(
+            User(None, "admin", "", Role.ADMIN, None, True, datetime(2026, 1, 1, tzinfo=UTC))
+        )
+
+    def add(self, u: User) -> User:
+        if self.get_by_username(u.username) is not None:
+            raise ValueError("username already exists")
+        stored = replace(u, id=self._next_id)
+        self._users[self._next_id] = stored
+        self._next_id += 1
+        return stored
+
+    def update(self, u: User) -> None:
+        assert u.id is not None
+        self._users[u.id] = u
+
+    def get(self, id: int) -> User | None:
+        return self._users.get(id)
+
+    def get_by_username(self, username: str) -> User | None:
+        return next(
+            (u for u in self._users.values() if u.username.lower() == username.lower()), None
+        )
+
+    def list_all(self) -> list[User]:
+        return [self._users[k] for k in sorted(self._users)]
