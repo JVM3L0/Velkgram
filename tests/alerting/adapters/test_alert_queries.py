@@ -151,3 +151,15 @@ def test_latency_samples_exclude_coupon_alerts_but_daily_counts_include_them(
     q = SqliteAlertQueries(conn)
     assert len(q.latency_samples(D1.date(), D1.date())) == 1
     assert q.daily_alert_counts(D1.date(), D1.date())[0].alerts == 2
+
+
+def test_history_can_be_limited_to_some_wishes(conn: sqlite3.Connection) -> None:
+    repo = SqliteAlertRepository(conn)
+    repo.add(replace(_alert(1, 1, D1), wish_id=1))
+    repo.add(replace(_alert(1, 2, D1), wish_id=2, dedup_keys=("k2",)))
+    repo.add(replace(_alert(1, 3, D1), wish_id=3, dedup_keys=("k3",)))
+    q = SqliteAlertQueries(conn)
+    assert [a.message_id for a in q.history(10, 0, wish_ids=[2, 3])] == [3, 2]
+    assert [a.message_id for a in q.history(10, 0, wish_ids=[1])] == [1]
+    assert q.history(10, 0, wish_ids=[]) == []  # a user with no wishes sees nothing
+    assert len(q.history(10, 0)) == 3  # no filter: everything, as before

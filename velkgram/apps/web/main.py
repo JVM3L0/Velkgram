@@ -94,6 +94,10 @@ def _wish_names(conn: sqlite3.Connection) -> dict[int, str]:
     return {w.id: w.name for w in SqliteWishRepository(conn).list_all() if w.id is not None}
 
 
+def _user_wish_ids(conn: sqlite3.Connection, user_id: int) -> list[int]:
+    return [w.id for w in SqliteWishRepository(conn).list_for_user(user_id) if w.id is not None]
+
+
 def _channel_names(conn: sqlite3.Connection) -> dict[int, str]:
     return {
         c.telegram_id: c.name or c.ref
@@ -305,6 +309,8 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(
         build_alerts_router(
             get_conn=get_conn,
+            current_user=require_user,
+            user_wish_ids=_user_wish_ids,
             templates=templates,
             make_queries=SqliteAlertQueries,
             wish_names=_wish_names,

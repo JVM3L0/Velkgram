@@ -9,7 +9,9 @@ from datetime import timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from velkgram.accounts.adapters.sqlite.repository import SqliteUserRepository
 from velkgram.alerting import Alert, AlertKind, AlertMessage, Notifier, SuppressionRule
+from velkgram.alerting.adapters.accounts_api import active_user_ids
 from velkgram.alerting.adapters.offers_api import OffersActiveCoupons
 from velkgram.alerting.adapters.sqlite.repository import SqliteAlertRepository
 from velkgram.alerting.adapters.wishlist_api import WishlistApiReader
@@ -102,6 +104,7 @@ class Collector:
         self._snapshot: dict[int, int | None] = {}
 
         self._wish_repo = SqliteWishRepository(conn)
+        self._active_users = active_user_ids(SqliteUserRepository(conn))
         self._channel_repo = SqliteChannelRepository(conn)
         self._channels = ChannelCommands(self._channel_repo, clock)
         self._messages = SqliteMessageRepository(conn, clock)
@@ -117,7 +120,7 @@ class Collector:
             on_message=self.heartbeat.count_message,
         )
         self.evaluator = Evaluator(
-            WishlistApiReader(self._wish_repo),
+            WishlistApiReader(self._wish_repo, self._active_users),
             self._alerts,
             self._cache,
             notifier,
@@ -133,7 +136,7 @@ class Collector:
             store_title=store_title,
         )
         self.coupon_alerter = CouponAlerter(
-            WishlistApiReader(self._wish_repo),
+            WishlistApiReader(self._wish_repo, self._active_users),
             self._alerts,
             self._cache,
             notifier,
@@ -399,6 +402,7 @@ class Collector:
         ):  # the text was rendered at alert time; no message to read
             if alert.payload is None:
                 return None
+            owner = self._wish_repo.get(alert.wish_id)
             return AlertMessage(
                 wish_name="",
                 text="",
@@ -407,6 +411,7 @@ class Collector:
                 link=None,
                 delayed_minutes=None,
                 rendered=alert.payload,
+                user_id=owner.user_id if owner is not None else 1,
             )
         m = self._messages.get(alert.channel_id, alert.message_id)
         wish = self._wish_repo.get(alert.wish_id)
@@ -427,4 +432,5 @@ class Collector:
             delayed_minutes=alert.delayed_minutes,
             # Coupon lines are not re-fetched on retry; the over-max suffix is kept.
             over_max_cents=wish.max_price_cents if alert.over_max else None,
+            user_id=wish.user_id,
         )

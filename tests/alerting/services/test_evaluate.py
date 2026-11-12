@@ -23,7 +23,9 @@ from velkgram.wishlist import Wish
 
 
 class Harness:
-    def __init__(self, notifier: FakeNotifier | None = None) -> None:
+    def __init__(
+        self, notifier: FakeNotifier | None = None, active_users: frozenset[int] | None = None
+    ) -> None:
         self.wishes = InMemoryWishRepository()
         self.alerts = InMemoryAlertRepository()
         self.messages = InMemoryMessageRepository()
@@ -35,7 +37,9 @@ class Harness:
         self.triggered: list[AlertTriggered] = []
         self.bus.subscribe(AlertTriggered, self._collect)
         self.evaluator = Evaluator(
-            wishes=WishlistApiReader(self.wishes),
+            wishes=WishlistApiReader(
+                self.wishes, active_users=(lambda: active_users) if active_users else None
+            ),
             repo=self.alerts,
             cache=DedupCache(timedelta(minutes=30)),
             notifier=self.notifier,
@@ -378,3 +382,25 @@ async def test_list_post_item_inherits_the_header_terms() -> None:
     await h.feed(_list_msg(text))
     [a] = h.stored()
     assert a.price_cents == 237400
+
+
+async def test_each_users_wish_alerts_that_user_with_their_id() -> None:
+    from velkgram.wishlist import Wish
+
+    h = Harness()
+    h.wishes.add(Wish(None, "Admin GPU", ("rtx 4060",), (), 200000, True, 1))
+    h.wishes.add(Wish(None, "Ana GPU", ("rtx 4060",), (), 200000, True, 2))
+    await h.feed(msg(text="RTX 4060 por R$ 1.500,00"))
+    by_wish = {m.wish_name: m.user_id for m in h.notifier.sent}
+    assert by_wish == {"Admin GPU": 1, "Ana GPU": 2}
+    assert len(h.stored()) == 2  # dedup keys carry the wish id: one alert per user
+
+
+async def test_a_disabled_users_wish_never_alerts() -> None:
+    from velkgram.wishlist import Wish
+
+    h = Harness(active_users=frozenset({1}))
+    h.wishes.add(Wish(None, "Admin GPU", ("rtx 4060",), (), 200000, True, 1))
+    h.wishes.add(Wish(None, "Ana GPU", ("rtx 4060",), (), 200000, True, 2))
+    await h.feed(msg(text="RTX 4060 por R$ 1.500,00"))
+    assert [m.wish_name for m in h.notifier.sent] == ["Admin GPU"]

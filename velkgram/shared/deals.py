@@ -16,6 +16,7 @@ class WishView:
     required: tuple[tuple[str, ...], ...]  # AND of ORs, already normalized
     excluded: tuple[str, ...]  # already normalized
     max_price_cents: int
+    user_id: int = 1  # owner of the wish: who receives its alerts
 
 
 @lru_cache(maxsize=4096)

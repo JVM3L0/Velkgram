@@ -117,7 +117,7 @@ class TelegramBotNotifier:
     async def notify(self, message: AlertMessage) -> None:
         if not await self.ensure_started():
             raise NotifierError("bot_unavailable")
-        await self._send(format_alert(message))
+        await self._send(format_alert(message), message.chat_id)
 
     async def notify_system(self, text: str) -> None:
         try:
@@ -128,8 +128,8 @@ class TelegramBotNotifier:
         except TimeoutError:
             raise NotifierError("timeout") from None
 
-    async def _send(self, text: str) -> None:
-        chat_id = self._chat_id()
+    async def _send(self, text: str, to: int | None = None) -> None:
+        chat_id = to if to is not None else self._chat_id()
         if chat_id is None:
             self._record(NotifierStatus.ERROR, "sem chat")
             raise NotifierError("no_chat")

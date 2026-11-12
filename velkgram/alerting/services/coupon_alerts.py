@@ -192,6 +192,7 @@ class CouponAlerter:
             link=coupon_link,
             delayed_minutes=None,
             rendered=payload,
+            user_id=wish.user_id,
         )
         ok, attempts, error = await send_with_retry(self._notifier, message, sleep=self._sleep)
         self._repo.update(

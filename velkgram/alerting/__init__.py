@@ -8,7 +8,7 @@ from velkgram.alerting.domain.models import (
     AlertStatus,
     SuppressionRule,
 )
-from velkgram.alerting.ports.notifier import Notifier, NotifierError
+from velkgram.alerting.ports.notifier import NotConfigured, Notifier, NotifierError
 from velkgram.alerting.ports.queries import (
     AlertQueries,
     DailyAlerts,
@@ -29,6 +29,7 @@ __all__ = [
     "DailyAlerts",
     "DailySuppressions",
     "LatencySample",
+    "NotConfigured",
     "Notifier",
     "NotifierError",
     "SuppressionRule",

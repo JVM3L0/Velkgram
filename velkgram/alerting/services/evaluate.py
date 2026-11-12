@@ -107,6 +107,7 @@ class Evaluator:
         self._on_alert_sent = on_alert_sent
         self._sleep = sleep
         self._tasks: set[asyncio.Task[None]] = set()
+        self._wish_users: dict[int, int] = {}
         self._wish_names: dict[int, str] = {}
         self._wish_max: dict[int, int] = {}
         self._coupons = coupons
@@ -241,6 +242,7 @@ class Evaluator:
     def _remember_wish(self, wish: WishView) -> None:
         self._wish_names[wish.id] = wish.name
         self._wish_max[wish.id] = wish.max_price_cents
+        self._wish_users[wish.id] = wish.user_id
 
     def _class_of(self, m: MessageData) -> tuple[str | None, bool]:
         """Store and coupon-post flag, classified once per message; never raises."""
@@ -379,6 +381,7 @@ class Evaluator:
             delayed_minutes=alert.delayed_minutes,
             coupon_lines=self._coupon_lines(m, alert, t),
             over_max_cents=self._wish_max.get(alert.wish_id) if alert.over_max else None,
+            user_id=self._wish_users.get(alert.wish_id, 1),
         )
         hits = self._hits.pop((m.channel_id, m.message_id, alert.wish_id), None)
         if hits and alert.kind is AlertKind.offer:

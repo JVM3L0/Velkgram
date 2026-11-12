@@ -44,4 +44,4 @@ def match_view(w: Wish) -> WishView | None:
         return None
     required = tuple(g for g in (split_alternatives(t) for t in w.required_terms) if g)
     excluded = tuple(alt for t in w.excluded_terms for alt in split_alternatives(t))
-    return WishView(w.id, w.name, required, excluded, w.max_price_cents)
+    return WishView(w.id, w.name, required, excluded, w.max_price_cents, w.user_id)

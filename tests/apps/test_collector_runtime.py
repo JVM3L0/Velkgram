@@ -15,10 +15,12 @@ from tests.fakes.messages import NOW, msg
 from tests.fakes.notifier import FakeNotifier
 from tests.fakes.notifier_state import InMemoryNotifierStateStore
 from tests.fakes.telegram import FakeTelegramGateway
+from velkgram.alerting import AlertMessage, NotConfigured
 from velkgram.alerting.adapters.notify_log import LogNotifier
 from velkgram.alerting.adapters.notify_telegram import TelegramBotNotifier
 from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.ports.notifier_state import NotifierStatus
+from velkgram.alerting.services.routing import UserRoutedNotifier
 from velkgram.apps.cli import MIGRATION_PACKAGES, build_parser
 from velkgram.apps.collector import main as collector_main
 from velkgram.apps.collector.collector import Collector
@@ -362,7 +364,7 @@ def test_build_notifier_telegram_records_starting_on_empty_table(tmp_path: Path)
     notifier, bot, holder = build_notifier(
         _tg_settings(tmp_path), conn, FakeClock(NOW), FakeBotClient()
     )
-    assert notifier is bot and isinstance(bot, TelegramBotNotifier)
+    assert isinstance(notifier, UserRoutedNotifier) and isinstance(bot, TelegramBotNotifier)
     assert holder is not None and holder.override is None
     row = SqliteNotifierStateStore(conn).get()
     assert row is not None and row[:2] == (NotifierStatus.ERROR, "iniciando")
@@ -510,3 +512,26 @@ async def test_run_closes_bot_even_if_stop_offer_worker_raises(
     with pytest.raises(OSError, match="stop failed"):
         await run(_tg_settings(tmp_path), client, bot_client=bot)
     assert bot.disconnects >= 1
+
+
+async def test_built_notifier_routes_each_alert_to_its_users_chat(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    conn = _conn(tmp_path)
+    conn.execute(
+        "INSERT INTO users (id, username, password_hash, role, telegram_chat_id, enabled, "
+        "created_at) VALUES (2, 'ana', 'x', 'user', 555, 1, '2026-11-12T00:00:00+00:00'), "
+        "(3, 'bia', 'x', 'user', NULL, 1, '2026-11-12T00:00:00+00:00')"
+    )
+    conn.commit()
+    client = FakeBotClient()
+    settings = replace(_tg_settings(tmp_path), alert_chat_id=999)
+    notifier, bot, _ = build_notifier(settings, conn, FakeClock(NOW), client)
+    message = AlertMessage("GPU", "oferta", 100, "Promos", None, None)
+    await notifier.notify(replace(message, user_id=2))
+    await notifier.notify(replace(message, user_id=1))  # the admin falls back to the bot's chat
+    with pytest.raises(NotConfigured):
+        await notifier.notify(replace(message, user_id=3))
+    assert [chat for chat, _, _ in client.sent] == [555, 999]
+    assert bot is not None
+    await bot.aclose()

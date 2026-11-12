@@ -9,11 +9,14 @@ from typing import Any
 
 from telethon import TelegramClient
 
+from velkgram.accounts.adapters.sqlite.repository import SqliteUserRepository
 from velkgram.alerting import Notifier
+from velkgram.alerting.adapters.accounts_api import AccountsChatDirectory
 from velkgram.alerting.adapters.notify_log import LogNotifier
 from velkgram.alerting.adapters.notify_telegram import BotClient, TelegramBotNotifier
 from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.ports.notifier_state import NotifierStateStore, NotifierStatus
+from velkgram.alerting.services.routing import UserRoutedNotifier
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
 from velkgram.apps.notifier_wiring import ChatHolder, make_bot_client
@@ -130,7 +133,11 @@ def build_notifier(
         state=state,
         clock=clock,
     )
-    return bot, bot, holder
+    directory = AccountsChatDirectory(
+        SqliteUserRepository(conn), admin_fallback=lambda: holder.resolve(state)
+    )
+    # Each alert goes to the chat of its user; system messages stay on the bot's own chat.
+    return UserRoutedNotifier(bot, directory), bot, holder
 
 
 async def remember_chat(

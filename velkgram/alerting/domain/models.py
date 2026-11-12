@@ -77,3 +77,5 @@ class AlertMessage:
     title: str = ""  # the offer title line of the post
     body: str = ""  # the post text after the title line
     store_title: str | None = None  # display name of the offer's store
+    user_id: int = 1  # who owns the wish that fired the alert
+    chat_id: int | None = None  # set by the routing notifier; None: the notifier's own chat

@@ -1,6 +1,7 @@
 """SQLite read queries for reporting and the web. "Day" is the UTC date of `created_at`."""
 
 import sqlite3
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 
 from velkgram.alerting.adapters.sqlite.repository import COLUMNS, to_alert, to_iso
@@ -19,10 +20,19 @@ class SqliteAlertQueries:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
-    def history(self, limit: int, offset: int) -> list[Alert]:
+    def history(
+        self, limit: int, offset: int, wish_ids: Sequence[int] | None = None
+    ) -> list[Alert]:
+        where, params = "", ()
+        if wish_ids is not None:
+            if not wish_ids:
+                return []
+            where = f"WHERE wish_id IN ({', '.join('?' * len(wish_ids))}) "
+            params = tuple(wish_ids)
         rows = self._conn.execute(
-            f"SELECT {COLUMNS} FROM alerts ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
-            (limit, offset),
+            f"SELECT {COLUMNS} FROM alerts {where}ORDER BY created_at DESC, id DESC "
+            "LIMIT ? OFFSET ?",
+            (*params, limit, offset),
         ).fetchall()
         return [to_alert(r) for r in rows]
 

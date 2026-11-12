@@ -1472,3 +1472,7 @@ body:not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-li
 @media (prefers-color-scheme: dark) {
   body:not(.latte):not(.frappe):not(.macchiato):not(.mocha):not(.gruvbox-dark):not(.gruvbox-light) .alert-card { box-shadow: none; }
 }
+
+/* A failed alert whose cause the user can fix (e.g. no Telegram chat configured). */
+.alert-note { display: flex; align-items: center; gap: 0.375rem; margin: 0.25rem 0 0; font-size: 0.8125rem; color: var(--error); }
+.alert-note > i { font-size: 1rem; }

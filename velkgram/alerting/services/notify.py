@@ -5,7 +5,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from velkgram.alerting.domain.models import AlertMessage
-from velkgram.alerting.ports.notifier import Notifier, NotifierError
+from velkgram.alerting.ports.notifier import NotConfigured, Notifier, NotifierError
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +27,8 @@ async def send_with_retry(
             async with asyncio.timeout(timeout):
                 await notifier.notify(message)
             return True, attempt, None
+        except NotConfigured:
+            return False, attempt, "no_chat"  # permanent until the user sets a chat
         except TimeoutError:
             last_error = f"timeout after {timeout}s"
         except NotifierError as exc:

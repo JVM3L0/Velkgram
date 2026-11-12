@@ -1,5 +1,6 @@
 """Read-side port used by reporting and the web."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
@@ -32,8 +33,10 @@ class LatencySample:
 
 
 class AlertQueries(Protocol):
-    def history(self, limit: int, offset: int) -> list[Alert]:
-        """Newest first."""
+    def history(
+        self, limit: int, offset: int, wish_ids: Sequence[int] | None = None
+    ) -> list[Alert]:
+        """Newest first; only the alerts of `wish_ids` when given (empty means none)."""
         ...
 
     def recent_failures(self, limit: int) -> list[Alert]:

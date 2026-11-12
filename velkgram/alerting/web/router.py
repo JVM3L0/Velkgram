@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
+from velkgram.accounts import User
 from velkgram.alerting import Alert, AlertKind, AlertQueries, AlertStatus, format_brl, telegram_link
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,11 @@ _STATUS_PT = {
     AlertStatus.failed: "falhou",
     AlertStatus.pending: "pendente",
     AlertStatus.expired: "expirado",
+}
+
+
+_ERROR_NOTES = {
+    "no_chat": "Telegram não configurado: informe o seu id em Perfil para receber alertas",
 }
 
 
@@ -44,8 +50,10 @@ def _parse_page(raw: str | None) -> int:
 def build_router(
     *,
     get_conn: Callable[..., Iterator[sqlite3.Connection]],
+    current_user: Callable[..., User],
     templates: Jinja2Templates,
     make_queries: Callable[[sqlite3.Connection], AlertQueries],
+    user_wish_ids: Callable[[sqlite3.Connection, int], list[int]],
     wish_names: Callable[[sqlite3.Connection], dict[int, str]],
     channel_names: Callable[[sqlite3.Connection], dict[int, str]],
     product_links: (
@@ -95,16 +103,20 @@ def build_router(
             "product_href": links.get(offer_pair(alert)),
             "link": telegram_link(alert.channel_id, alert.message_id),
             "created_at": alert.created_at,
+            "error_note": _ERROR_NOTES.get(alert.last_error or ""),
         }
 
     @router.get("")
     def list_alerts(
         request: Request,
         conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+        user: Annotated[User, Depends(current_user)],
         page: str | None = None,
     ) -> Response:
         number = _parse_page(page)
-        fetched = make_queries(conn).history(PAGE_SIZE + 1, (number - 1) * PAGE_SIZE)
+        fetched = make_queries(conn).history(
+            PAGE_SIZE + 1, (number - 1) * PAGE_SIZE, wish_ids=user_wish_ids(conn, user.id or 0)
+        )
         wishes, channels = wish_names(conn), channel_names(conn)
         shown = fetched[:PAGE_SIZE]
         links = lookup_links(conn, shown)

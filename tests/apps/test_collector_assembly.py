@@ -527,6 +527,7 @@ async def test_retry_of_an_over_max_alert_keeps_the_suffix(env: Env) -> None:
     assert rebuilt is not None
     assert rebuilt.over_max_cents == 50000
     assert rebuilt.coupon_lines == ()
+    assert rebuilt.user_id == 1
 
 
 async def test_retried_offer_alert_has_the_title_line_and_the_store(env: Env) -> None:

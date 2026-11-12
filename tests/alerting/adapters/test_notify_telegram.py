@@ -264,3 +264,16 @@ async def test_aclose_cancels_pending_login_and_disconnects(env: Env) -> None:
     assert env.client.disconnects == 1
     assert env.notifier._login_task is not None  # pyright: ignore[reportPrivateUsage]
     assert env.notifier._login_task.cancelled()  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_notify_sends_to_the_chat_of_the_message_when_it_has_one(env: Env) -> None:
+    from dataclasses import replace
+
+    await env.notifier.notify(replace(MSG, chat_id=777))
+    await env.notifier.notify(MSG)
+    assert [chat for chat, _, _ in env.client.sent] == [777, 42]  # no chat -> the default one
+
+
+async def test_system_messages_still_go_to_the_default_chat(env: Env) -> None:
+    await env.notifier.notify_system("parou")
+    assert env.client.sent[0][0] == 42

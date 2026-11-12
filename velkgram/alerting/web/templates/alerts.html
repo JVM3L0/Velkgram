@@ -21,6 +21,7 @@
         <span class="chip small chip-muted"><span class="alert-channel">{{ r.channel }}</span></span>
         <time datetime="{{ r.created_at.isoformat() }}">{{ r.created_at.strftime("%d/%m/%Y %H:%M") }}</time>
       </p>
+      {% if r.error_note %}<p class="alert-note"><i aria-hidden="true">info</i> {{ r.error_note }}</p>{% endif %}
       <p class="alert-tech hide-compact">Telegram {{ r.latency_telegram_ms }} ms · interno {{ r.latency_internal_ms }} ms · {{ r.dedup_keys }} {{ "chave" if r.dedup_keys == 1 else "chaves" }}</p>
     </div>
     <div class="alert-actions">
