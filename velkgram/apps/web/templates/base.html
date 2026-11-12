@@ -8,6 +8,9 @@
   <link rel="stylesheet" href="/static/velkgram.css?v={{ css_version }}">
   <script src="/static/velkgram.js?v={{ js_version }}" defer></script>
   <script src="/static/htmx.min.js?v={{ js_version }}" defer></script>
+  <script type="speculationrules">
+    {"prefetch": [{"where": {"and": [{"href_matches": "/*"}, {"not": {"href_matches": ["/logout", "/theme", "/static/*"]}}]}, "eagerness": "moderate"}]}
+  </script>
 </head>
 <body class="{{ theme_classes(request.cookies.get('theme')) }}">
   {% if request.session.get("user_id") %}

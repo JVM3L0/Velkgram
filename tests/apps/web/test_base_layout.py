@@ -209,3 +209,10 @@ def test_script_is_loaded_deferred_with_content_hash(tmp_path: Path) -> None:
     (tmp_path / "c").mkdir()
     served = make_client(tmp_path / "c").get("/static/velkgram.js")
     assert served.status_code == 200 and "data-copy" in served.text
+
+
+def test_pages_prefetch_links_on_hover_but_never_logout(tmp_path: Path) -> None:
+    page = _page(make_client(tmp_path))
+    assert '<script type="speculationrules">' in page
+    rules = page.split('<script type="speculationrules">')[1].split("</script>")[0]
+    assert '"eagerness": "moderate"' in rules and "/logout" in rules

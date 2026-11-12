@@ -6,7 +6,7 @@
 <h1>Ofertas</h1>
 {% with tab = "ofertas" %}{% include "_feed_tabs.html" %}{% endwith %}
 <form id="feed-filters" class="filters" method="get" action="/"
-  hx-get="/" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true"
+  hx-get="/" hx-target="#results" hx-select="#results" hx-swap="outerHTML transition:true" hx-push-url="true"
   hx-sync="this:replace" hx-trigger="submit, change, input changed delay:400ms from:#q">
   <div class="filters-bar">
     <div class="field prefix border filters-search">

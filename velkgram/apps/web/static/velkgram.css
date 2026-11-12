@@ -1281,3 +1281,26 @@ nav.tabs.feed-tabs { margin-block: 0 1rem; border-block-end: 1px solid var(--out
   .appbar form.inline button { padding-inline: 0.75rem; }
   .appbar form.inline button span { display: none; }
 }
+
+/* ---- Feed feel: a filter change dims the old results and shows a thin progress bar; the swap
+   itself is a short cross-fade (htmx `transition:true`). ---- */
+#results { transition: opacity 150ms ease; }
+.feed-page:has(#feed-filters.htmx-request) #results { opacity: 0.55; }
+.feed-page:has(#feed-filters.htmx-request)::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  block-size: 3px;
+  z-index: 400;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: feed-progress 1s ease-in-out infinite;
+}
+@keyframes feed-progress { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+::view-transition-group(root) { animation-duration: 160ms; }
+@media (prefers-reduced-motion: reduce) {
+  #results { transition: none; }
+  .feed-page:has(#feed-filters.htmx-request)::before { animation: none; background-size: 100% 100%; }
+  ::view-transition-group(root) { animation-duration: 0.01ms; }
+}
