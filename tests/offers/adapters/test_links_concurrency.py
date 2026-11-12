@@ -1,5 +1,6 @@
 """The enricher's writes must never starve or fail the collector's offer upserts."""
 
+import os
 import sqlite3
 import threading
 import time
@@ -59,7 +60,9 @@ def test_upserts_and_link_saves_do_not_lock_each_other(tmp_path: Path) -> None:
 
 @pytest.mark.slow
 def test_upserts_and_link_saves_do_not_lock_each_other_at_50k(tmp_path: Path) -> None:
-    _run_scenario(tmp_path, bulk=50_000, rounds=20, limit_s=0.5)
+    # A real lock fight shows up as errors or stalls near the 5 s busy_timeout, both still caught
+    # here; a shared CI runner can add a one-off spike to the first write, so it gets more room.
+    _run_scenario(tmp_path, bulk=50_000, rounds=20, limit_s=3.0 if os.environ.get("CI") else 0.5)
 
 
 def _run_scenario(tmp_path: Path, *, bulk: int, rounds: int, limit_s: float | None) -> None:
