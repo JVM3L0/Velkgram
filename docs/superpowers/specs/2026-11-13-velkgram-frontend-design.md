@@ -71,62 +71,35 @@ not wanted. The weaknesses are consistency and finish, which a framework does no
   until then the font is self-hosted and subset.
 - Native `popover` and view transitions need a current browser; both degrade to a plain page.
 
-## Visual direction (design pass with the frontend-design guidance)
+## Visual direction (decided with the owner, 2026-11-13)
 
-### The subject
+The first proposal was a distinct "price tag" identity (condensed prices in a ruled list, coupons
+as perforated tickets). The owner chose differently, and the brief wins:
 
-A private tool for Brazilian deal hunting: Telegram promo channels reduced to the few offers that
-matter to a handful of people. It is read quickly, mostly on a phone, and the one question asked
-a hundred times is "is this a good price?". The vernacular is the price tag, the coupon, the
-shelf label, the receipt: printed, numeric, practical.
-
-### Plan (first pass)
-
-- **Colour:** the owner chose the themes (Catppuccin flavours and the Gruvbox "bem pastel" pair),
-  and the brief wins, so the palette is the existing role tokens. Reference, Gruvbox dark:
-  paper `#282828`, ink `#d4be98`, stamp (primary) `#bab979`, amber (coupons) `#d6b071`,
-  sage `#a0b49f`, coral (price above average) `#e18b78`. Store colours stay as brand inks.
-- **Type:** one family, Bricolage Grotesque (variable: optical size 12 to 96, weight 200 to 800,
-  width 75 to 100), self-hosted. Body: opsz 14, width 100, weight 400. Titles: opsz 28,
-  weight 600. **Prices: width 75 (condensed), weight 800, tabular lining numerals**, sized by
-  importance. Sentence case everywhere; no all-caps labels.
-- **Layout:** the feed is a ruled list, not boxed cards: a row per offer with the price in a
-  fixed left rail, so prices line up down the screen and can be compared by eye.
-  Coupons are the exception: perforated tickets with the code on a tear-off stub.
-- **Principles:** price first; structure carries information (a rule separates offers, the rail
-  aligns prices, the notch marks a coupon); one memorable element (the ticket); calm elsewhere;
-  motion only as an answer to an action (a swap, an open sheet).
-
-```
- offer row (phone)                      coupon ticket
- ┌──────────────────────────────┐       ╭──────────────────┬─ ─ ─╮
- │ R$ 884   Monitor TCL 25G64   │       │ R$ 20 de desconto│ CODE│
- │ −12%     KaBuM!  Promotom 2h │       │ em compras de R$ │ BF20│
- │ abaixo   Também em 3 lojas   │       ╰──────────────────┴─ ─ ─╯
- ├──────────────────────────────┤        notch circles at the perforation
- │ R$ 1.199 Teclado ...         │
- └──────────────────────────────┘
-```
-
-### Review against the defaults (second pass)
-
-Things the first idea shared with a generic deal-site template, and what changed:
-
-- *Boxed rounded cards with one radius and one soft shadow* (the SaaS card kit): replaced by
-  ruled rows. Radii are chosen by role (small for chips and stamps, larger for sheets, circles for
-  the ticket notches) instead of one value everywhere.
-- *Monospace for small data labels, all-caps eyebrows, "A · B · C" meta strings, "→" on buttons:*
-  none. The existing middle-dot strings ("menor R$ 884 em 10/11 · 9 ofertas") become structured
-  fields with their own labels. Labels are sentence case.
-- *Roboto Flex* is the Material default: replaced by a family with a point of view and a
-  condensed width that suits prices.
-- *Colour:* kept on purpose, because the owner picked these themes. No warm-cream-and-terracotta,
-  no acid accent, no gradients.
-- *Copy:* two buttons are ambiguous today ("Produto" opens the store page, "Abrir" opens the
-  Telegram post). They become "Ver na loja" and "Ver no Telegram", used the same way everywhere.
+- **Identity: evolve the current look.** Cards stay as they are; the work is consistency and
+  finish (tokens, spacing, components), not a new personality.
+- **Themes: two**, a dark and a light, designed together with the Gruvbox "bem pastel" pair as
+  the base. The Catppuccin flavours go away. Modes in the menu: Sistema, Escuro, Claro. An old
+  `theme` cookie value maps to the nearest of the two (mocha, macchiato, frappe and gruvbox-dark
+  to dark; latte and gruvbox-light to light).
+- **Feed: cards as today** (the cards and list views both stay).
+- **Type: Bricolage Grotesque**, one self-hosted family (optical size 12 to 96, weight 200 to
+  800, width 75 to 100). Body at width 100; prices in a heavier, slightly condensed setting with
+  tabular lining numerals so the digits line up between cards. Sentence case; no all-caps labels.
 
 ### Quality floor
 
 Visible keyboard focus, `prefers-reduced-motion` respected, contrast checked per theme (the test
-suite already enforces WCAG AA for the flavours), tap targets of 40 px or more, the UI audit
-script clean at 320 to 1440 px.
+suite enforces WCAG AA), tap targets of 40 px or more, and the UI audit script clean at 320 to
+1440 px. Copy: "Produto" and "Abrir" are ambiguous today (the store page and the Telegram post);
+they become "Ver na loja" and "Ver no Telegram", the same way everywhere.
+
+### Stages that follow from this (replaces the earlier list for the visual work)
+
+1. Typography: self-hosted font, type scale tokens, price style. No third-party font request.
+2. Themes: reduce to Escuro and Claro, migrate old cookie values, drop the Catppuccin CSS and its
+   tests. Redesign the two palettes together so roles (surface levels, accents, store inks) agree.
+3. Components: one definition each of button, chip, field, card, list row; remove duplicated and
+   `!important` rules; migrate screens one at a time with the UI audit as the check.
+4. Shell without Beer JS (native `popover` and `<dialog>`), then self-host HTMX and remove Beer CSS.
+5. Feed feel and the chart-tooltip island, as in the earlier plan.
