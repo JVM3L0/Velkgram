@@ -1,0 +1,1389 @@
+{
+ "note": "Pairs of offers from different stores, labelled by hand: same=true means the same product and variant. code_frequency is how many of the ~2000 distinct offers carried each code when the pairs were drawn.",
+ "pairs": [
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Placa de Vídeo Gainward Rtx 5060 Ghost 8Gb Gddr7 Nvidia 128 bit",
+    "price": 214000
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo Zotac Gaming RTX 5060 Twin Edge OC NVIDIA GeForce, 8GB GDDR7, 128-bits, Dual Fan, Ray Tracing, DLSS 4 - ZT-B50600H-10A",
+    "price": 257400
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Monitor Gamer Lg UltraGear 32G403b, 32\", Fhd, 144Hz (Nativo), 1ms Mbr, FreeSync, Hdr10, sRGB 99%, Hdmi, DisplayPort, Alto-Falantes, Preto -",
+    "price": 80000
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Monitor Gamer Lg UltraGear 24”Ips Full Hd 180Hz 1ms (GtG) Nvidia G-Sync Amd FreeSync Hdr10 sRGB 99% Hdmi DisplayPort, Preto- 24Gs60f",
+    "price": 61300
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Micro-ondas Philco 20l Branco Pintura Limpa Fácil 1100w Pmo24b 127v",
+    "price": 32500
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Micro-ondas Philco 20L Branco Pintura Limpa Fácil Pmo24b 127v",
+    "price": 29900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Fonte Xpg Core Reactor Ii Ve 850W Modular 80 Plus Gold",
+    "price": 38800
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Fonte XPG CORESHIFT II VE, 850W, 80 Plus Gold, Preto - CORESHIFTIIVE850GD-BKCBR",
+    "price": 38100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "magalu",
+    "title": "Monitor Gamer Gigabyte 25\", FHD, 200Hz, 1ms, IPS, VRR, FreeSync Premium, HDR 10, Alto-falante Embutido - GS25F2-SA",
+    "price": 59200
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Monitor Gamer Gigabyte 25 Fhd 200hz 1ms Ips Vrr Freesync",
+    "price": 61300
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "Caixa De Som Jbl Boombox 4 210w Bluetooth Ip68 Bateria 34h",
+    "price": 195400
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Caixa de Som Jbl Boombox 4 Bluetooth Portátil 210W Bivolt Azul",
+    "price": 192900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "aliexpress",
+    "title": "Ssd Nvme M2 2Tb 7200 mbs Pcie 4.0 X 4 2280 Ps5 Kootion",
+    "price": 170800
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Ssd Kingston Nv3, 1Tb, M.2 2280, PCIe 4.0 x4, NVMe, Leitura: 6000",
+    "price": 81600
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Rtx 5060 Placa De Vídeo Nvidia Geforce Palit Rtx5060 8gb Infinity2 Oc",
+    "price": 255100
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo MSI RTX 5060 8G VENTUS 2X OC Geforce NVIDIA, 8GB, GDDR7, 128 bits, 2535 MHz, DLSS 4, Ray Tracing - G5060-8V2C",
+    "price": 255100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Monitor Gamer Asus Tuf 27\" QHD 255hz 0.3ms Fast Ips Hdr10",
+    "price": 106900
+   },
+   "b": {
+    "store": "terabyte",
+    "title": "Monitor Gamer Asus Tuf Gaming Vg27aqme5f, 27 Pol, Quad Hd, 255Hz, Fast Ips, 0.3ms",
+    "price": 114900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa de Vídeo Msi Rtx 5060 8G Shadow 2x Oc Gddr7 128 Bits",
+    "price": 260300
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo MSI RTX 5060 Cyclone OC NVIDIA GeForce, 8GB, GDDR7, 128-bit - 912-V812-205",
+    "price": 242900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Water Cooler Mach1 Logic Gk360 Rgb 360mm Preto",
+    "price": 18400
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa-Mãe Asus Tuf Gaming B550m-Plus, mATX, Ddr4 + Processador Amd Ryzen 7 5700x + Water Cooler Mach1 Logic, Rgb, 240mm",
+    "price": 165500
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "ZOTAC GAMING GEFORCE RTX 5060 8GB 128BITS GDDR7 TWIN EDGE OC ZT-B50600H-10M",
+    "price": 251200
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo Gigabyte RTX 5060 AERO OC 8G NVIDIA GeForce, 8GB GDDR7, 128bits, DLSS, Triple Fan, Ray Tracing - GV-N5060AERO OC-8GD",
+    "price": 260900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "ELG Suporte Articulado para Monitor 17 a 35 Polegadas Pistão a Gás Preto - R$ 114,37 #anúncio",
+    "price": 11437
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Suporte Mesa Articulado Rm-il-02-w Para 2 Monitores 15 A 34",
+    "price": 8800
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Placa de Vídeo Inno3d GeForce Rtx 5060 Twin X2 8Gb Gddr7",
+    "price": 263900
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo MSI RTX 5060 8G SHADOW 2X OC Geforce NVIDIA, 8GB GDDR7, 128 bits, 2535 MHz, DLSS 4, Ray Tracing - G5060-8S2C",
+    "price": 263900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Micro-ondas Philco 20l Branco Pintura Limpa Fácil 1100w Pmo24b 127v",
+    "price": 32500
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Microondas 20L Philco 1100W Receitas Préprogramadas PME25B 127v",
+    "price": 30500
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Notebook Acer Nitro V16 Anv16-I31-58Mm Intel Core 5 210H 8Gb Ram 512Gb Ssd Rtx 5060 Linux 16\" Wuxga",
+    "price": 641400
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo MSI RTX 5060 8G SHADOW 2X OC Geforce NVIDIA, 8GB GDDR7, 128 bits, 2535 MHz, DLSS 4, Ray Tracing - G5060-8S2C",
+    "price": 263900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Smart Tv Toshiba 50\" Qled Full Hd 60hz Vidaa com Wi-fi Dual Band e Bluetooth 50V45SS Bivolt",
+    "price": 157100
+   },
+   "b": {
+    "store": "aliexpress",
+    "title": "Toshiba 50\" Qled Smart Tv Full Hd 60Hz Vidaa with Dual Band Wi-Fi and Bluetooth 50V45Ss Bivolt",
+    "price": 147800
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Console Nintendo Switch 2 + Mario Kart World",
+    "price": 347700
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Console Nintendo Switch 2, Edição Bundle EA SPORTS FC 27 - NT000088NSW",
+    "price": 367000
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Placa de Vídeo Gigabyte Rtx 5060 Eagle Max Oc 8Gb Nvidia GeForce, 8Gb Gddr7, 128bit, Triple Fan",
+    "price": 254900
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Placa de Vídeo Inno3d GeForce Rtx 5060 Twin X2 8Gb Gddr7",
+    "price": 263900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Dr. Peanut - Pasta de amendoim (vários sabores) 600g",
+    "price": 2400
+   },
+   "b": {
+    "store": "netshoes",
+    "title": "Pasta de Amendoim 250g - Dr Peanut",
+    "price": 900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "aliexpress",
+    "title": "Ps5 PlayStation 5 Edição Digital 825Gb 1 Controle Branco Sony",
+    "price": 333600
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Playstation 5 Edição Digital 825gb 1 Controle Branco Sony",
+    "price": 374400
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "Notebook Gamer Acer Nitro V16 Rtx 5060 (Versão Com 16Gb Ram + W11)",
+    "price": 689800
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Notebook Asus Gamer V16 Rp213 Rtx5050 Core 5 8gb 512gb Linux",
+    "price": 534400
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "terabyte",
+    "title": "Placa Mãe Asus B650M-AYW WIFI, Chipset B650, AMD AM5, mATX, DDR5, 90MB1KI0-M0EAY0",
+    "price": 62900
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Placa Mãe ASRock B650m-Hdv/M.2, Chipset B650, Amd Am5, mATX, Ddr5",
+    "price": 77100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Fonte Mach1 Steady 750W 80 Plus Bronze Pfc Ativo Preto",
+    "price": 13500
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa-Mãe Asus Tuf Gaming B550m-Plus, mATX, Ddr4 + Processador Amd Ryzen 7 5700x + Water Cooler Mach1 Logic, Rgb, 240mm",
+    "price": 165500
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "terabyte",
+    "title": "Water Cooler Kalkan Aura Digital 360 Argb, 360mm, Intel-Amd, Preto, Klk00101",
+    "price": 19900
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Water Cooler Kalkan Aura Com Tela Lcd 360mm Argb Intel Amd Preto",
+    "price": 34200
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Placa de Vídeo RX 7600 Challenger ASRock AMD Radeon, 8GB GDDR6 - 90-GA41ZZ-00UANF",
+    "price": 161400
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Placa De Vídeo Asrock Rx 7600 Challenger 8gb Gddr6 Oc",
+    "price": 170900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Monitor Mini Led Tcl 25G64 25\" Full Hd Preto",
+    "price": 90900
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Monitor Gamer Tcl 25 Polegadas Qd-Mini Led Full Hd G64 300hz 1ms (Gtg) Freesync Hdr 600 Nits 25g64",
+    "price": 93100
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Notebook Acer Nitro 58mm C5 8gb Ram 512gb Ssd Rtx5060 Linux Preto",
+    "price": 659900
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Video Palit GeForce RTX 5060 WHITE OC 8GB GDDR7 128bit 3-DP e HDMI - NE75060U19P1-GB2063M",
+    "price": 242900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Caixa de Som Aiwa Boombox Light Plus Aws-Bbs-01-Lbl Bluetooth Ativa Portátil 200W Usb",
+    "price": 89100
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Caixa de Som Aiwa Boombox Plus 200W Bivolt Aws-Bbs-01-B",
+    "price": 104800
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa-mãe Asus p/Amd Am4 B550m-Plus Tuf Gaming 4xDDR4 mATX 90Mb14a0-C1bay0",
+    "price": 55100
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Placa-mãe Asus Tuf Gaming B550m-plus Amd Am4 4xddr4 Matx - 9",
+    "price": 59100
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Ar Condicionado 12000 BTUs Split Hi Wall Inverter Hitachi Frio Airhome 600 220V",
+    "price": 169800
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Ar Condicionado Split Hi Wall Inverter Vix 9000 BTU/h Frio 220 Volts",
+    "price": 132000
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Notebook Vaio Fe16 Amd Ryzen 7 5825U, Linux, 8Gb Ram 256Gb M.2 NVMe 16\" Ips - Cinza Grafite fe 16",
+    "price": 285700
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Notebook VAIO FE16 Intel Core i5-1334U - 13ª Gen Linux Debian 12 - 8GB RAM 256GB SSD Tela 16&quot; IPS WUXGA Antirreflexo - Cinza Grafite -",
+    "price": 319900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "pichau",
+    "title": "Processador AMD Ryzen 5 7600X3D, 6-Core, 12-Threads, 4.1GHz (4.7GHz Turbo), Cache 102MB, AM5, 100-100001721WOF",
+    "price": 132900
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Processador Amd Ryzen 7 9850X3d, 5.6GHz, Cache 104Mb, 8 Núcleos, 16 Threads, Am5, Com Vídeo Integrado - 100-100001973Wof",
+    "price": 266900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Notebook Aorus Master 16 Byh Core Ultra 9 Rtx 5080 32GB 1TB OLED QHD 240Hz Gigabyte",
+    "price": 2699100
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo Palit RTX 5080 GamingPro NVIDIA GeForce, 16GB, GDDR7, ARGB SYNC EVO, G-Sync, Ray Tracing, DLSS 4 - NE75080019T2-GB2031Y",
+    "price": 999900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "pichau",
+    "title": "Placa de Video Xfx Swift Radeon Rx 9070 Gre Triple Fan Gaming, 12Gb, Gddr6, 192-bit, Rx-97Gre29b7",
+    "price": 413900
+   },
+   "b": {
+    "store": "terabyte",
+    "title": "Placa de Vídeo ASRock AMD Radeon RX 9070 Challenger, 16GB, GDDR6, FSR, Ray Tracing, 90-GA5NZZ-00UANF",
+    "price": 439900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "PlayStation5 Slim Digital 825GB – Pacote ASTRO BOT e Gran Turismo 7 - R$ 3.719,90 #anúncio",
+    "price": 371990
+   },
+   "b": {
+    "store": "aliexpress",
+    "title": "PlayStation 5 Edição Digital 825Gb - Astro Bot e Gran Turismo 7",
+    "price": 367800
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "pichau",
+    "title": "Placa Mae AsRock B850M-X R2.0, DDR5, Socket AMD AM5, M-ATX, Chipset AMD B850, B850M-X-R2.0",
+    "price": 62900
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Placa Mãe ASRock B650m-Hdv/M.2, Chipset B650, Amd Am5, mATX, Ddr5",
+    "price": 77100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa-Mãe Husky Nexus B450, M.2 NVMe, Ddr4 3200MHz, Ryzen 5000/3000/2000, Micro-Atx, 64Gb Dual Channel - Hpm450",
+    "price": 26300
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Placa-mãe Husky Nexus B450 Micro-atx M.2 Nvme Ddr4 64gb Preto",
+    "price": 26300
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Micro-ondas Philco 20l Branco Pintura Limpa Fácil 1100w Pmo24b 127v",
+    "price": 32500
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Micro-ondas Philco 28L Branco Pintura Limpa Fácil Pmo30b 110V",
+    "price": 38000
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "Processador Amd Ryzen 7 5700x, 3,4 GHz, 8 núcleos, 16 threads, cache de 32 Mb, soquete Am4, Oem",
+    "price": 96500
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Ryzen 7 5700x (4.6ghz Max) - Novo (sem Caixa Box Ou Cooler)",
+    "price": 87800
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Placa de Vídeo ASRock Rx 9070 Challenger Amd Radeon, Led, 16Gb, Gddr6",
+    "price": 443600
+   },
+   "b": {
+    "store": "pichau",
+    "title": "Placa de Video Xfx Swift Radeon Rx 9070 Gre Triple Fan Gaming, 12Gb, Gddr6, 192-bit, Rx-97Gre29b7",
+    "price": 413900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Processador Amd Ryzen 5 5500 3.6GHz 4.2GHz Max Turbo Cache 16Mb Am4",
+    "price": 40000
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Amd Ryzen 5 5500x3D Processador, 4.0GHz Max Turbo, Cache 96Mb, Am4, (Novo S/Box) Ddr4",
+    "price": 125000
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Notebook ASUS Vivobook 15 M1502YA AMD Ryzen 7 5825U 8GB Ram 512GB SSD Linux 15,6\" FHD Silver - NJ611",
+    "price": 251000
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Notebook Acer Nitro 58mm C5 8gb Ram 512gb Ssd Rtx5060 Linux Preto",
+    "price": 659900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Caixa De Som Boombox Aiwa Aws-Bbs-01-B 200w Ip66 30hs De Bateria",
+    "price": 106000
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Caixa de Som Aiwa Boombox Plus BBS-01-B, Bluetooth, 200W RMS, IP66, 30 Horas de Bateria, Preto - 4899-01",
+    "price": 90900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Notebook Gamer Acer Nitro V15, Amd Ryzen 7 7735Hs, 8Gb Ram, Ssd 512Gb, Rtx 4050, Tela 15.6\" Full Hd Ips 165Hz, Linux - Anv15-41-R6j0",
+    "price": 517400
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Notebook ASUS TUF Gaming F16 FX607VU RTX4050 Intel Core 5 210H 8Gb Ram 512Gb SSD Linux 16\" LED RL054",
+    "price": 595100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Monitor Gamer Curvo Aoc Agon G4z 27\" 300Hz 0,3ms Hdr10 Base Ajustável C27g4z/P Preto",
+    "price": 89100
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Monitor Gamer Curvo AOC 27\", Full HD, 280Hz, 0.3ms, Fast VA, Adaptive-Sync, HDR 10, Altura Ajustável, Preto - C27G4Z/P",
+    "price": 91700
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Ssd Nvme Kingston Nv3 1Tb 6000Mb/S Pci 4.0",
+    "price": 79400
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Ssd Kingston Nv3, 1Tb, M.2 2280, PCIe 4.0 x4, NVMe, Leitura: 6000",
+    "price": 81600
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Placa gráfica Gigabyte Radeon Rx 9050 Gaming Oc 8gb Gddr6",
+    "price": 179600
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Placa de Vídeo Gigabyte Amd Radeon Rx 9050 Gaming Oc, 8Gb Gddr6 - 128Bits Gv-R9050gaming Oc-8Gd",
+    "price": 187400
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa de Vídeo Gigabyte Rtx 5060 Eagle Max Oc 8Gb Gddr7",
+    "price": 251100
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Rtx 5060 Placa De Vídeo Nvidia Geforce Palit Rtx5060 8gb Infinity2 Oc",
+    "price": 255100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Water Cooler Mach1 Logic, Rgb, 240mm, Amd e Intel, Branco - Gk240w",
+    "price": 14700
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa-Mãe Asus Tuf Gaming B550m-Plus, mATX, Ddr4 + Processador Amd Ryzen 7 5700x + Water Cooler Mach1 Logic, Rgb, 240mm",
+    "price": 165500
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Notebook Gamer Acer Nitro V16 ANV16-I31-58MM Intel Core 5 210H 8GB RAM 512GB SSD RTX 5060 Linux 16\" WUXGA",
+    "price": 659900
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Video Inno3D RTX 5060 Twin X2 NVIDIA Geforce, 8GB, 128bits, 2497MHz, FP4 e DLSS 4, Ray Tracing - N50602-08D7-195071N",
+    "price": 251900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "Apple iPhone 15 (128 Gb) — Preto",
+    "price": 347900
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Apple iPhone 16e de 128 Gb — Preto 128Gb",
+    "price": 302900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa de Vídeo Gigabyte Rtx 5060 Eagle Max Oc 8Gb Gddr7",
+    "price": 251100
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Video Palit GeForce RTX 5060 8GB INFINITY 2 OC GDDR7 128bits - NE75060V19P1-GB2063L",
+    "price": 255100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "aliexpress",
+    "title": "Apple iPhone 16e 128Gb Preto 6,1\" 48Mp iOS 5G",
+    "price": 279700
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "iPhone 16e (128 Gb) - Preto",
+    "price": 295400
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Fonte Mach1 Steady 750W 80 Plus Bronze Pfc Ativo Preto",
+    "price": 13500
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa Mãe Msi A520m-A Pro + Processador Amd Ryzen 5 5500F + Air Cooler Mach1 Artic",
+    "price": 78100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "aliexpress",
+    "title": "Monitor Gamer Curvo Aoc Agon Quad 34″ Ultrawide Wqhd 180Hz 0,5ms Base Ajustável U34g4c",
+    "price": 136100
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Monitor Gamer Curvo Aoc Agon Quad 34\" Ultrawide Wqhd 180Hz 0,5ms Base Ajustável U34g4c",
+    "price": 157900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa-mãe Asus Tuf Gaming B550m-plus Amd Am4 Matx Ddr4 Preto",
+    "price": 59700
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa-Mãe Msi A520m-a Pro, Amd Am4, Matx, Ddr4, Preto - A520m-a Pro",
+    "price": 31100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Placa De Video Gigabyte Geforce Rtx 5060 Eagle Max Oc, 8gb",
+    "price": 251600
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo MSI RTX 5060 8G VENTUS 2X OC Geforce NVIDIA, 8GB, GDDR7, 128 bits, 2535 MHz, DLSS 4, Ray Tracing - G5060-8V2C",
+    "price": 255100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "terabyte",
+    "title": "Kit Upgrade Ryzen 7 5700X + Placa Mãe Chipset A520M",
+    "price": 123900
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Ryzen 7 5700x - Com Caixa Novo",
+    "price": 97900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Rtx 5060 Placa De Vídeo Nvidia Geforce Palit Rtx5060 8gb Infinity2 Oc",
+    "price": 255100
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo Zotac Gaming RTX 5060 Twin Edge OC NVIDIA GeForce, 8GB GDDR7, 128-bits, Dual Fan, Ray Tracing, DLSS 4 - ZT-B50600H-10A",
+    "price": 257400
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Monitor Gamer TCL Mini LED 25\", 300Hz, 1ms, HDR 600, Altura Ajustável - 25G64",
+    "price": 89600
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Monitor Mini Led Tcl 25G64 25\" Full Hd Preto",
+    "price": 90900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Monitor Gamer TCL Mini LED 25\", 300Hz, 1ms, HDR 600, Altura Ajustável - 25G64",
+    "price": 89600
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Monitor Gamer Tcl 25\" Qled Mini Led 300Hz Full Hd G64 1ms (GtG) Freesync Hdr 600 nits 25G64",
+    "price": 96600
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa de Video Inno3d GeForce Rtx 5070 Twin X2 Oc White, 12Gb, Gddr7, 192-bit, N50702-12D7x-195064W",
+    "price": 520000
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo ASUS PRIME RTX 5070 OC 12G WHITE NVIDIA Geforce, 12GB, GDDR7, OpenGL 4.6, 2587 MHz, Triple Fan, DLSS 4 - 90YV0M19-M0NA00",
+    "price": 458900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "magalu",
+    "title": "Notebook Gamer Acer Nitro V 15 AMD Ryzen 7 RTX 4050 8GB Linux 15.6\"",
+    "price": 479400
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Notebook Gamer Lenovo LOQ 15IRX9 Intel Core i7-13645HX 16GB 512GB SSD RTX 4050 Linux 15.6\" - 83KHS00600 Luna Grey",
+    "price": 543900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Notebook Gamer Acer Nitro V15, Amd Ryzen 7 7735Hs, 8Gb Ram, Ssd 512Gb, Rtx 4050, Tela 15.6\" Full Hd Ips 165Hz, Linux - Anv15-41-R6j0",
+    "price": 517400
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Notebook ASUS Vivobook 15 M1502YA AMD Ryzen 7 5825U 16GB Ram 512GB SSD Linux 15,6\" FHD Silver NJ612",
+    "price": 350000
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa-Mãe Msi B550m Gaming Plus WiFi6E, Amd Am4, Ddr4, Wi-Fi 6E, Bluetooth 5.2, Preto e Prata - B550m Gaming Plus Wifi6e",
+    "price": 48400
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Placa-mãe Msi B550m Gaming Plus Wifi6e, Amd Am4, Micro Atx",
+    "price": 56300
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Watercooler Geometric Future Eskimo Junior Neon 36 Rgb Preto",
+    "price": 25500
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Water Cooler Geometric Future Eskimo Pro 42 RGB Branco",
+    "price": 28100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Headset Sem Fio Havit Fuxi H6",
+    "price": 13500
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Headset Gamer Sem Fio Havit Fuxi H3",
+    "price": 14300
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "aliexpress",
+    "title": "Cpu Ryzen 7 5700x Ddr4 Am4 Processador Amd R7 Novo",
+    "price": 91900
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Processador Ryzen 7 5700x 3.4ghz (4.6ghz Max) - Novo S/Box (Oem)",
+    "price": 96600
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Monitor Gamer Aoc 23,8 Full Hd 144hz Agon G50 0,5ms",
+    "price": 47200
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Monitor Gamer Aoc 23,8\" Full Hd 144Hz Agon G50 Ips 0,5ms 24G50f/57 Hdmi DisplayPort G-Sync 24\"",
+    "price": 47700
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Câmera de Segurança Wi-Fi A28b 4K Dupla Lente Visão Noturna Colorida Full Hd Externa Prova D'água Ip66 Sensor Movimento iCSee Duoseg",
+    "price": 7600
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Câmera Inteligente Externa Velds, Wi-Fi, 2K, Resistente à Água IP66, Visão Noturna Infravermelha, Detecção de Movimento, Áudio Bidirecional,",
+    "price": 9400
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Notebook Lenovo IdeaPad Slim 3 Ryzen 7",
+    "price": 349900
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Notebook Lenovo IdeaPad Slim 3 Amd Ryzen 5 7535Hs",
+    "price": 262300
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Ar Condicionado Inverter Hisense Hi Wall Eco Plus R-32 sem Wi-fi 9.000 Btus Frio 220v",
+    "price": 139300
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Ar Condicionado Split Hi Wall Inverter R-32 Airvolution Lite Midea 9.000 BTUs Frio Monofásico",
+    "price": 132900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "Notebook Gamer Acer Nitro V16 Rtx 5060 (Versão Com 16Gb Ram + W11)",
+    "price": 689800
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo Gigabyte RTX 5060 EAGLE MAX OC 8GB NVIDIA GeForce, 8GB GDDR7, 128bit, Triple Fan, Ray Tracing - GV-N5060EAGLEMAX OC-8GD",
+    "price": 263900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa de Vídeo NVIDIA GeForce ZOTAC Gaming RTX5060 8GB Twin Edge OC GDDR7 128BITS ZT-B50600H-10M",
+    "price": 261100
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Placa de Vídeo Inno3d GeForce Rtx 5060 Twin X2 8Gb Gddr7",
+    "price": 263900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Console Nintendo Switch Lite - Turquesa",
+    "price": 111200
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Console Nintendo Switch Lite 32gb Azul Turquesa Standard Tela 5,5'' Cor Azul-turquesa",
+    "price": 121000
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "Placa Mãe Asus Tuf Gaming B650m-e Wifi, Chipset B650, Amd Am5, Matx, Ddr5, 90Mb1fv0-M0eay0",
+    "price": 105900
+   },
+   "b": {
+    "store": "terabyte",
+    "title": "Placa Mãe Asus B650M-AYW WIFI, Chipset B650, AMD AM5, mATX, DDR5, 90MB1KI0-M0EAY0",
+    "price": 62900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Processador Amd Ryzen 7 5700x, 3.4GHz (4.6GHz Max Turbo), Cache 36Mb, 8 Núcleos, 16 Threads, Am4, Sem Vídeo Integrado - 100-100000926Wof",
+    "price": 92900
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Processador Amd Ryzen 7 5700, 3.7 GHz (4.6GHz Max Turbo), Cache 4Mb, 8 Núcleos, 16 Threads, Am4",
+    "price": 74100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Notebook Gamer Lenovo Loq 15Irx9 i5-13450Hx 16Gb 512Gb Ssd Rtx 4050",
+    "price": 533900
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Notebook Gamer Lenovo LOQ 15IRX9 Intel Core i7-13645HX 16GB 512GB SSD RTX 4050 Linux 15.6\" - 83KHS00600 Luna Grey",
+    "price": 543900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Monitor Gamer Aoc Agon Cs2 25\" 310Hz 0.3ms Hdr400 Ips Base Ajustável Cs25g cs 2",
+    "price": 109400
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Monitor Gamer Curvo AOC Agon 34\", Ultrawide, WQHD, 180Hz, 0.5ms, Fast VA, Adaptive-Sync, Altura Ajustável, Preto - U34G4C",
+    "price": 144400
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Placa Mãe Msi A520m-A Pro + Processador Amd Ryzen 5 5500F + Air Cooler Mach1 Artic",
+    "price": 78100
+   },
+   "b": {
+    "store": "terabyte",
+    "title": "Kit Upgrade, Amd Ryzen 5 5500F + Placa Mãe Chipset B450",
+    "price": 78900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "Notebook Lenovo IdeaPad Slim 3 Amd Ryzen 5 7535Hs",
+    "price": 262300
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Notebook Lenovo Ideapad Slim 3 Ryzen 5 8gb 512gb Linux",
+    "price": 271900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Lavadora de Alta Pressão WAP Eco Fit Plus 1700 PSI 1600W",
+    "price": 22700
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Wap Lavadora de Alta Pressão Wl 1800 1500 Psi 1400W 220V",
+    "price": 21900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Notebook Positivo Vision R15 Amd Ryzen 5-5500U Linux 16Gb Ram 256Gb Ssd Full Hd 15.6” Tela Ips",
+    "price": 276900
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Notebook Acer Aspire 5 A515-45-R478, AMD Ryzen 5-5500U, 16GB RAM, 512GB SSD, 15.6\" FHD LED, IPS, 60Hz, Linux Gutta - NX.AYDAL.00R",
+    "price": 284600
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "kabum",
+    "title": "Placa de Vídeo Inno3D Rtx 5080 X3 Nvidia GeForce, 16Gb, Gddr7, G-Sync, Ray Tracing, Dlss 4, Hdr - N50803-16D7-176068N",
+    "price": 917900
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Rtx 5080 Placa de vídeo Msi Inspire 3x Oc Black 16Gb GeForce Rtx5080 16Gb",
+    "price": 1249900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "amazon",
+    "title": "Apple iPhone 16 (128Gb) – Branco",
+    "price": 439900
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Apple iPhone 16e 128Gb Preto",
+    "price": 293900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Celular Samsung Galaxy A57 5g 128gb, 8gb Ram, Câmera 50mp, Ip68, Super Amoled 6.7 , Recursos Ai - Azul-escuro",
+    "price": 157400
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Samsung Combo Galaxy A57 5G (256Gb) - Cinza + Galaxy Buds Core - Preto",
+    "price": 188600
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "terabyte",
+    "title": "Water Cooler Kalkan Aura Digital 360 Argb, 360mm, Intel-Amd, Preto, Klk00101",
+    "price": 19900
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Water cooler Digital Kalkan 360mm 3x Fans Argb 360mm Preto",
+    "price": 21200
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "(Caiu Mais) Monitor Aoc 22\" 120Hz 1ms Gaming Hdmi 22B35hm23 Preto",
+    "price": 30800
+   },
+   "b": {
+    "store": "shopee",
+    "title": "Monitor Gamer 120Hz 1ms Aoc B35 22B35hm23 21,5\" Full Hd Mprt 1 Vga",
+    "price": 36300
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Caixa de Som Bluetooth Jbl Boombox 4, com Auracast, Ip68 Bivolt Preta",
+    "price": 193800
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Caixa de Som Jbl Boombox 4 Bluetooth Portátil 210W Bivolt",
+    "price": 191900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Placa de Vídeo Gainward Rtx 5060 Ghost 8Gb Gddr7 Nvidia 128 bit",
+    "price": 214000
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo Gigabyte RTX 5060 AERO OC 8G NVIDIA GeForce, 8GB GDDR7, 128bits, DLSS, Triple Fan, Ray Tracing - GV-N5060AERO OC-8GD",
+    "price": 260900
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Lava E Seca Samsung Wd11m Com Digital Inverter Branca 11kg Cor Branco",
+    "price": 273500
+   },
+   "b": {
+    "store": "amazon",
+    "title": "Lava e Seca Philco 11kg Pls11a Eco Invertplus 16 Programas Lavagem Branca",
+    "price": 217400
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "mercadolivre",
+    "title": "Placa De Video Msi Geforce Rtx 5060 Cyclone Oc 8gb Gddr7",
+    "price": 250900
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Placa de Vídeo Zotac Gaming RTX 5060 Twin Edge OC NVIDIA GeForce, 8GB GDDR7, 128-bits, Dual Fan, Ray Tracing, DLSS 4 - ZT-B50600H-10A",
+    "price": 257400
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Console Sony Playstation 5 Slim Edição Digital, PS5, 825GB - R$ 3.587,91 #anúncio",
+    "price": 358791
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Console Playstation 5 Slim Edição Digital 825Gb",
+    "price": 379900
+   },
+   "same": true
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa de Vídeo Msi Nvidia Geforce Rtx 5050 Gaming Oc 8G 912-V538-009",
+    "price": 211500
+   },
+   "b": {
+    "store": "mercadolivre",
+    "title": "Notebook Asus Gamer V16 Rp213 Rtx5050 Core 5 8gb 512gb Linux",
+    "price": 534400
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Placa de Video Xfx Radeon Rx 7600 Speedster Swft210, 8Gb, Gddr6, 128-bit, Rx-76Pswftfy",
+    "price": 188100
+   },
+   "b": {
+    "store": "kabum",
+    "title": "Precin! Placa de Vídeo RX 7600 Challenger ASRock AMD Radeon, 8GB GDDR6 - 90-GA41ZZ-00UANF",
+    "price": 167100
+   },
+   "same": false
+  },
+  {
+   "a": {
+    "store": "shopee",
+    "title": "Suporte Articulado Para Dois Monitores Zinnia Nimbo 210, 13 Pol. a 32 Pol",
+    "price": 11200
+   },
+   "b": {
+    "store": "pichau",
+    "title": "Suporte Articulado Para Monitor Zinnia Nimbo 110 Navy Blue Edition, 13 Pol a 32 Pol, Preto, ZNO-NBLUE110-BL01-V2",
+    "price": 5400
+   },
+   "same": false
+  }
+ ],
+ "code_frequency": {
+  "00R": 1,
+  "100-100000926WOF": 1,
+  "100-100001721WOF": 2,
+  "100-100001973WOF": 1,
+  "13A": 3,
+  "15IRX9": 3,
+  "16E": 4,
+  "210H": 4,
+  "22B35HM23": 2,
+  "24G50F": 4,
+  "24GS60F": 1,
+  "25G64": 10,
+  "30HS": 1,
+  "32G403B": 3,
+  "34H": 4,
+  "4XDDR4": 3,
+  "5-5500U": 2,
+  "50V45SS": 2,
+  "5500F": 4,
+  "5500X3D": 3,
+  "5700X": 15,
+  "5825U": 6,
+  "7535HS": 2,
+  "7600X3D": 2,
+  "7735HS": 2,
+  "83KHS00600": 1,
+  "90-GA41ZZ-00UANF": 2,
+  "90-GA5NZZ-00UANF": 2,
+  "90MB14A0-C1BAY0": 1,
+  "90MB1FV0-M0EAY0": 1,
+  "90MB1KI0-M0EAY0": 1,
+  "90YV0M19-M0NA00": 1,
+  "912-V538-009": 1,
+  "912-V812-205": 1,
+  "9850X3D": 1,
+  "A28B": 1,
+  "A515-45-R478": 1,
+  "A520M": 2,
+  "A520M-A": 8,
+  "A57": 6,
+  "ANV15-41-R6J0": 1,
+  "ANV16-I31-58MM": 2,
+  "AWS-BBS-01-B": 2,
+  "AWS-BBS-01-LBL": 1,
+  "B35": 2,
+  "B450": 4,
+  "B550M": 10,
+  "B550M-PLUS": 8,
+  "B650": 7,
+  "B650M-AYW": 2,
+  "B650M-E": 4,
+  "B650M-HDV": 2,
+  "B850": 9,
+  "B850M-X": 2,
+  "B850M-X-R2": 1,
+  "BBS-01-B": 1,
+  "C27G4Z": 3,
+  "CORESHIFTIIVE850GD-BKCBR": 1,
+  "CS25G": 3,
+  "F16": 3,
+  "FE16": 5,
+  "FX607VU": 1,
+  "G50": 8,
+  "G5060-8S2C": 1,
+  "G5060-8V2C": 1,
+  "G64": 4,
+  "GK240W": 1,
+  "GK360": 2,
+  "GS25F2-SA": 3,
+  "GV-N5060AERO": 1,
+  "GV-N5060EAGLEMAX": 1,
+  "GV-R9050GAMING": 2,
+  "HPM450": 1,
+  "I5-1334U": 2,
+  "I5-13450HX": 2,
+  "I7-13645HX": 1,
+  "INFINITY2": 2,
+  "INNO3D": 11,
+  "KLK00101": 2,
+  "M1502YA": 2,
+  "MACH1": 13,
+  "N50602-08D7-195071N": 1,
+  "N50702-12D7X-195064W": 1,
+  "N50803-16D7-176068N": 1,
+  "NE75060U19P1-GB2063M": 1,
+  "NE75060V19P1-GB2063L": 1,
+  "NE75080019T2-GB2031Y": 1,
+  "NJ611": 2,
+  "NJ612": 2,
+  "NT000088NSW": 1,
+  "OC-8GD": 4,
+  "PLAYSTATION5": 2,
+  "PLS11A": 1,
+  "PME25B": 1,
+  "PMO24B": 2,
+  "PMO30B": 2,
+  "R-32": 5,
+  "R15": 1,
+  "RL054": 1,
+  "RM-IL-02-W": 1,
+  "RP213": 1,
+  "RTX4050": 9,
+  "RTX5050": 6,
+  "RTX5060": 32,
+  "RTX5070": 10,
+  "RTX5080": 6,
+  "RX-76PSWFTFY": 1,
+  "RX-97GRE29B7": 1,
+  "RX7600": 8,
+  "RX9050": 4,
+  "RX9070": 4,
+  "SWFT210": 1,
+  "U34G4C": 6,
+  "V15": 4,
+  "V16": 4,
+  "VG27AQME5F": 5,
+  "W11": 2,
+  "WD11M": 2,
+  "ZNO-NBLUE110-BL01-V2": 1,
+  "ZT-B50600H-10A": 1,
+  "ZT-B50600H-10M": 2
+ }
+}
