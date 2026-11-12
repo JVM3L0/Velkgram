@@ -201,6 +201,13 @@ class SqliteOfferRepository:
             c.executemany(_INSERT_MATCH, [_match_params(m) for m in ms])
             return c.total_changes - before
 
+    def delete_offer_matches(self, channel_id: int, message_id: int) -> int:
+        with transaction(self._conn) as c:
+            return c.execute(
+                "DELETE FROM offer_matches WHERE channel_id = ? AND message_id = ?",
+                (channel_id, message_id),
+            ).rowcount
+
     def delete_matches(self, wish_id: int, since: datetime | None) -> int:
         with transaction(self._conn) as c:
             if since is None:

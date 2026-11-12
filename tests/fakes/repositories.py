@@ -256,6 +256,12 @@ class InMemoryOfferRepository:
     def add_matches(self, ms: Sequence[OfferMatch]) -> int:
         return sum(1 for m in ms if self.add_match(m))
 
+    def delete_offer_matches(self, channel_id: int, message_id: int) -> int:
+        doomed = [k for k in self._matches if k[1] == channel_id and k[2] == message_id]
+        for k in doomed:
+            del self._matches[k]
+        return len(doomed)
+
     def delete_matches(self, wish_id: int, since: datetime | None) -> int:
         doomed = [
             k

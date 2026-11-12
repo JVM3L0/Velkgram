@@ -118,9 +118,14 @@ class OfferBuilder:
             return False
         if not matchable:
             return True
-        found = self._matches_for(offer, self._wishes.all, source, now)
-        if found:
-            self._repo.add_matches(found)
+        if offer.kind is OfferKind.product:
+            found = self._matches_for(offer, self._wishes.all, source, now)
+            if found:
+                self._repo.add_matches(found)
+        else:
+            # A coupon or channel chatter matches no wish; drop matches stored before it was
+            # recognised (a rebuild only ever adds matches).
+            self._repo.delete_offer_matches(offer.channel_id, offer.message_id)
         if self._publish is not None and source == MatchSource.live and m.source == "live":
             self._queue_coupon_event(m, offer, now)
         return True
@@ -227,7 +232,7 @@ class OfferBuilder:
         now: datetime,
     ) -> list[OfferMatch]:
         # A coupon post lists many products; its text would match wishes by accident.
-        if offer.deleted or offer.norm_text is None or offer.kind == OfferKind.coupon:
+        if offer.deleted or offer.norm_text is None or offer.kind is not OfferKind.product:
             return []
         return [
             OfferMatch(

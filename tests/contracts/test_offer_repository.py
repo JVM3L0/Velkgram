@@ -263,3 +263,12 @@ def test_recent_store_offers_is_newest_first_and_limited(handle: Handle) -> None
         handle.repo.upsert(_offer(i, posted_at=T0 + timedelta(minutes=i)))
     assert _recent(handle, T0) == [4, 3, 2, 1]
     assert _recent(handle, T0, limit=2) == [4, 3]
+
+
+def test_delete_offer_matches_removes_only_that_posts_matches(handle: Handle) -> None:
+    handle.repo.add_match(_match(message_id=1))
+    handle.repo.add_match(_match(message_id=2))
+    handle.repo.add_match(_match(wish_id=2, message_id=1))
+    assert handle.repo.delete_offer_matches(10, 1) == 2  # both wishes' matches of message 1
+    assert len(handle.repo.priced_points(1)) == 1  # message 2 of wish 1 stays
+    assert handle.repo.delete_offer_matches(10, 1) == 0  # idempotent

@@ -1,6 +1,8 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
+import pytest
+
 from velkgram.offers.domain.build import offer_from_message, wish_fingerprint
 from velkgram.offers.domain.models import CouponTier, OfferKind
 from velkgram.shared.deals import WishView
@@ -269,3 +271,38 @@ def test_classify_message_applies_the_same_structural_signal() -> None:
 
     assert classify_message(_msg(WORDY, has_photo=False)).is_coupon_post
     assert not classify_message(_msg(WORDY, has_photo=True)).is_coupon_post
+
+
+CHATTER = ["Menor preço histórico?", "Precin", "Última chance!", "BARATO EM", "🔥", "PQP"]
+
+
+@pytest.mark.parametrize("text", CHATTER)
+def test_channel_chatter_with_no_price_link_store_or_photo_is_not_an_offer(text: str) -> None:
+    offer = offer_from_message(_msg(text, has_photo=False), sold_out=False, deleted=False, now=NOW)
+    assert offer is not None  # still stored, so nothing is lost
+    assert offer.kind is OfferKind.chatter
+    assert offer.price_cents is None and offer.comparable is False
+
+
+@pytest.mark.parametrize(
+    "m",
+    [
+        _msg("Menor preço histórico?", has_photo=True),  # a photo may carry the product
+        _msg("Menor preço histórico?", ("https://amzn.to/x",), has_photo=False),  # a link
+        _msg("Monitor por R$ 999", has_photo=False),  # a price
+        _msg("Menor preço histórico? na Kabum", ("https://www.kabum.com.br/p/1",), has_photo=False),
+    ],
+)
+def test_a_post_with_a_photo_a_link_or_a_price_stays_a_product(m: MessageData) -> None:
+    offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
+    assert offer is not None and offer.kind is OfferKind.product
+
+
+def test_a_coupon_or_a_list_is_never_chatter() -> None:
+    coupon = offer_from_message(
+        _msg("iFood R$ 12 OFF Restaurantes: BFFOOD", has_photo=False),
+        sold_out=False,
+        deleted=False,
+        now=NOW,
+    )
+    assert coupon is not None and coupon.kind is OfferKind.coupon

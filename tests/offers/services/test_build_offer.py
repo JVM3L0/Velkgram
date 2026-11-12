@@ -6,7 +6,7 @@ import pytest
 
 from tests.fakes.clock import FakeClock
 from tests.fakes.repositories import FakeMessageSource, FakeWishReader, InMemoryOfferRepository
-from velkgram.offers.domain.models import MatchSource
+from velkgram.offers.domain.models import MatchSource, OfferMatch
 from velkgram.offers.ports.messages import SourceMessage
 from velkgram.offers.services.build_offer import OfferBuilder
 from velkgram.offers.services.rebuild import rebuild_offers
@@ -562,3 +562,28 @@ async def test_event_link_is_the_redeem_link(
     [event] = published.events
     assert isinstance(event, CouponMatchedWish)
     assert event.link == COUPON_LINKS[0]
+
+
+def test_chatter_is_stored_but_never_matches_a_wish(
+    repo: InMemoryOfferRepository, wishes: FakeWishReader
+) -> None:
+    wishes.views = [_wish(required=(("precin",),), max_price_cents=30000)]
+    wishes.enabled_ids = {1}
+    builder = OfferBuilder(repo, wishes, FakeClock(NOW))
+    assert builder.ingest(_msg("Precin", links=(), has_photo=False))
+    stored = repo.get(1, 2)
+    assert stored is not None and stored.kind.value == "chatter"
+    assert repo.priced_points(1) == []
+
+
+def test_reclassifying_a_post_as_chatter_drops_the_matches_it_had(
+    repo: InMemoryOfferRepository, wishes: FakeWishReader
+) -> None:
+    wishes.views = [_wish(required=(("precin",),), max_price_cents=30000)]
+    wishes.enabled_ids = {1}
+    builder = OfferBuilder(repo, wishes, FakeClock(NOW))
+    # before the rule existed, the same post was a product and matched the wish
+    repo.add_match(OfferMatch(1, 1, 2, None, NOW, MatchSource.live, NOW))
+    assert len(repo.priced_points(1)) == 1
+    builder.ingest(_msg("Precin", links=(), has_photo=False), source=MatchSource.retro)
+    assert repo.priced_points(1) == []

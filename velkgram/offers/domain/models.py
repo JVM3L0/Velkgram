@@ -19,6 +19,7 @@ class RetroStatus(StrEnum):
 class OfferKind(StrEnum):
     product = "product"
     coupon = "coupon"
+    chatter = "chatter"  # channel talk with nothing to buy or open: kept, never shown as an offer
 
 
 @dataclass(frozen=True, slots=True)

@@ -50,6 +50,21 @@ def classify_message(m: MessageData) -> MessageClass:
     return MessageClass(store=store, is_coupon_post=deal is not None)
 
 
+def _kind(
+    deal: CouponDeal | None, price: int | None, link: str | None, store: str | None, m: MessageData
+) -> OfferKind:
+    """Coupon, channel chatter, or a product.
+
+    Chatter ("Precin", "Última chance!", "Menor preço histórico?") has no price, no link, no store
+    and no photo: nothing to buy or open. It stays stored but is never shown as an offer.
+    """
+    if deal is not None:
+        return OfferKind.coupon
+    if price is None and link is None and store is None and not m.links and not m.has_photo:
+        return OfferKind.chatter
+    return OfferKind.product
+
+
 def offer_from_message(
     m: MessageData, *, sold_out: bool, deleted: bool, now: datetime
 ) -> Offer | None:
@@ -57,12 +72,14 @@ def offer_from_message(
     if text is None and not m.links:
         return None
     link, store, title, deal, listing = _classify(m)
+    price = None if deal or listing else extract_price(m.text)
+    kind = _kind(deal, price, link, store, m)
     return Offer(
         channel_id=m.channel_id,
         message_id=m.message_id,
         posted_at=m.date,
         title=title,
-        price_cents=None if deal or listing else extract_price(m.text),
+        price_cents=price,
         store=store,
         main_link=link,
         has_photo=m.has_photo,
@@ -73,8 +90,8 @@ def offer_from_message(
         sold_out=sold_out,
         deleted=deleted,
         updated_at=now,
-        comparable=False if deal else is_comparable(title, text),
-        kind=OfferKind.coupon if deal else OfferKind.product,
+        comparable=False if deal or kind is OfferKind.chatter else is_comparable(title, text),
+        kind=kind,
         coupons=_codes(m.text, deal),
         coupon_discount=(deal.discount or None) if deal else None,
         coupon_min_cents=deal.min_cents if deal else None,

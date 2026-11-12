@@ -22,6 +22,10 @@ class OfferRepository(Protocol):
         """Insert a batch in one transaction, ignoring duplicates; return rows inserted."""
         ...
 
+    def delete_offer_matches(self, channel_id: int, message_id: int) -> int:
+        """Delete every wish's match of one post; return how many were removed."""
+        ...
+
     def delete_matches(self, wish_id: int, since: datetime | None) -> int:
         """Delete all of the wish's matches, or only those with `posted_at >= since`."""
         ...
