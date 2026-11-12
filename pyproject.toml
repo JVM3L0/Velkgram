@@ -21,7 +21,15 @@ dependencies = [
 velkgram = "velkgram.apps.cli:main"
 
 [dependency-groups]
-dev = ["pytest", "pytest-asyncio", "ruff", "pyright", "import-linter", "ty"]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "pyright",
+    "import-linter",
+    "ty",
+    "pytest-xdist>=3.8.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["velkgram"]
