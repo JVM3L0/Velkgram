@@ -15,6 +15,18 @@ from velkgram.shared.ports import Clock
 PASSWORD = "secret"
 
 
+class FakeTestSender:
+    """Stands in for the Telegram test alert: records chat ids, answers with `result`."""
+
+    def __init__(self, result: str | None = None) -> None:
+        self.chats: list[int] = []
+        self.result = result
+
+    async def __call__(self, chat_id: int) -> str | None:
+        self.chats.append(chat_id)
+        return self.result
+
+
 def make_settings(tmp_path: Path) -> Settings:
     return Settings(
         db_path=tmp_path / "web.db",
@@ -30,7 +42,9 @@ def make_client(tmp_path: Path, *, login: bool = True, clock: Clock | None = Non
         apply_migrations(conn, MIGRATION_PACKAGES)
     finally:
         conn.close()
-    client = TestClient(create_app(settings, clock=clock), follow_redirects=False)
+    client = TestClient(
+        create_app(settings, clock=clock, test_sender=FakeTestSender()), follow_redirects=False
+    )
     if login:
         client.post("/login", data={"username": "admin", "password": PASSWORD})
     return client
@@ -55,7 +69,18 @@ def make_user_client(
             commands.create(username, password, Role.ADMIN if admin else Role.USER)
     finally:
         conn.close()
-    client = TestClient(create_app(settings), follow_redirects=False)
+    client = TestClient(create_app(settings, test_sender=FakeTestSender()), follow_redirects=False)
     response = client.post("/login", data={"username": username, "password": password})
     assert response.status_code == 303
     return client
+
+
+def sender_of(client: TestClient) -> FakeTestSender:
+    """The fake test-alert sender the app under test was built with."""
+    from typing import cast
+
+    from fastapi import FastAPI
+
+    sender = cast(FastAPI, client.app).state.test_sender
+    assert isinstance(sender, FakeTestSender)
+    return sender

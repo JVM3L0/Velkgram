@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from starlette.middleware.sessions import SessionMiddleware
 
+import velkgram.accounts.web as accounts_web
 import velkgram.alerting.web as alerting_web
 import velkgram.channels.web as channels_web
 import velkgram.ingestion.web as ingestion_web
@@ -23,12 +24,14 @@ import velkgram.offers.web as offers_web
 import velkgram.wishlist.web as wishlist_web
 from velkgram.accounts import UserCommands, ensure_admin
 from velkgram.accounts.adapters.sqlite.repository import SqliteUserRepository
+from velkgram.accounts.web.router import build_profile_router, build_users_router
 from velkgram.alerting.adapters.sqlite.notifier_state import SqliteNotifierStateStore
 from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.alerting.web.router import build_router as build_alerts_router
 from velkgram.apps.web.auth import hash_password, verify_password
-from velkgram.apps.web.deps import SESSION_KEY, get_conn, require_user
+from velkgram.apps.web.deps import SESSION_KEY, get_conn, require_admin, require_user
 from velkgram.apps.web.nav import nav_items
+from velkgram.apps.web.telegram_test import TestSender, make_test_sender
 from velkgram.apps.web.theme import (
     THEME_COOKIE,
     THEME_MAX_AGE,
@@ -61,6 +64,7 @@ _STATIC_DIR = Path(__file__).parent / "static"
 _MODULE_TEMPLATE_DIRS = (
     Path(wishlist_web.__file__).parent / "templates",
     Path(channels_web.__file__).parent / "templates",
+    Path(accounts_web.__file__).parent / "templates",
     Path(alerting_web.__file__).parent / "templates",
     Path(ingestion_web.__file__).parent / "templates",
     Path(offers_web.__file__).parent / "templates",
@@ -199,7 +203,11 @@ def _seed_admin(settings: Settings) -> None:
         log.warning("admin_seed_skipped")
 
 
-def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    clock: Clock | None = None,
+    test_sender: TestSender | None = None,
+) -> FastAPI:
     settings = settings or load_settings(os.environ)
     if not settings.web_secret_key:
         raise ValueError("WEB_SECRET_KEY is required to run the web app")
@@ -219,6 +227,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.state.templates = templates
     clock = clock or SystemClock()
     app.state.clock = clock
+    app.state.test_sender = test_sender or make_test_sender(settings)
     throttle = LoginThrottle(clock)
     app.state.login_throttle = throttle
 
@@ -283,6 +292,34 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
 
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
+    def make_commands(conn: sqlite3.Connection) -> UserCommands:
+        return UserCommands(SqliteUserRepository(conn), clock, hash_password, verify_password)
+
+    async def send_test(chat_id: int) -> str | None:
+        return await app.state.test_sender(chat_id)
+
+    app.include_router(
+        build_profile_router(
+            get_conn=get_conn,
+            current_user=require_user,
+            templates=templates,
+            make_commands=make_commands,
+            send_test=send_test,
+        ),
+        prefix="/perfil",
+        dependencies=[Depends(require_user)],
+    )
+    app.include_router(
+        build_users_router(
+            get_conn=get_conn,
+            admin_user=require_admin,
+            templates=templates,
+            make_commands=make_commands,
+            make_repo=SqliteUserRepository,
+        ),
+        prefix="/usuarios",
+        dependencies=[Depends(require_admin)],
+    )
     app.include_router(
         build_wishlist_router(
             get_conn=get_conn,
@@ -304,7 +341,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             last_messages=_last_messages,
         ),
         prefix="/channels",
-        dependencies=[Depends(require_user)],
+        dependencies=[Depends(require_admin)],
     )
     app.include_router(
         build_alerts_router(
@@ -332,7 +369,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             notifier_status=_notifier_status,
         ),
         prefix="/status",
-        dependencies=[Depends(require_user)],
+        dependencies=[Depends(require_admin)],
     )
     # Included after the wishlist router so `/wishes/new` wins over `/wishes/{id}`.
     app.include_router(

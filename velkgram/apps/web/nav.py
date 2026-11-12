@@ -26,6 +26,16 @@ def _is_current(href: str, path: str) -> bool:
     return path == href or path.startswith(href + "/")
 
 
-def nav_items(path: str) -> list[NavItem]:
-    """The five destinations; Feed also covers `/cupons`, the others match by path segment."""
-    return [NavItem(h, label, icon, _is_current(h, path)) for h, label, icon in _DESTINATIONS]
+_ADMIN_ONLY = frozenset({"/channels", "/status"})
+
+
+def nav_items(path: str, admin: bool = True) -> list[NavItem]:
+    """The destinations; Feed also covers `/cupons`, the others match by path segment.
+
+    Channels and Status are for administrators only.
+    """
+    return [
+        NavItem(h, label, icon, _is_current(h, path))
+        for h, label, icon in _DESTINATIONS
+        if admin or h not in _ADMIN_ONLY
+    ]

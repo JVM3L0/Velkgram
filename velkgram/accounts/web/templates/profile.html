@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% set page_title = "Perfil" %}
+{% block title %}Perfil - Velkgram{% endblock %}
+{% block content %}
+<div class="list-page">
+<h1>Perfil</h1>
+<p class="muted">Conectado como <strong>{{ me.username }}</strong>{% if me.role.value == "admin" %} (administrador){% endif %}.</p>
+{% if notice %}<p class="notice" role="status"><i aria-hidden="true">check_circle</i> {{ notice }}</p>{% endif %}
+{% if error %}<p class="error" role="alert"><i aria-hidden="true">error</i> {{ error }}</p>{% endif %}
+
+<article class="border profile-section">
+  <h2>Alertas no Telegram</h2>
+  <p class="muted">Abra o bot do Velkgram no Telegram e toque em <strong>Iniciar</strong>. Depois informe aqui o seu id numérico (peça ao <code>@userinfobot</code>). Os alertas dos seus desejos chegam nesse chat.</p>
+  <form class="stack" method="post" action="/perfil/telegram">
+    <div class="field label border">
+      <input id="chat_id" type="text" inputmode="numeric" name="chat_id" placeholder=" " value="{{ me.telegram_chat_id if me.telegram_chat_id is not none else '' }}" autocomplete="off">
+      <label for="chat_id">Id do Telegram</label>
+    </div>
+    <div class="row">
+      <button type="submit">Salvar</button>
+    </div>
+  </form>
+  <form method="post" action="/perfil/teste">
+    <button class="border" type="submit"{% if me.telegram_chat_id is none %} disabled{% endif %}><i aria-hidden="true">send</i><span>Enviar alerta de teste</span></button>
+  </form>
+</article>
+
+<article class="border profile-section">
+  <h2>Trocar a senha</h2>
+  <form class="stack" method="post" action="/perfil/senha">
+    <div class="field label border">
+      <input id="current" type="password" name="current" placeholder=" " autocomplete="current-password" required>
+      <label for="current">Senha atual</label>
+    </div>
+    <div class="field label border">
+      <input id="new" type="password" name="new" placeholder=" " autocomplete="new-password" minlength="8" required>
+      <label for="new">Nova senha (8 ou mais caracteres)</label>
+    </div>
+    <div class="field label border">
+      <input id="repeat" type="password" name="repeat" placeholder=" " autocomplete="new-password" minlength="8" required>
+      <label for="repeat">Repita a nova senha</label>
+    </div>
+    <div class="row"><button type="submit">Trocar senha</button></div>
+  </form>
+</article>
+</div>
+{% endblock %}

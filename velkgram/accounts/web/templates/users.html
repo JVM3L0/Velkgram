@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% set page_title = "Usuários" %}
+{% block title %}Usuários - Velkgram{% endblock %}
+{% block content %}
+<div class="list-page">
+<h1>Usuários</h1>
+{% if error %}<p class="error" role="alert"><i aria-hidden="true">error</i> {{ error }}</p>{% endif %}
+{% if generated %}
+<article class="border generated" role="status">
+  <p>Senha de <strong>{{ generated[0] }}</strong>. Ela aparece só desta vez; passe para a pessoa agora.</p>
+  <p><code data-generated-password>{{ generated[1] }}</code></p>
+</article>
+{% endif %}
+
+<article class="border profile-section">
+  <h2>Novo usuário</h2>
+  <form class="stack" method="post" action="/usuarios/novo">
+    <div class="field label border">
+      <input id="new-username" type="text" name="username" placeholder=" " autocomplete="off" autocapitalize="none" spellcheck="false" required>
+      <label for="new-username">Usuário</label>
+    </div>
+    <div class="field label suffix border">
+      <select id="new-role" name="role">
+        <option value="user" selected>Usuário</option>
+        <option value="admin">Administrador</option>
+      </select>
+      <label for="new-role">Perfil</label>
+      <i aria-hidden="true">arrow_drop_down</i>
+    </div>
+    <div class="row"><button type="submit">Criar</button></div>
+  </form>
+</article>
+
+<ul class="alert-list">
+  {% for u in users %}
+  <li class="alert-card">
+    <div class="alert-body">
+      <p class="alert-head">
+        <span class="alert-wish">{{ u.username }}</span>
+        <span class="chip small">{{ "administrador" if u.role.value == "admin" else "usuário" }}</span>
+        {% if not u.enabled %}<span class="chip small flag-warn">desativado</span>{% endif %}
+      </p>
+      <p class="alert-tech">Telegram: {{ u.telegram_chat_id if u.telegram_chat_id is not none else "não configurado" }}</p>
+      <form class="user-chat" method="post" action="/usuarios/{{ u.id }}/telegram">
+        <div class="field border small">
+          <input type="text" inputmode="numeric" name="chat_id" placeholder="id do Telegram" aria-label="Id do Telegram de {{ u.username }}" value="{{ u.telegram_chat_id if u.telegram_chat_id is not none else '' }}">
+        </div>
+        <button class="small border" type="submit">Salvar id</button>
+      </form>
+    </div>
+    <div class="alert-actions">
+      <form method="post" action="/usuarios/{{ u.id }}/senha"><button class="small border" type="submit"><i aria-hidden="true">key</i><span>Nova senha</span></button></form>
+      <form method="post" action="/usuarios/{{ u.id }}/ativo">
+        <input type="hidden" name="enabled" value="{{ '0' if u.enabled else '1' }}">
+        <button class="small" type="submit"><span>{{ "Desativar" if u.enabled else "Ativar" }}</span></button>
+      </form>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+</div>
+{% endblock %}
