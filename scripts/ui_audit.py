@@ -9,7 +9,8 @@ It logs in as the admin of a throwaway app, renders each page to HTML with the s
 inlined, opens it in Chromium and reports, per page, theme and width:
 
 - horizontal overflow (the page scrolls sideways, or an element sticks out of the viewport);
-- tap targets smaller than 40 px on phone widths (a finger needs about 44 px, 40 is the floor).
+- tap targets smaller than 40 px on phone widths (a finger needs about 44 px, 40 is the floor);
+  a control inside a label counts as the label, and the hidden skip link is ignored.
 
 Exit status 1 when anything overflows; small targets are reported but do not fail the run.
 """
@@ -51,13 +52,13 @@ _MEASURE_JS = """() => {
     .map(name);
   const tappable = 'a[href], button, input:not([type=hidden]), select';
   const small = [...document.querySelectorAll(tappable)]
-    .filter((e) => {
-      const r = e.getBoundingClientRect();
+    .filter((e) => !e.classList.contains('sr-only'))
+    .map((e) => [e, (e.closest('label') || e).getBoundingClientRect()])
+    .filter(([e, r]) => {
       const hidden = getComputedStyle(e).visibility === 'hidden';
       return r.width > 0 && r.height > 0 && !hidden && (r.height < MIN || r.width < MIN);
     })
-    .map((e) => {
-      const r = e.getBoundingClientRect();
+    .map(([e, r]) => {
       return name(e) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height);
     });
   return {scroll: document.documentElement.scrollWidth, vw, out, small};

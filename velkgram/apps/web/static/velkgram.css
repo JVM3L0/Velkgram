@@ -1269,3 +1269,15 @@ nav.tabs.feed-tabs { margin-block: 0 1rem; border-block-end: 1px solid var(--out
 /* The card title opens the product page. */
 .offer-title-link { color: inherit; text-decoration: none; }
 .offer-title-link:hover, .offer-title-link:focus-visible { text-decoration: underline; text-underline-offset: 0.2em; }
+
+/* ---- Tap targets: 40 px at least on phones ---- */
+/* Vertical padding on an inline link grows its hit area without moving the text. */
+.offer-title-link, .wish-name a, .wish-count a { padding-block: 0.5rem; }
+.appbar .button.circle { flex: none; min-inline-size: 2.5rem; }
+.channel-switch { min-block-size: 2.5rem; align-items: center; }
+.wish-name a, .wish-count a { padding-block: 0.6rem; }
+/* Narrow phones with the admin's extra icon: logout keeps its icon and drops the word. */
+@media (max-width: 419.98px) {
+  .appbar form.inline button { padding-inline: 0.75rem; }
+  .appbar form.inline button span { display: none; }
+}
