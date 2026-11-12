@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from velkgram.offers.domain.models import CouponTier
 from velkgram.offers.domain.title import STORE_TITLES
-from velkgram.shared.deals import line_coupons
+from velkgram.shared.deals import is_coupon_title, line_coupons
 from velkgram.shared.text import URL_PATTERN
 
 _MONEY = r"R\$\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?"
@@ -34,7 +34,8 @@ def _plain(text: str) -> str:
 
 
 def starts_with_coupon_word(title: str) -> bool:
-    return _plain(title).startswith("cupom")
+    """Whether the title is a coupon post's ("Cupom ..." or "iFood R$ 20 OFF: CODE")."""
+    return is_coupon_title(title)
 
 
 def _store_words(slug: str) -> str:

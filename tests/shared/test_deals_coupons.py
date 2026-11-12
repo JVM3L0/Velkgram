@@ -1,7 +1,7 @@
 import pytest
 
 from velkgram.offers.domain.title import STORE_TITLES
-from velkgram.shared.deals import extract_coupons
+from velkgram.shared.deals import extract_coupons, is_coupon_title
 
 
 def _post(*lines: str) -> str:
@@ -112,3 +112,41 @@ def test_store_names_are_never_codes() -> None:
     for title in STORE_TITLES.values():
         token = title.upper().replace(" ", "").replace("!", "")
         assert extract_coupons(f"cupom: {token}") == (), token
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "iFood R$ 20 OFF Mercados: ATACADOBF",
+        "iFood R$ 12 OFF Restaurantes: BFFOOD",
+        "iFood Farmácia R$ 20 OFF: FARMABF",
+        "iFood Mercado R$ 20 OFF: BFDUPLA",
+        "iFood R$ 12 OFF em R$ 27 : COMEOUBF",
+        "Uber Eats 30% OFF: UBER30",
+        "Cupom Shopee R$ 10 OFF em R$ 40: CODIGO1",
+        "Cupons Magalu",
+    ],
+)
+def test_coupon_titles_include_store_posts_that_start_with_the_discount(title: str) -> None:
+    assert is_coupon_title(title)
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "SSD Kingston NV2 1TB por R$ 299",
+        "Notebook Gamer Acer Nitro V15 por R$ 3999 - R$ 200 OFF: CODIGO",
+        "Fone JBL Tune 510BT R$ 20 OFF",
+        "Monitor Gamer AOC 27 polegadas Full HD 144Hz 20% OFF: BLACK10",
+        "iFood - Subway por R$0,01 centavo",
+        "Kit 3 camisetas R$ 99",
+        "",
+    ],
+)
+def test_product_titles_are_not_coupon_titles(title: str) -> None:
+    assert not is_coupon_title(title)
+
+
+def test_codes_are_read_from_a_store_discount_post() -> None:
+    assert extract_coupons("iFood R$ 12 OFF Restaurantes: BFFOOD") == ("BFFOOD",)
+    assert extract_coupons("iFood Farmácia R$ 20 OFF: FARMABF\n\n-Anúncio") == ("FARMABF",)

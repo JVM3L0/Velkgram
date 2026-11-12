@@ -180,10 +180,29 @@ def _as_code(raw: str) -> str | None:
     return token
 
 
+# "iFood R$ 20 OFF Mercados: CODE": a short store or category name, then the discount, then a code.
+_DISCOUNT_THEN_CODE = re.compile(
+    r"^\W*[^\W\d][\w&'.-]*(?:\s+[^\W\d][\w&'.-]*){0,2}\s+"
+    r"(?:R\$\s*\d[\d.,]*|\d+\s*%)\s*OFF\b[^:]*:\s*[A-Za-z0-9]",
+    re.IGNORECASE,
+)
+_PRICED = re.compile(r"\bpor\s+R\$", re.IGNORECASE)
+
+
+def is_coupon_title(title: str) -> bool:
+    """A coupon post's title: it starts with "Cupom" or "Cupons", or it is a short name followed straight by
+    a discount and a code ("iFood R$ 20 OFF Mercados: ATACADOBF"). A title that gives a product
+    price ("por R$ 3999") is never a coupon."""
+    head = unicodedata.normalize("NFKD", title.strip().lower())
+    plain = "".join(c for c in head if unicodedata.category(c) != "Mn")
+    if plain.startswith(("cupom", "cupons")):
+        return True
+    return _PRICED.search(title) is None and _DISCOUNT_THEN_CODE.match(title.strip()) is not None
+
+
 def _starts_with_coupon_word(text: str) -> bool:
     first = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
-    head = unicodedata.normalize("NFKD", first.lower())
-    return "".join(c for c in head if unicodedata.category(c) != "Mn").startswith("cupom")
+    return is_coupon_title(first)
 
 
 _COUPON_OFF = re.compile(r"\bOFF\b", re.IGNORECASE)

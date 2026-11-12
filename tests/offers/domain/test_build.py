@@ -221,3 +221,22 @@ def test_coupon_post_that_lists_products_keeps_its_links() -> None:
     assert offer is not None
     assert offer.kind is OfferKind.coupon
     assert offer.main_link == a
+
+
+def test_a_store_discount_post_is_a_coupon_not_a_product_priced_at_the_discount() -> None:
+    m = _msg("iFood R$ 20 OFF Mercados: ATACADOBF")
+    offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
+    assert offer is not None
+    assert offer.kind is OfferKind.coupon
+    assert offer.price_cents is None  # R$ 20 is the discount, never the price
+    assert offer.comparable is False
+    assert offer.coupons == ("ATACADOBF",)
+    assert offer.coupon_discount == "R$ 20 OFF"
+
+
+def test_a_similar_looking_product_post_stays_a_product() -> None:
+    m = _msg(
+        "Notebook Gamer Acer Nitro V15 por R$ 3999 - R$ 200 OFF: CODIGO", ("https://amzn.to/x",)
+    )
+    offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
+    assert offer is not None and offer.kind is OfferKind.product
