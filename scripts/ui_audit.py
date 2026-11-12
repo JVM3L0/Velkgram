@@ -38,19 +38,31 @@ PHONE_MAX = 600
 MIN_TAP = 40
 STATIC = Path(__file__).parents[1] / "velkgram" / "apps" / "web" / "static"
 
-MEASURE = """() => {
+_MEASURE_JS = """() => {
   const vw = document.documentElement.clientWidth;
-  const sticky = (e) => getComputedStyle(e).position === 'fixed';
-  const out = [...document.querySelectorAll('body *')].filter((e) => {
-    const r = e.getBoundingClientRect();
-    return r.width > 0 && !sticky(e) && (r.right > vw + 1 || r.left < -1);
-  }).slice(0, 3).map((e) => e.tagName.toLowerCase() + '.' + String(e.className).slice(0, 24));
-  const small = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), select')]
-    .filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; })
-    .filter((e) => { const r = e.getBoundingClientRect(); return r.height < %d || r.width < %d; })
-    .map((e) => e.tagName.toLowerCase() + '.' + String(e.className).slice(0, 20) + ' ' + Math.round(e.getBoundingClientRect().width) + 'x' + Math.round(e.getBoundingClientRect().height));
+  const fixed = (e) => getComputedStyle(e).position === 'fixed';
+  const name = (e) => e.tagName.toLowerCase() + '.' + String(e.className).slice(0, 22);
+  const out = [...document.querySelectorAll('body *')]
+    .filter((e) => {
+      const r = e.getBoundingClientRect();
+      return r.width > 0 && !fixed(e) && (r.right > vw + 1 || r.left < -1);
+    })
+    .slice(0, 3)
+    .map(name);
+  const tappable = 'a[href], button, input:not([type=hidden]), select';
+  const small = [...document.querySelectorAll(tappable)]
+    .filter((e) => {
+      const r = e.getBoundingClientRect();
+      const hidden = getComputedStyle(e).visibility === 'hidden';
+      return r.width > 0 && r.height > 0 && !hidden && (r.height < MIN || r.width < MIN);
+    })
+    .map((e) => {
+      const r = e.getBoundingClientRect();
+      return name(e) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height);
+    });
   return {scroll: document.documentElement.scrollWidth, vw, out, small};
-}""" % (MIN_TAP, MIN_TAP)
+}"""
+MEASURE = _MEASURE_JS.replace("MIN", str(MIN_TAP))
 
 
 def _render(client: TestClient, path: str, css: str) -> str:
@@ -122,16 +134,16 @@ def main() -> int:
                     small_targets += bool(small)
                     if bad or small:
                         flag = "OVERFLOW" if bad else "tap"
-                        print(
-                            f"{flag:8} {theme:13} {width:5}px {path}  {found['out'] or ''} {small[:3] or ''}"
-                        )
+                        detail = f"{found['out'] or ''} {small[:3] or ''}"
+                        print(f"{flag:8} {theme:13} {width:5}px {path}  {detail}")
                     if args.shots:
                         page.screenshot(path=str(args.out / f"{theme}-{name}-{width}.png"))
                     page.close()
         browser.close()
     shutil.rmtree(work, ignore_errors=True)
     print(
-        f"\n{cases} cases | overflow: {overflows} | phone widths with targets under {MIN_TAP}px: {small_targets}"
+        f"\n{cases} cases | overflow: {overflows} | "
+        f"phone widths with targets under {MIN_TAP}px: {small_targets}"
     )
     return 1 if overflows else 0
 
