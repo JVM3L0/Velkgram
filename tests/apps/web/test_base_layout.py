@@ -10,7 +10,6 @@ from tests.apps.web_support import make_client
 from velkgram.apps.web.nav import nav_items
 
 PINNED = (
-    "https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js",
     "https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.css",
     "https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js",
     "/static/velkgram.css",
@@ -75,10 +74,10 @@ def test_base_assets_have_sri(tmp_path: Path) -> None:
     found = {}
     for name, attrs in tags:
         target = attrs.get("src") or attrs.get("href") or ""
-        for key in ("htmx.min.js", "beer.min.css", "beer.min.js"):
+        for key in ("beer.min.css", "beer.min.js"):
             if name in ("script", "link") and target.endswith(key):
                 found[key] = attrs
-    assert set(found) == {"htmx.min.js", "beer.min.css", "beer.min.js"}
+    assert set(found) == {"beer.min.css", "beer.min.js"}
     for attrs in found.values():
         assert re.fullmatch(r"sha384-[A-Za-z0-9+/]{64}", attrs.get("integrity") or "")
         assert attrs.get("crossorigin") == "anonymous"

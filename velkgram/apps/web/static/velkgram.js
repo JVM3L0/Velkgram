@@ -142,3 +142,22 @@
     if (img.complete) markIfTiny(img);
   });
 })();
+
+// Menus are native popovers (light dismiss, Escape and focus return come with the platform).
+// The browser puts a popover in the top layer, so place it under its button, right-aligned.
+(() => {
+  const GAP = 4;
+  const MARGIN = 8;
+  document.addEventListener("toggle", (event) => {
+    const menu = event.target;
+    if (!(menu instanceof HTMLElement) || !menu.matches(".vg-menu") || event.newState !== "open") return;
+    const button = document.querySelector(`[popovertarget="${menu.id}"]`);
+    if (!button) return;
+    const anchor = button.getBoundingClientRect();
+    const box = menu.getBoundingClientRect();
+    const left = Math.min(Math.max(anchor.right - box.width, MARGIN), innerWidth - box.width - MARGIN);
+    const fitsBelow = anchor.bottom + GAP + box.height <= innerHeight - MARGIN;
+    menu.style.left = `${left}px`;
+    menu.style.top = `${fitsBelow ? anchor.bottom + GAP : Math.max(anchor.top - GAP - box.height, MARGIN)}px`;
+  }, true);
+})();

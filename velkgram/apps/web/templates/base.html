@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.css" integrity="sha384-EqZ6IXmk+4jeYN6dm7SEK3B8T8AMiHLEujTTup/LU1rSEjt1Ce8Vz8uI6NQ8czHg" crossorigin="anonymous">
   <link rel="stylesheet" href="/static/velkgram.css?v={{ css_version }}">
   <script src="/static/velkgram.js?v={{ js_version }}" defer></script>
-  <script src="https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js" integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq" crossorigin="anonymous"></script>
+  <script src="/static/htmx.min.js?v={{ js_version }}" defer></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js" integrity="sha384-7xZPd8qp8XUHrLKlKeZKr5yHcqeQ0Juz7GLT0AOsAIMhtHNqKJg5bfFCj782KnFh" crossorigin="anonymous"></script>
 </head>
 <body class="{{ theme_classes(request.cookies.get('theme')) }}">
@@ -23,10 +23,10 @@
       {% if is_admin %}<a class="button circle transparent" href="/usuarios" aria-label="Usuários" title="Usuários"><i>group</i></a>{% endif %}
       <a class="button circle transparent" href="/perfil" aria-label="Perfil" title="Perfil"><i>person</i></a>
       <div class="theme-menu-wrap">
-        <button class="circle transparent" type="button" data-ui="#theme-menu" aria-label="Tema" title="Tema" aria-haspopup="menu">
+        <button class="circle transparent" type="button" popovertarget="theme-menu" aria-label="Tema" title="Tema" aria-haspopup="menu">
           <i>palette</i>
         </button>
-        <menu id="theme-menu" class="theme-menu left no-wrap">
+        <div id="theme-menu" class="vg-menu theme-menu" popover role="menu">
           <form method="post" action="/theme">
             <input type="hidden" name="next" value="{{ request.url.path }}">
             {% for mode in theme_modes %}
@@ -36,7 +36,7 @@
             </button>
             {% endfor %}
           </form>
-        </menu>
+        </div>
       </div>
       <form class="inline" method="post" action="/logout">
         <button class="transparent" type="submit" aria-label="Sair" title="Sair"><i>logout</i><span>Sair</span></button>

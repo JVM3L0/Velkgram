@@ -233,7 +233,18 @@ nav.bottom a, nav.left a {
 
 /* ---- Theme menu ---- */
 .theme-menu-wrap, .row-menu-wrap { position: relative; }
-.theme-menu, .row-menu { min-inline-size: 13rem; padding: 0.5rem; }
+.vg-menu {
+  /* Top layer, placed by velkgram.js next to its button; `inset: auto` drops the UA centring. */
+  inset: auto;
+  margin: 0;
+  min-inline-size: 13rem;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: var(--shape-xl);
+  background-color: var(--surface-container);
+  color: var(--on-surface);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+}
 .theme-menu form, .row-menu form { display: contents; }
 .theme-menu button, .row-menu button {
   display: flex;

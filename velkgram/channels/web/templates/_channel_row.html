@@ -17,12 +17,12 @@
     <span></span>
   </label>
   <div class="row-menu-wrap">
-    <button class="circle transparent" type="button" data-ui="#channel-menu-{{ channel.id }}" aria-label="Mais ações" title="Mais ações" aria-haspopup="menu"><i aria-hidden="true">more_vert</i></button>
-    <menu id="channel-menu-{{ channel.id }}" class="row-menu left no-wrap">
+    <button class="circle transparent" type="button" popovertarget="channel-menu-{{ channel.id }}" aria-label="Mais ações" title="Mais ações" aria-haspopup="menu"><i aria-hidden="true">more_vert</i></button>
+    <div id="channel-menu-{{ channel.id }}" class="vg-menu row-menu" popover role="menu">
       <form class="inline" method="post" action="/channels/{{ channel.id }}/delete"
         hx-boost="true" hx-confirm="Remover o canal {{ channel.name or channel.ref }}? As ofertas já coletadas continuam no histórico." hx-target="body">
         <button type="submit"><i aria-hidden="true">delete</i><span>Remover</span></button>
       </form>
-    </menu>
+    </div>
   </div>
 </li>

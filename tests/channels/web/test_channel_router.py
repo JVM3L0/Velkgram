@@ -120,9 +120,7 @@ def test_channel_row_stacks_name_over_handle_with_a_switch_and_a_remove_menu(
     assert 'hx-post="/channels/1/toggle"' in switch.group(0)
     assert 'aria-label="Mais ações"' in page
     menu = page[
-        page.index('<menu id="channel-menu-1"') : page.index(
-            "</menu>", page.index("channel-menu-1")
-        )
+        page.index('<div id="channel-menu-1"') : page.index("</form>", page.index("channel-menu-1"))
     ]
     assert "Remover" in menu and "hx-confirm=" in menu
     assert 'action="/channels/1/delete"' in menu

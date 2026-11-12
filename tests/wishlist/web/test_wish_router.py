@@ -78,7 +78,7 @@ def test_list_shows_wishes_and_escapes(tmp_path: Path) -> None:
     assert "Desejos" in page
     assert "&lt;script&gt;" in page
     assert "<script>x" not in page
-    assert "htmx.org@2.0.3" in page
+    assert "/static/htmx.min.js" in page
 
 
 def test_toggle_returns_row_fragment(tmp_path: Path) -> None:
