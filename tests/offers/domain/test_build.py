@@ -171,3 +171,28 @@ def test_product_post_never_guesses_its_store_from_the_title() -> None:
     )
     assert offer is not None
     assert offer.store is None
+
+
+def test_main_link_is_the_labelled_product_link_not_the_coupon_page_before_it() -> None:
+    coupons, product = "https://s.shopee.com.br/30fk4tl3lu", "https://s.shopee.com.br/8fTr4C8eWt"
+    m = _msg(
+        "DJI Osmo Nano (128GB), Câmera 4K\n\nR$ 1522\n"
+        f"-Resgate todos os cupons desta página: {coupons}\n\n-Link produto: {product}",
+        (coupons, product),
+    )
+    offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
+    assert offer is not None
+    assert offer.main_link == product
+    assert offer.store == "shopee"
+
+
+def test_coupon_post_keeps_its_first_link_as_the_main_link() -> None:
+    redeem, cart = "https://s.shopee.com.br/70GSVaUJxC", "https://s.shopee.com.br/7fW9IpEnZG"
+    m = _msg(
+        "Cupom Shopee\n\nR$ 40 OFF em R$ 199: CODIGO1\n"
+        f"-Resgate aqui: {redeem}\n-Link carrinho: {cart}",
+        (redeem, cart),
+    )
+    offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
+    assert offer is not None
+    assert offer.main_link == redeem

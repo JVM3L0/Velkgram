@@ -1,6 +1,6 @@
 import pytest
 
-from velkgram.offers.domain.stores import STORES, main_link, store_of
+from velkgram.offers.domain.stores import STORES, main_link, product_link, store_of
 
 HOSTS = [(slug, host) for slug, hosts in STORES.items() for host in hosts]
 
@@ -41,3 +41,40 @@ def test_main_link_prefers_known_store() -> None:
 def test_main_link_falls_back_to_first_then_none() -> None:
     assert main_link(("https://bit.ly/a", "https://tidd.ly/b")) == "https://bit.ly/a"
     assert main_link(()) is None
+
+
+COUPONS = "https://s.shopee.com.br/30fk4tl3lu"
+PRODUCT = "https://s.shopee.com.br/8fTr4C8eWt"
+
+
+def test_product_link_is_the_one_labelled_link_produto_on_the_same_line() -> None:
+    text = (
+        "DJI Osmo Nano\n\nR$ 1522\n-Resgate todos os cupons desta página: "
+        f"{COUPONS}\n\n-Link produto: {PRODUCT}\n\n-Anúncio"
+    )
+    assert product_link(text, (COUPONS, PRODUCT)) == PRODUCT
+
+
+def test_product_link_reads_the_link_on_the_line_after_the_label() -> None:
+    text = f"Creatina\n-Resgate todos os cupons desta página:\n{COUPONS}\n-Link produto:\n{PRODUCT}"
+    assert product_link(text, (COUPONS, PRODUCT)) == PRODUCT
+
+
+def test_product_link_accepts_link_do_produto_and_ignores_case_and_accents() -> None:
+    assert product_link(f"LINK DO PRODUTO: {PRODUCT}", (PRODUCT,)) == PRODUCT
+
+
+def test_product_link_is_none_without_the_label() -> None:
+    text = f"Cupom Shopee\n-Resgate aqui: {COUPONS}\n-Link carrinho: {PRODUCT}"
+    assert product_link(text, (COUPONS, PRODUCT)) is None
+    assert product_link(None, (PRODUCT,)) is None
+    assert product_link("sem links", ()) is None
+
+
+def test_product_link_ignores_a_labelled_link_of_an_unknown_store() -> None:
+    assert product_link("Link produto: https://bit.ly/abc", ("https://bit.ly/abc",)) is None
+
+
+def test_product_link_does_not_borrow_a_link_from_a_later_line() -> None:
+    text = f"-Link produto:\n-Anúncio\nhttps://bit.ly/x\n-Resgate aqui: {COUPONS}"
+    assert product_link(text, ("https://bit.ly/x", COUPONS)) is None

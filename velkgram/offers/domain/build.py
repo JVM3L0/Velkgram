@@ -7,7 +7,7 @@ from datetime import datetime
 from velkgram.offers.domain.comparable import is_comparable
 from velkgram.offers.domain.coupon import CouponDeal, coupon_deal, store_in_title
 from velkgram.offers.domain.models import Offer, OfferKind
-from velkgram.offers.domain.stores import main_link, store_of
+from velkgram.offers.domain.stores import main_link, product_link, store_of
 from velkgram.offers.domain.title import title_of
 from velkgram.shared.deals import WishView, extract_coupons, extract_price
 from velkgram.shared.events import MessageData
@@ -21,7 +21,7 @@ class MessageClass:
 
 
 def _classify(m: MessageData) -> tuple[str | None, str | None, str, CouponDeal | None]:
-    link = main_link(m.links)
+    link = product_link(m.text, m.links) or main_link(m.links)
     store = store_of(link) if link else None
     title = title_of(m.text, store)
     text = m.text if m.text.strip() else None
