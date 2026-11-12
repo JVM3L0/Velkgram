@@ -52,26 +52,24 @@
 
 <ul class="alert-list">
   {% for u in users %}
-  <li class="alert-card">
-    <div class="alert-body">
-      <p class="alert-head">
-        <span class="alert-wish">{{ u.username }}</span>
-        <span class="chip small">{{ "administrador" if u.role.value == "admin" else "usuário" }}</span>
-        {% if not u.enabled %}<span class="chip small flag-warn">desativado</span>{% endif %}
-      </p>
-      <p class="alert-tech">Telegram: {{ u.telegram_chat_id if u.telegram_chat_id is not none else "não configurado" }}</p>
+  <li class="alert-card user-card">
+    <p class="alert-head">
+      <span class="alert-wish">{{ u.username }}</span>
+      <span class="chip small">{{ "administrador" if u.role.value == "admin" else "usuário" }}</span>
+      {% if not u.enabled %}<span class="chip small flag-warn">desativado</span>{% endif %}
+    </p>
+    <p class="alert-tech">Telegram: {{ u.telegram_chat_id if u.telegram_chat_id is not none else "não configurado" }}</p>
+    <div class="user-controls">
       <form class="user-chat" method="post" action="/usuarios/{{ u.id }}/telegram">
-        <div class="field border small">
+        <div class="field border">
           <input type="text" inputmode="numeric" name="chat_id" placeholder="id do Telegram" aria-label="Id do Telegram de {{ u.username }}" value="{{ u.telegram_chat_id if u.telegram_chat_id is not none else '' }}">
         </div>
-        <button class="small border" type="submit">Salvar id</button>
+        <button class="border" type="submit">Salvar id</button>
       </form>
-    </div>
-    <div class="alert-actions user-actions">
-      <form method="post" action="/usuarios/{{ u.id }}/senha"><button class="small border" type="submit"><i aria-hidden="true">key</i><span>Nova senha</span></button></form>
+      <form method="post" action="/usuarios/{{ u.id }}/senha"><button class="border" type="submit"><i aria-hidden="true">key</i><span>Nova senha</span></button></form>
       <form method="post" action="/usuarios/{{ u.id }}/ativo">
         <input type="hidden" name="enabled" value="{{ '0' if u.enabled else '1' }}">
-        <button class="small" type="submit"><span>{{ "Desativar" if u.enabled else "Ativar" }}</span></button>
+        <button type="submit"><span>{{ "Desativar" if u.enabled else "Ativar" }}</span></button>
       </form>
     </div>
   </li>
