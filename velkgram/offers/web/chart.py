@@ -1,5 +1,6 @@
 """Price chart and sparkline as inline SVG (colors only via theme CSS variables)."""
 
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime, tzinfo
 from html import escape
@@ -24,11 +25,11 @@ Spot = tuple[float, float, str]
 _HEIGHT = 220  # fixed: text keeps its pixel size because the viewBox is rendered at ~1:1
 
 
-def _open(width: int, height: int, title: str, desc: str, cls: str = "") -> str:
+def _open(width: int, height: int, title: str, desc: str, cls: str = "", extra: str = "") -> str:
     attr = f' class="{cls}"' if cls else ""
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" '
-        f'role="img"{attr}><title>{escape(title)}</title><desc>{escape(desc)}</desc>'
+        f'role="img"{attr}{extra}><title>{escape(title)}</title><desc>{escape(desc)}</desc>'
     )
 
 
@@ -182,7 +183,25 @@ def price_chart_svg(
         f"média {brl(average)}"
         + (f", seu alerta {brl(max_price_cents)}." if max_price_cents is not None else ".")
     )
-    parts = [_open(width, height, "Histórico de preços", desc, cls)]
+    # velkgram.js reads these for the tooltip: [x, y, "date", "price"] per point (viewBox units).
+    days = {p.posted_at.date() for p in points}
+    stamp = "%d/%m/%Y %H:%M" if len(days) < len(points) else "%d/%m/%Y"
+    tips = json.dumps(
+        [
+            [
+                round(x(p), 1),
+                round(y(p.price_cents), 1),
+                f"{p.posted_at:{stamp}}",
+                brl(p.price_cents),
+            ]
+            for p in points
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    parts = [
+        _open(width, height, "Histórico de preços", desc, cls, f' data-points="{escape(tips)}"')
+    ]
     axis_y = height - _BOTTOM
     right = width - _RIGHT
     parts.append(

@@ -188,3 +188,97 @@
     if (!inside) dialog.close();
   });
 })();
+
+// Price chart tooltip: hover or touch shows the date and price of the nearest point, with a guide
+// line and a dot on the chart. The SVG carries its points in data-points (viewBox units); the
+// chart is server-rendered, so this only adds the readout. Works on cards htmx swaps in later.
+(() => {
+  const NS = "http://www.w3.org/2000/svg";
+  const state = new WeakMap();
+
+  const parts = (svg) => {
+    let s = state.get(svg);
+    if (s) return s;
+    let points;
+    try {
+      points = JSON.parse(svg.dataset.points ?? "[]");
+    } catch {
+      points = [];
+    }
+    const frame = svg.parentElement;
+    const guide = document.createElementNS(NS, "line");
+    guide.setAttribute("class", "chart-guide");
+    const dot = document.createElementNS(NS, "circle");
+    dot.setAttribute("class", "chart-hover-dot");
+    dot.setAttribute("r", "6");
+    const tip = document.createElement("div");
+    tip.className = "chart-tip";
+    tip.hidden = true;
+    tip.setAttribute("aria-hidden", "true");
+    frame.append(tip);
+    s = { points, guide, dot, tip, frame };
+    state.set(svg, s);
+    return s;
+  };
+
+  const hide = (svg) => {
+    const s = state.get(svg);
+    if (!s) return;
+    s.guide.remove();
+    s.dot.remove();
+    s.tip.hidden = true;
+  };
+
+  const show = (svg, event) => {
+    const s = parts(svg);
+    if (s.points.length === 0) return;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return;
+    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+    let best = s.points[0];
+    for (const p of s.points) if (Math.abs(p[0] - at.x) < Math.abs(best[0] - at.x)) best = p;
+    const [x, y, date, price] = best;
+    const axis = svg.viewBox.baseVal.height;
+    s.guide.setAttribute("x1", x);
+    s.guide.setAttribute("x2", x);
+    s.guide.setAttribute("y1", 0);
+    s.guide.setAttribute("y2", axis);
+    s.dot.setAttribute("cx", x);
+    s.dot.setAttribute("cy", y);
+    svg.append(s.guide, s.dot);
+    s.tip.textContent = "";
+    const strong = document.createElement("strong");
+    strong.textContent = price;
+    s.tip.append(strong, document.createTextNode(` ${date}`));
+    s.tip.hidden = false;
+    // Place it above the point in frame pixels; flip below near the top, clamp to the frame.
+    const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+    const box = svg.getBoundingClientRect();
+    const frame = s.frame.getBoundingClientRect();
+    const px = box.left - frame.left + x * scale;
+    const py = box.top - frame.top + y * scale;
+    const w = s.tip.offsetWidth;
+    const h = s.tip.offsetHeight;
+    s.tip.style.left = `${Math.min(Math.max(px - w / 2, 4), frame.width - w - 4)}px`;
+    s.tip.style.top = `${py - h - 12 < 4 ? py + 14 : py - h - 12}px`;
+  };
+
+  const chart = (event) =>
+    event.target instanceof Element ? event.target.closest("svg[data-points]") : null;
+  document.addEventListener("pointermove", (event) => {
+    const svg = chart(event);
+    if (svg) show(svg, event);
+  });
+  document.addEventListener("pointerdown", (event) => {
+    const svg = chart(event);
+    if (svg) show(svg, event);
+  });
+  document.addEventListener("pointerout", (event) => {
+    const svg = chart(event);
+    if (svg && !svg.contains(event.relatedTarget)) hide(svg);
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (chart(event)) return;
+    for (const svg of document.querySelectorAll("svg[data-points]")) hide(svg);
+  });
+})();

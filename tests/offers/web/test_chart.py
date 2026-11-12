@@ -309,3 +309,15 @@ def test_chart_prints_dates_in_the_given_zone_not_utc() -> None:
     local = price_chart_svg(late, None, tz=ZoneInfo("America/Sao_Paulo"))
     assert "01/03/2026" in utc and "28/02/2026" not in utc
     assert "28/02/2026" in local and "02/03/2026" in local
+
+
+def test_chart_exposes_its_points_for_the_tooltip() -> None:
+    import json
+    from html import unescape
+
+    out = price_chart_svg(_pts(100000, 90000), None)
+    raw = re.search(r'data-points="([^"]*)"', out)
+    assert raw is not None
+    points = json.loads(unescape(raw.group(1)))
+    assert [p[3] for p in points] == [brl(100000), brl(90000)]
+    assert points[0][2] == "01/03/2026" and points[0][0] < points[1][0]
