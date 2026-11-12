@@ -196,3 +196,28 @@ def test_coupon_post_keeps_its_first_link_as_the_main_link() -> None:
     offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
     assert offer is not None
     assert offer.main_link == redeem
+
+
+def test_list_post_has_no_price_and_no_main_link_but_keeps_its_store() -> None:
+    first, second = "https://link.amazon/B06LZorOc", "https://link.amazon/B0fVH2s7r"
+    m = _msg(
+        "Leve 3 pelo preço de 2\n\n1 https://link.amazon/B0dysqBQ9\n\n"
+        f"-12x NIVEA Derma 150ml = R$ 87\n{first}\n\n-12x Rexona V8 250ml = R$ 110\n{second}",
+        ("https://link.amazon/B0dysqBQ9", first, second),
+    )
+    offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
+    assert offer is not None
+    assert offer.price_cents is None
+    assert offer.main_link is None
+    assert offer.store == "amazon"
+    assert offer.comparable is False
+    assert offer.kind is OfferKind.product
+
+
+def test_coupon_post_that_lists_products_keeps_its_links() -> None:
+    a, b = "https://www.kabum.com.br/produto/1", "https://www.kabum.com.br/produto/2"
+    m = _msg(f"Cupom Kabum 10% OFF: KORUJAO\n-A = R$ 10\n{a}\n-B = R$ 20\n{b}", (a, b))
+    offer = offer_from_message(m, sold_out=False, deleted=False, now=NOW)
+    assert offer is not None
+    assert offer.kind is OfferKind.coupon
+    assert offer.main_link == a

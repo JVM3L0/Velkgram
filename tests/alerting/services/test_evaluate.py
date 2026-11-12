@@ -15,6 +15,7 @@ from tests.fakes.repositories import (
 from velkgram.alerting import Alert, AlertStatus
 from velkgram.alerting.adapters.wishlist_api import WishlistApiReader
 from velkgram.alerting.domain.dedup import DedupCache
+from velkgram.alerting.domain.format import format_alert
 from velkgram.alerting.services.evaluate import Evaluator
 from velkgram.shared.adapters.bus_memory import MemoryBus
 from velkgram.shared.events import AlertTriggered, MessageData, MessageReceived
@@ -325,3 +326,55 @@ async def test_concurrent_reposts_yield_one_alert() -> None:
     await h.evaluator.wait_idle()
     assert len(h.stored()) == 1
     assert len(h.alerts.suppressions) == 1
+
+
+LIST_POST = (
+    "Leve 3 pelo preço de 2\n\n"
+    "-12x NIVEA Derma Protect Clinical 150ml = R$ 87\nhttps://link.amazon/B06LZorOc\n\n"
+    "-12x Rexona V8 Masculino 250ml = R$ 110\nhttps://link.amazon/B0fVH2s7r\n\n"
+    "-12x Rexona Cotton Dry 250ml = R$ 117\nhttps://link.amazon/B0hk6Ou4C\n\n-Anúncio"
+)
+
+
+def _list_msg(text: str = LIST_POST) -> MessageData:
+    links = tuple(x for x in text.split() if x.startswith("https://"))
+    return replace(msg(text=text), links=links)
+
+
+async def test_list_post_alerts_with_the_cheapest_matching_item_only() -> None:
+    h = Harness()
+    h.wish("Rexona", ("rexona",), 20000)
+    await h.feed(_list_msg())
+    [a] = h.stored()
+    assert a.price_cents == 11000
+    sent = h.notifier.sent[0]
+    text = format_alert(sent)
+    assert "Rexona V8" in text and "Rexona Cotton Dry" in text
+    assert "NIVEA" not in text
+    assert "https://link.amazon/B0fVH2s7r" in text
+
+
+async def test_list_post_does_not_borrow_terms_across_items() -> None:
+    h = Harness()
+    h.wish("Mix", ("nivea", "rexona"), 20000)  # both words, but never in the same item
+    await h.feed(_list_msg())
+    assert h.stored() == []
+
+
+async def test_list_post_respects_the_price_cap_of_the_matching_item() -> None:
+    h = Harness()
+    h.wish("Rexona", ("rexona",), 10000)  # the Rexona items cost 110 and 117
+    await h.feed(_list_msg())
+    assert h.stored() == []
+
+
+async def test_list_post_item_inherits_the_header_terms() -> None:
+    h = Harness()
+    h.wish("Vaio", ("vaio",), 300000)
+    text = (
+        "Notebook VAIO FE16\n-Ryzen 3 = R$ 2374\nhttps://meli.la/1\n"
+        "-Core i5 = R$ 2659\nhttps://meli.la/2"
+    )
+    await h.feed(_list_msg(text))
+    [a] = h.stored()
+    assert a.price_cents == 237400

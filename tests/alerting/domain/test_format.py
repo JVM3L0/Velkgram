@@ -367,3 +367,49 @@ def test_extra_lines_stop_when_the_budget_is_used_exactly() -> None:
 
 def test_extra_lines_drop_code_lines_ignoring_case() -> None:
     assert extra_lines("use o cupom favorito agora\nDetalhe", ("FAVORITO",)) == ("Detalhe",)
+
+
+def test_format_list_alert_shows_the_matching_items_with_price_and_link() -> None:
+    from velkgram.alerting.domain.format import format_list_alert
+    from velkgram.shared.deals import ListItem
+
+    items = (
+        ListItem("12x Rexona V8 Masculino 250ml", 11000, "https://link.amazon/B0fVH2s7r"),
+        ListItem("12x Rexona Cotton Dry 250ml", 11700, "https://link.amazon/B0hk6Ou4C"),
+    )
+    text = format_list_alert(
+        wish_name="Rexona",
+        title="Leve 3 pelo preço de 2",
+        items=items,
+        channel_name="Promotom",
+        delayed_minutes=None,
+        store_title="Amazon",
+    )
+    assert text == (
+        "🔔 Rexona\n"
+        "Leve 3 pelo preço de 2 · Amazon\n"
+        "• 12x Rexona V8 Masculino 250ml — R$ 110,00\n"
+        "https://link.amazon/B0fVH2s7r\n"
+        "• 12x Rexona Cotton Dry 250ml — R$ 117,00\n"
+        "https://link.amazon/B0hk6Ou4C\n"
+        "via Promotom"
+    )
+
+
+def test_format_list_alert_caps_the_items_and_counts_the_rest() -> None:
+    from velkgram.alerting.domain.format import format_list_alert
+    from velkgram.shared.deals import ListItem
+
+    items = tuple(ListItem(f"Item {n}", 1000 + n, f"https://x.test/{n}") for n in range(5))
+    text = format_list_alert(
+        wish_name="W",
+        title="Lista",
+        items=items,
+        channel_name="C",
+        delayed_minutes=7,
+        store_title=None,
+    )
+    assert text.count("•") == 3
+    assert "+2 itens na lista" in text
+    assert "⏱ atrasado 7 min" in text
+    assert "https://x.test/4" not in text

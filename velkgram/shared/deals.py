@@ -2,8 +2,11 @@
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
+
+from velkgram.shared.text import URL_PATTERN
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,3 +232,60 @@ def extract_coupons(text: str) -> tuple[str, ...]:
         for code in _line_codes(line, coupon_post=coupon_post):
             found[code] = None
     return tuple(found)
+
+
+@dataclass(frozen=True, slots=True)
+class ListItem:
+    name: str
+    price_cents: int
+    link: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProductList:
+    header: str  # the post text before the first item: title, coupon notes, promo links
+    items: tuple[ListItem, ...]
+
+
+_NAME_EDGE = " -=:\u2013\u2022*"
+_ITEM_LINK_LOOKAHEAD = 2
+
+
+def _link_of(line: str, following: Sequence[str], links: Sequence[str]) -> str | None:
+    """The link on the item's own line, else a bare URL line right after it."""
+    url = URL_PATTERN.search(line)
+    if url is None:
+        candidates = [x.strip() for x in following if x.strip()][:_ITEM_LINK_LOOKAHEAD]
+        url = next(
+            (m for c in candidates if (m := URL_PATTERN.fullmatch(c)) is not None),
+            None,
+        )
+    if url is None:
+        return None
+    raw = url.group(0)
+    return next((x for x in links if raw.startswith(x)), raw)
+
+
+def product_list(text: str, links: Sequence[str]) -> ProductList | None:
+    """A post that lists several products, each with its own price and link, else None.
+
+    Lines like "-NIVEA 150ml = R$ 87" followed by the product link. A single product that
+    merely carries extra links (coupon page, "Link produto") is not a list.
+    """
+    lines = [line.strip() for line in text.splitlines()]
+    items: list[ListItem] = []
+    first: int | None = None
+    for i, line in enumerate(lines):
+        prices = listed_prices(line)
+        if not prices:
+            continue
+        name = line.split("R$", 1)[0].strip(_NAME_EDGE)
+        link = _link_of(line, lines[i + 1 :], links)
+        if not name or link is None:
+            continue
+        if first is None:
+            first = i
+        items.append(ListItem(name, prices[0], link))
+    if len(items) < 2 or first is None:
+        return None
+    return ProductList("\n".join(lines[:first]).strip(), tuple(items))

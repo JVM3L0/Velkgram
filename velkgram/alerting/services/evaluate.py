@@ -15,7 +15,7 @@ from velkgram.alerting.domain.dedup import (
     rule_for_key,
     text_key,
 )
-from velkgram.alerting.domain.format import format_coupon_line, message_link
+from velkgram.alerting.domain.format import format_coupon_line, format_list_alert, message_link
 from velkgram.alerting.domain.models import (
     ActiveCoupon,
     Alert,
@@ -29,10 +29,13 @@ from velkgram.alerting.ports.repository import AlertRepository
 from velkgram.alerting.ports.wishlist_reader import WishlistReader
 from velkgram.alerting.services.notify import send_with_retry
 from velkgram.shared.deals import (
+    ListItem,
+    ProductList,
     WishView,
     extract_coupons,
     extract_price,
     matches_terms,
+    product_list,
     within_over_max,
 )
 from velkgram.shared.events import AlertTriggered, MessageData, MessageEdited, MessageReceived
@@ -55,6 +58,16 @@ def _no_class(_m: MessageData) -> tuple[str | None, bool]:
 def _split_first_line(text: str, _store: str | None) -> tuple[str, str]:
     title, _, rest = text.strip().partition("\n")
     return title.strip(), rest
+
+
+def _list_hits(wish: WishView, listing: ProductList) -> tuple[ListItem, ...]:
+    """Items of a list post that match the wish (header terms count), cheapest first."""
+    found = [
+        item
+        for item in listing.items
+        if matches_terms(wish, normalize_text(f"{listing.header} {item.name}"))
+    ]
+    return tuple(sorted(found, key=lambda i: i.price_cents))
 
 
 def _identity(slug: str) -> str:
@@ -103,6 +116,8 @@ class Evaluator:
         self._classes: dict[tuple[int, int], tuple[str | None, bool]] = {}
         # (channel, message, price) -> coupon lines: wishes of one message share one lookup.
         self._lines: dict[tuple[int, int, int], tuple[str, ...]] = {}
+        # (channel, message, wish) -> the list items that matched, for the alert text
+        self._hits: dict[tuple[int, int, int], tuple[ListItem, ...]] = {}
 
     async def on_received(self, e: MessageReceived) -> None:
         m = e.message
@@ -152,18 +167,26 @@ class Evaluator:
                 return [], True
             delayed = int(age.total_seconds() // 60)
         price = extract_price(m.text)
+        listing = self._listing_of(m)
         created: list[Alert] = []
         over_max: list[WishView] = []
         complete = True
         for wish in self._wishes.enabled():
             try:
-                if not matches_terms(wish, text):
+                wish_price = price
+                if listing is not None:
+                    hits = _list_hits(wish, listing)
+                    if not hits:
+                        continue
+                    wish_price = hits[0].price_cents
+                    self._remember_hits(m, wish, hits)
+                elif not matches_terms(wish, text):
                     continue
-                if price is not None and price > wish.max_price_cents:
-                    if within_over_max(price, wish.max_price_cents):
+                if wish_price is not None and wish_price > wish.max_price_cents:
+                    if listing is None and within_over_max(wish_price, wish.max_price_cents):
                         over_max.append(wish)
                     continue
-                alert = self._decide(m, wish, text, price, delayed, now)
+                alert = self._decide(m, wish, text, wish_price, delayed, now)
             except Exception:
                 complete = False
                 log.exception(
@@ -197,6 +220,23 @@ class Evaluator:
                     self._remember_wish(wish)
                     created.append(alert)
         return created, complete
+
+    def _listing_of(self, m: MessageData) -> ProductList | None:
+        """The product list of a non-coupon post that lists several priced products."""
+        try:
+            if self._class_of(m)[1]:
+                return None
+            return product_list(m.text, m.links)
+        except Exception:
+            log.exception(
+                "list_parse_failed", extra={"channel_id": m.channel_id, "message_id": m.message_id}
+            )
+            return None
+
+    def _remember_hits(self, m: MessageData, wish: WishView, hits: tuple[ListItem, ...]) -> None:
+        if len(self._hits) >= _MEMO_CAP:
+            self._hits.pop(next(iter(self._hits)))
+        self._hits[(m.channel_id, m.message_id, wish.id)] = hits
 
     def _remember_wish(self, wish: WishView) -> None:
         self._wish_names[wish.id] = wish.name
@@ -340,6 +380,19 @@ class Evaluator:
             coupon_lines=self._coupon_lines(m, alert, t),
             over_max_cents=self._wish_max.get(alert.wish_id) if alert.over_max else None,
         )
+        hits = self._hits.pop((m.channel_id, m.message_id, alert.wish_id), None)
+        if hits and alert.kind is AlertKind.offer:
+            message = replace(
+                message,
+                rendered=format_list_alert(
+                    wish_name=message.wish_name,
+                    title=title,
+                    items=hits,
+                    channel_name=message.channel_name,
+                    delayed_minutes=alert.delayed_minutes,
+                    store_title=message.store_title,
+                ),
+            )
         ok, attempts, error = await send_with_retry(self._notifier, message, sleep=self._sleep)
         updated = replace(
             alert,

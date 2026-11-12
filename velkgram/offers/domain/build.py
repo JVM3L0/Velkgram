@@ -9,7 +9,7 @@ from velkgram.offers.domain.coupon import CouponDeal, coupon_deal, store_in_titl
 from velkgram.offers.domain.models import Offer, OfferKind
 from velkgram.offers.domain.stores import main_link, product_link, store_of
 from velkgram.offers.domain.title import title_of
-from velkgram.shared.deals import WishView, extract_coupons, extract_price
+from velkgram.shared.deals import WishView, extract_coupons, extract_price, product_list
 from velkgram.shared.events import MessageData
 from velkgram.shared.text import normalize_text
 
@@ -20,7 +20,7 @@ class MessageClass:
     is_coupon_post: bool
 
 
-def _classify(m: MessageData) -> tuple[str | None, str | None, str, CouponDeal | None]:
+def _classify(m: MessageData) -> tuple[str | None, str | None, str, CouponDeal | None, bool]:
     link = product_link(m.text, m.links) or main_link(m.links)
     store = store_of(link) if link else None
     title = title_of(m.text, store)
@@ -28,12 +28,17 @@ def _classify(m: MessageData) -> tuple[str | None, str | None, str, CouponDeal |
     deal = coupon_deal(title, text, m.links)
     if deal is not None and store is None:
         store = store_in_title(title)  # short links (tidd.ly) hide the store; the title names it
-    return link, store, title, deal
+    # A list of products has no single price or product link: the first link is a promo page.
+    listing = deal is None and product_list(m.text, m.links) is not None
+    if listing:
+        link = None
+        store = next((s for x in m.links if (s := store_of(x))), None)
+    return link, store, title, deal, listing
 
 
 def classify_message(m: MessageData) -> MessageClass:
     """Store and coupon-post flag of a message; `offer_from_message` shares this logic."""
-    _, store, _, deal = _classify(m)
+    _, store, _, deal, _ = _classify(m)
     return MessageClass(store=store, is_coupon_post=deal is not None)
 
 
@@ -43,13 +48,13 @@ def offer_from_message(
     text = m.text if m.text.strip() else None
     if text is None and not m.links:
         return None
-    link, store, title, deal = _classify(m)
+    link, store, title, deal, listing = _classify(m)
     return Offer(
         channel_id=m.channel_id,
         message_id=m.message_id,
         posted_at=m.date,
         title=title,
-        price_cents=None if deal else extract_price(m.text),
+        price_cents=None if deal or listing else extract_price(m.text),
         store=store,
         main_link=link,
         has_photo=m.has_photo,

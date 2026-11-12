@@ -4,7 +4,13 @@ import unicodedata
 from datetime import timedelta
 
 from velkgram.alerting.domain.models import ActiveCoupon, AlertMessage
-from velkgram.shared.deals import coupon_saving, extract_coupons, extract_price, min_not_met
+from velkgram.shared.deals import (
+    ListItem,
+    coupon_saving,
+    extract_coupons,
+    extract_price,
+    min_not_met,
+)
 from velkgram.shared.events import MessageData
 from velkgram.shared.text import URL_PATTERN
 
@@ -81,6 +87,34 @@ def format_alert(msg: AlertMessage) -> str:
     lines.append(f"via {msg.channel_name}")
     if msg.link:
         lines.append(msg.link)
+    return "\n".join(lines)
+
+
+_LIST_ITEMS_SHOWN = 3
+
+
+def format_list_alert(
+    *,
+    wish_name: str,
+    title: str,
+    items: tuple[ListItem, ...],
+    channel_name: str,
+    delayed_minutes: int | None,
+    store_title: str | None,
+) -> str:
+    """Alert for a post that lists products: only the items that match the wish, cheapest first."""
+    head = f"{title} · {store_title}" if store_title else title
+    lines = [f"🔔 {wish_name}"]
+    if head:
+        lines.append(head)
+    for item in items[:_LIST_ITEMS_SHOWN]:
+        lines.append(f"• {item.name} — {format_brl(item.price_cents)}")
+        lines.append(item.link)
+    if len(items) > _LIST_ITEMS_SHOWN:
+        lines.append(f"+{len(items) - _LIST_ITEMS_SHOWN} itens na lista")
+    if delayed_minutes is not None:
+        lines.append(f"⏱ atrasado {delayed_minutes} min")
+    lines.append(f"via {channel_name}")
     return "\n".join(lines)
 
 
