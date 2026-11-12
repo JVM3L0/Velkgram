@@ -19,7 +19,7 @@
     <div class="kv-row"><dt><i aria-hidden="true">sync_alt</i>Conexão</dt>
       <dd><span class="chip small {{ 'flag-error' if heartbeat.state == 'erro fatal' else 'state-on' }}">{{ heartbeat.state }}</span>{% if heartbeat.reason %} <span>{{ heartbeat.reason }}</span>{% endif %}</dd></div>
     <div class="kv-row"><dt><i aria-hidden="true">schedule</i>Último sinal</dt>
-      <dd>{{ heartbeat.last_seen.strftime("%d/%m/%Y %H:%M:%S") }} <span class="muted">({{ heartbeat.last_seen_ago }})</span>{% if heartbeat.stale %} <span class="chip small flag-error">desatualizado</span>{% endif %}</dd></div>
+      <dd>{{ (heartbeat.last_seen|local).strftime("%d/%m/%Y %H:%M:%S") }} <span class="muted">({{ heartbeat.last_seen_ago }})</span>{% if heartbeat.stale %} <span class="chip small flag-error">desatualizado</span>{% endif %}</dd></div>
     <div class="kv-row"><dt><i aria-hidden="true">mail</i>Mensagens lidas</dt>
       <dd>{{ heartbeat.messages_seen }} {{ "mensagem" if heartbeat.messages_seen == 1 else "mensagens" }}</dd></div>
     <div class="kv-row"><dt><i aria-hidden="true">notifications_active</i>Alertas</dt>
@@ -51,7 +51,7 @@
     {% for c in channels %}
       <tr>
         <td>{{ c.name }}</td>
-        <td>{% if c.last_message_at %}{{ c.last_message_at.strftime("%d/%m/%Y %H:%M") }} <span class="muted">({{ c.last_message_ago }})</span>{% else %}<span class="muted">nenhuma</span>{% endif %}</td>
+        <td>{% if c.last_message_at %}{{ (c.last_message_at|local).strftime("%d/%m/%Y %H:%M") }} <span class="muted">({{ c.last_message_ago }})</span>{% else %}<span class="muted">nenhuma</span>{% endif %}</td>
         <td>{% if c.silent %}<span class="chip small flag-error">silencioso (&gt; {{ c.silent_after_hours }} h)</span>{% endif %}</td>
       </tr>
     {% endfor %}
@@ -76,7 +76,7 @@
     <thead><tr><th>Quando</th><th>Desejo</th><th>Status</th></tr></thead>
     <tbody>
     {% for wish, state, when in failures %}
-      <tr><td>{{ when.strftime("%d/%m/%Y %H:%M") }}</td><td>{{ wish }}</td><td><span class="chip small status-{{ state }}">{{ {"failed": "falhou", "expired": "expirado", "pending": "pendente", "sent": "enviado"}.get(state, state) }}</span></td></tr>
+      <tr><td>{{ (when|local).strftime("%d/%m/%Y %H:%M") }}</td><td>{{ wish }}</td><td><span class="chip small status-{{ state }}">{{ {"failed": "falhou", "expired": "expirado", "pending": "pendente", "sent": "enviado"}.get(state, state) }}</span></td></tr>
     {% endfor %}
     </tbody>
   </table>

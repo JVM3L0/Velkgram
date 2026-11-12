@@ -1,6 +1,7 @@
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -232,3 +233,12 @@ def test_alerts_render_without_buttons_when_product_links_fails(
     assert page.status_code == 200
     assert "Produto" not in page.text
     assert any(r.getMessage() == "product_links_failed" for r in caplog.records)
+
+
+def test_alert_times_are_shown_in_the_app_timezone(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _seed(tmp_path, [(1000, 12345, "sent")])  # created exactly at NOW (UTC)
+    page = client.get("/alerts").text
+    local = NOW.astimezone(ZoneInfo("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M")
+    assert f">{local}</time>" in page
+    assert NOW.strftime("%d/%m/%Y %H:%M") != local

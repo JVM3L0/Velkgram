@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -297,7 +298,7 @@ def test_status_has_no_bot_line_when_the_callable_is_not_wired(tmp_path: Path) -
     app.include_router(
         build_router(
             get_conn=get_conn,
-            templates=_build_templates(),
+            templates=_build_templates(ZoneInfo("America/Sao_Paulo")),
             make_queries=SqliteIngestionQueries,
             channels=lambda _c: [],
             recent_failures=lambda _c: [],

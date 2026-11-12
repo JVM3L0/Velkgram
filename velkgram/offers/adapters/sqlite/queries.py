@@ -525,7 +525,14 @@ class SqliteOfferQueries:
                 PricePoint(datetime.fromisoformat(r["posted_at"]), int(r["price_cents"]))
                 for r in raw
             )
-        days = [(datetime.fromisoformat(r["day"]).replace(tzinfo=UTC), int(r["low"])) for r in rows]
+        # A bucket is a UTC date: park it at noon so it keeps its date in any zone from -12 to +11.
+        days = [
+            (
+                datetime.fromisoformat(r["day"]).replace(tzinfo=UTC) + timedelta(hours=12),
+                int(r["low"]),
+            )
+            for r in rows
+        ]
         if len(days) > _MAX_POINTS:
             n = len(days)
             buckets = [

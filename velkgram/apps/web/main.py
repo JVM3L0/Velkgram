@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -75,7 +76,7 @@ log = logging.getLogger(__name__)
 _RECENT_FAILURES = 10
 
 
-def _build_templates() -> Jinja2Templates:
+def _build_templates(tz: ZoneInfo) -> Jinja2Templates:
     loaders = [FileSystemLoader(d) for d in (_APP_TEMPLATES, *_MODULE_TEMPLATE_DIRS)]
     env = Environment(loader=ChoiceLoader(loaders), autoescape=True)
     env.globals["theme_classes"] = theme_classes
@@ -89,6 +90,8 @@ def _build_templates() -> Jinja2Templates:
         (_STATIC_DIR / "velkgram.js").read_bytes()
     ).hexdigest()[:12]
     env.filters["brl"] = format_brl
+    # Stored times are UTC; the interface shows the app timezone (America/Sao_Paulo, -3 h).
+    env.filters["local"] = lambda value: value.astimezone(tz)
     env.filters["linkify"] = linkify
     env.globals["below_alert"] = is_below_alert
     return Jinja2Templates(env=env)
@@ -222,7 +225,7 @@ def create_app(
         same_site="strict",
         https_only=settings.web_https_only,
     )
-    templates = _build_templates()
+    templates = _build_templates(settings.app_timezone)
     app.state.settings = settings
     app.state.templates = templates
     clock = clock or SystemClock()

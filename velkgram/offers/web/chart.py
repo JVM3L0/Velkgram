@@ -1,7 +1,7 @@
 """Price chart and sparkline as inline SVG (colors only via theme CSS variables)."""
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime, tzinfo
 from html import escape
 from itertools import pairwise
 
@@ -140,7 +140,10 @@ def price_chart_svg(
     height: int = _HEIGHT,
     variant: str = "wide",
     with_table: bool = True,
+    tz: tzinfo = UTC,
 ) -> str:
+    # Every date the chart prints is in the viewer's zone, not UTC.
+    points = [PricePoint(p.posted_at.astimezone(tz), p.price_cents) for p in points]
     cls = f"chart-svg chart-svg-{variant}"
     if not points:
         return (
@@ -303,11 +306,15 @@ def price_chart_svg(
     return "".join(parts)
 
 
-def price_chart_responsive(points: Sequence[PricePoint], max_price_cents: int | None) -> str:
+def price_chart_responsive(
+    points: Sequence[PricePoint], max_price_cents: int | None, tz: tzinfo = UTC
+) -> str:
     """Compact, medium and wide charts; CSS shows one, so text stays ~12 px at every viewport."""
     sizes = (("compact", 340), ("medium", 520), ("wide", 800))
     return "".join(
-        price_chart_svg(points, max_price_cents, width=w, variant=name, with_table=name == "wide")
+        price_chart_svg(
+            points, max_price_cents, width=w, variant=name, with_table=name == "wide", tz=tz
+        )
         for name, w in sizes
     )
 

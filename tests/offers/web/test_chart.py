@@ -296,3 +296,16 @@ def test_a_chart_without_an_alert_line_draws_no_alert_text_or_line() -> None:
     assert "chart-step" in svg and "Menor" in svg
     assert "alerta" not in svg.lower()
     assert "stroke-dasharray" not in svg  # the dashed alert line
+
+
+def test_chart_prints_dates_in_the_given_zone_not_utc() -> None:
+    from zoneinfo import ZoneInfo
+
+    late = [
+        PricePoint(datetime(2026, 3, 1, 1, 0, tzinfo=UTC), 100),
+        PricePoint(T0 + timedelta(days=2, hours=1), 90),
+    ]
+    utc = price_chart_svg(late, None)
+    local = price_chart_svg(late, None, tz=ZoneInfo("America/Sao_Paulo"))
+    assert "01/03/2026" in utc and "28/02/2026" not in utc
+    assert "28/02/2026" in local and "02/03/2026" in local
