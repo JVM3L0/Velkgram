@@ -53,7 +53,7 @@ def test_image_not_rendered_without_url_or_when_not_https(tmp_path: Path) -> Non
     client = _client(tmp_path)
     conn = _conn(tmp_path)
     add_link(conn, "https://l/a", product_id="A", image_url="http://img.test/a.jpg")
-    add_link(conn, "https://l/b", product_id="B", image_url=None)
+    add_link(conn, "https://l/b", store="kabum", product_id="B", image_url=None)
     put(conn, offer(1, link="https://l/a"), offer(2, link="https://l/b"))
     conn.close()
     assert "offer-thumb" not in client.get("/").text

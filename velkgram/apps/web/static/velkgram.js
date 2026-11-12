@@ -123,16 +123,22 @@
 })();
 
 // A product image that fails to load (dead link, hotlink block) steps aside so the placeholder
-// icon behind it shows. `error` does not bubble, so listen in the capture phase.
+// icon behind it shows. `error` does not bubble, so listen in the capture phase. The Amazon CDN
+// answers an unknown ASIN with a 1x1 GIF that loads fine, so a tiny image counts as broken too.
 (() => {
+  const isThumb = (img) => img instanceof HTMLImageElement && img.classList.contains("offer-thumb");
+  const markIfTiny = (img) => {
+    if (isThumb(img) && img.naturalWidth > 0 && img.naturalWidth < 8) img.classList.add("is-broken");
+  };
   document.addEventListener(
     "error",
     (event) => {
-      const img = event.target;
-      if (img instanceof HTMLImageElement && img.classList.contains("offer-thumb")) {
-        img.classList.add("is-broken");
-      }
+      if (isThumb(event.target)) event.target.classList.add("is-broken");
     },
     true,
   );
+  document.addEventListener("load", (event) => markIfTiny(event.target), true);
+  document.querySelectorAll("img.offer-thumb").forEach((img) => {
+    if (img.complete) markIfTiny(img);
+  });
 })();

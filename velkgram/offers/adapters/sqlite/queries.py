@@ -80,8 +80,14 @@ _SEEN_CHANNELS = (
     "AND (h.posted_at, h.channel_id, h.message_id) < (o.posted_at, o.channel_id, o.message_id) "
     f"AND julianday(o.posted_at) - julianday(h.posted_at) <= {_COLLAPSE_DAYS}) AS seen_channels"
 )
+# Amazon serves product images by ASIN from its CDN, so the datacenter-blocked page scrape is not
+# needed: a product with no scraped image falls back to that URL (the browser loads it).
+_AMAZON_ASIN_IMAGE = (
+    "'https://m.media-amazon.com/images/P/' || pl.product_id || '.01._SCLZZZZZZZ_.jpg'"
+)
 _IMAGE = (
-    "CASE WHEN pl.kind = 'product' AND pl.product_id IS NOT NULL THEN pl.image_url END AS image_url"
+    "CASE WHEN pl.kind = 'product' AND pl.product_id IS NOT NULL THEN COALESCE(pl.image_url, "
+    f"CASE WHEN pl.store = 'amazon' THEN {_AMAZON_ASIN_IMAGE} END) END AS image_url"
     ", pl.store AS pl_store, pl.product_id AS pl_product_id, pl.kind AS pl_kind, "
     "pl.final_url AS pl_final_url"
 )

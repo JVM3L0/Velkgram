@@ -39,7 +39,7 @@ def test_card_image_only_for_product_link_with_product_id(conn: sqlite3.Connecti
     add_link(
         conn, "https://l/b", product_id=None, image_url="https://img/b.jpg", kind="not_product"
     )
-    add_link(conn, "https://l/c", product_id="C", image_url=None)
+    add_link(conn, "https://l/c", store="kabum", product_id="C", image_url=None)
     add_link(conn, "https://l/d", product_id=None, image_url="https://img/d.jpg")  # no item id
     put(
         conn,
@@ -53,6 +53,29 @@ def test_card_image_only_for_product_link_with_product_id(conn: sqlite3.Connecti
     cards = {c.message_id: c for c in SqliteOfferQueries(conn).feed(NOTHING, None, 50).cards}
     assert cards[1].image_url == "https://img/a.jpg"
     assert all(cards[m].image_url is None for m in (2, 3, 4, 5, 6))
+
+
+def test_amazon_product_without_a_scraped_image_gets_the_asin_image(
+    conn: sqlite3.Connection,
+) -> None:
+    asin_image = "https://m.media-amazon.com/images/P/B0000WS6QI.01._SCLZZZZZZZ_.jpg"
+    add_link(conn, "https://l/a", product_id="B0000WS6QI", image_url=None)
+    add_link(conn, "https://l/b", product_id="B0000AW09Q", image_url="https://img/real.jpg")
+    add_link(conn, "https://l/c", store="shopee", product_id="1.2", image_url=None)
+    add_link(conn, "https://l/d", product_id=None, image_url=None)
+    add_link(conn, "https://l/e", product_id="B0E", image_url=None, kind="not_product")
+    put(
+        conn,
+        offer(1, link="https://l/a"),
+        offer(2, link="https://l/b"),
+        offer(3, link="https://l/c"),
+        offer(4, link="https://l/d"),
+        offer(5, link="https://l/e"),
+    )
+    cards = {c.message_id: c for c in SqliteOfferQueries(conn).feed(NOTHING, None, 50).cards}
+    assert cards[1].image_url == asin_image
+    assert cards[2].image_url == "https://img/real.jpg"  # a scraped image always wins
+    assert all(cards[m].image_url is None for m in (3, 4, 5))
 
 
 def test_match_card_carries_image(conn: sqlite3.Connection) -> None:
