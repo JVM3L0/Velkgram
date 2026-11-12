@@ -48,7 +48,7 @@
         <button class="small border" type="submit">Salvar id</button>
       </form>
     </div>
-    <div class="alert-actions">
+    <div class="alert-actions user-actions">
       <form method="post" action="/usuarios/{{ u.id }}/senha"><button class="small border" type="submit"><i aria-hidden="true">key</i><span>Nova senha</span></button></form>
       <form method="post" action="/usuarios/{{ u.id }}/ativo">
         <input type="hidden" name="enabled" value="{{ '0' if u.enabled else '1' }}">
