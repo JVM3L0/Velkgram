@@ -1,8 +1,10 @@
-"""Single-container runner: migrate, then collector + enricher + web under one supervisor.
+"""Single-container runner: migrate, then collector + web under one supervisor.
 
 Railway volumes attach to one service only, and the three processes share one SQLite file,
-so on Railway they run side by side in the same container. If any child dies, the others are
-stopped and the container exits non-zero so the platform restarts it.
+so on Railway they run side by side in the same container. The link enricher and the post-image
+sync are threads of the collector process (woken by `OfferCreated`), not children of their own.
+If any child dies, the others are stopped and the container exits non-zero so the platform
+restarts it.
 """
 
 import os
@@ -13,7 +15,7 @@ import threading
 from collections.abc import Mapping, Sequence
 
 DEFAULT_PORT = 8000
-GRACE_SECONDS = 40.0  # below the enricher's 45 s compose grace; Railway allows ~60 s
+GRACE_SECONDS = 40.0  # below the compose 45 s grace; Railway allows ~60 s
 
 
 def port_from_env(env: Mapping[str, str]) -> int:
@@ -32,7 +34,6 @@ def port_from_env(env: Mapping[str, str]) -> int:
 def serve_commands(port: int) -> dict[str, list[str]]:
     return {
         "collector": ["velkgram", "collector"],
-        "enricher": ["velkgram", "enrich"],
         "web": [
             sys.executable,
             "-m",

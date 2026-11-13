@@ -57,6 +57,7 @@ from velkgram.shared.events import (
     MessageDeleted,
     MessageEdited,
     MessageReceived,
+    OfferCreated,
     WishlistChanged,
 )
 from velkgram.shared.migrate import apply_migrations
@@ -85,8 +86,10 @@ class Collector:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         retention_days: int = 90,
         app_timezone: ZoneInfo | None = None,
+        on_offer_created: Callable[[], None] | None = None,
     ) -> None:
         self._conn = conn
+        self._on_offer_created = on_offer_created
         self._gateway = gateway
         self._notifier = notifier
         self._clock = clock
@@ -177,9 +180,15 @@ class Collector:
         # Same shape for coupon alerts: the handler only enqueues, a separate task sends.
         self._coupon_worker = asyncio.create_task(self._run_coupon_worker())
         self.bus.subscribe(CouponMatchedWish, self.coupon_alerter.on_coupon)
+        if self._on_offer_created is not None:
+            self.bus.subscribe(OfferCreated, self._wake_enricher)
         self.bus.subscribe(WishlistChanged, self._on_wishlist_changed)
         self.bus.subscribe(ChannelsChanged, self._on_channels_changed)
         self._spawn_retro(WishlistChanged(0))  # existing wishes and stale runs
+
+    async def _wake_enricher(self, _event: OfferCreated) -> None:
+        assert self._on_offer_created is not None
+        self._on_offer_created()
 
     async def wait_idle(self) -> None:
         while True:

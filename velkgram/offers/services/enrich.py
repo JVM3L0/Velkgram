@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -25,6 +26,7 @@ DISCOVER_BATCH = 50
 DISCOVER_EVERY_S = 60.0
 HOST_GAP_S = 2.0
 IDLE_MAX_S = 10.0
+STOP_POLL_S = 0.5
 HEARTBEAT_EVERY_S = 60.0
 PAUSE = timedelta(minutes=30)
 BLOCK_RETRY = timedelta(hours=24)
@@ -39,12 +41,15 @@ class LinkEnricher:
         fetcher: Fetcher,
         clock: Clock,
         wait: Callable[[float], bool] | None = None,
+        wake: threading.Event | None = None,
     ) -> None:
         self._links = links
         self._fetcher = fetcher
         self._clock = clock
         self._custom_wait = wait  # None: `run` sleeps on its stop event, so SIGTERM interrupts
         self._wait: Callable[[float], bool] = wait or threading.Event().wait
+        self._wake = wake or threading.Event()  # set by `wake`: new work, stop sleeping
+        self._stop: threading.Event | None = None
         self._paused: dict[str, datetime] = {}
         self._pause_hit: datetime | None = None  # end of the pause that stopped the last fetch
         self._last_request: dict[str, datetime] = {}
@@ -53,13 +58,56 @@ class LinkEnricher:
 
     # --- discovery and scheduling -------------------------------------------------------
 
+    def wake(self) -> None:
+        """New links may exist: end the idle sleep and discover now. Safe from any thread."""
+        self._wake.set()
+
+    def _sleep(self, seconds: float) -> bool:
+        """The idle sleep: ends early on `wake`; True when the loop should stop."""
+        if self._custom_wait is not None:
+            return self._custom_wait(seconds)
+        deadline = time.monotonic() + seconds
+        while True:
+            stopping = self._stop is not None and self._stop.is_set()
+            left = deadline - time.monotonic()
+            if stopping or left <= 0:
+                return stopping
+            # Two events cannot be awaited at once: a stop is noticed within STOP_POLL_S.
+            if self._wake.wait(min(left, STOP_POLL_S)):
+                return self._stop is not None and self._stop.is_set()
+
     def _paused_hosts(self, now: datetime) -> frozenset[str]:
         self._paused = {h: until for h, until in self._paused.items() if until > now}
         return frozenset(self._paused)
 
+    def _unavailable_hosts(self, now: datetime) -> frozenset[str]:
+        """Paused hosts plus hosts inside their gap: their rows wait, other hosts go on."""
+        return self._paused_hosts(now) | frozenset(self._cooling_hosts(now))
+
+    def _cooling_hosts(self, now: datetime) -> dict[str, float]:
+        """Hosts still inside their request gap, with the seconds left in it."""
+        left = {
+            host: HOST_GAP_S - (now - last).total_seconds()
+            for host, last in self._last_request.items()
+        }
+        return {host: secs for host, secs in left.items() if secs > 0}
+
+    def _cooldown_wait(self, now: datetime) -> float | None:
+        """Seconds until a host's gap ends, when only such hosts hold the due rows back."""
+        cooling = self._cooling_hosts(now)
+        if not cooling:
+            return None
+        earliest = self._links.earliest_next_try(now, self._paused_hosts(now))
+        if earliest is None or earliest > now:
+            return None
+        return min(cooling.values())
+
     def _discover_if_due(self, now: datetime) -> None:
+        woken = self._wake.is_set()
+        self._wake.clear()  # before the scan: a row stored after it re-wakes the next sleep
         due = (
-            self._last_discover_at is None
+            woken
+            or self._last_discover_at is None
             or self._last_discovered >= DISCOVER_BATCH
             or (now - self._last_discover_at).total_seconds() >= DISCOVER_EVERY_S
         )
@@ -71,7 +119,7 @@ class LinkEnricher:
         """Discover when due, then process one due link; True when a link was processed."""
         now = self._clock.now()
         self._discover_if_due(now)
-        row = self._links.next_due(now, self._paused_hosts(now))
+        row = self._links.next_due(now, self._unavailable_hosts(now))
         if row is None:
             return False
         self._process(row)
@@ -79,6 +127,7 @@ class LinkEnricher:
 
     def run(self, stop: threading.Event, limit: int | None = None, until_idle: bool = False) -> int:
         self._wait = self._custom_wait or stop.wait
+        self._stop = stop
         processed = 0
         last_beat: datetime | None = None
         while not stop.is_set() and (limit is None or processed < limit):
@@ -87,6 +136,11 @@ class LinkEnricher:
                 last_beat = self._beat()
                 continue
             now = self._clock.now()
+            cooldown = self._cooldown_wait(now)
+            if cooldown is not None:
+                if self._wait(cooldown):
+                    break
+                continue
             if until_idle:
                 # Idle, but the periodic discovery may not have looked since the last batch.
                 self._last_discovered = self._links.discover(DISCOVER_BATCH)
@@ -96,7 +150,7 @@ class LinkEnricher:
                 continue
             if last_beat is None or (now - last_beat).total_seconds() >= HEARTBEAT_EVERY_S:
                 last_beat = self._beat()
-            if self._wait(self._idle_delay(now)):
+            if self._sleep(self._idle_delay(now)):
                 break
         return processed
 
@@ -106,6 +160,8 @@ class LinkEnricher:
         return now
 
     def _idle_delay(self, now: datetime) -> float:
+        # Hosts in their request gap still count: `run` waits those out before it idles, so a
+        # row left here is not due yet and the sleep must end when it is.
         earliest = self._links.earliest_next_try(now, self._paused_hosts(now))
         if earliest is None:
             return IDLE_MAX_S

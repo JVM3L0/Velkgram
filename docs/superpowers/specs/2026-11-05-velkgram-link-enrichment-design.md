@@ -45,7 +45,7 @@ Offers carry affiliate and short links. 121 offers have an unknown store, and no
   - **`offers/services/enrich.py`:** the loop.
   - **`offers/ports/fetcher.py`:** the `Fetcher` port.
   - **`offers/adapters/http/fetcher.py`:** an httpx-based `HttpxFetcher`, wired only by `apps/cli.py`.
-- **Process:** a new compose service, `enricher`, runs `velkgram enrich` from the same image and DB volume.
+- **Process:** originally a compose service, `enricher`, running `velkgram enrich`. Superseded: see the 2026-11-13 addendum (it is now a thread of the collector process).
   - **Restart and startup:** `restart: unless-stopped`; `depends_on: migrate: service_completed_successfully`; `stop_grace_period: 45s`.
   - **Healthcheck:** none in this version. The status page shows the enricher's last run (§5.7).
   - **SIGTERM:** the loop stops between URLs.
@@ -60,7 +60,7 @@ Offers carry affiliate and short links. 121 offers have an unknown store, and no
 - **The link table is keyed by URL.** A `product_links` row is keyed by `url`: the offer's `main_link` exactly as stored (it is already extracted and trimmed), so every join compares equal strings. Offers join links by `offers.main_link = product_links.url`.
   - Offers get **no `link_id` column**, so an edit that changes `main_link` points to the right row automatically.
   - Coupon offers join on `main_link` as well.
-- **`OfferBuilder` is untouched.** The enricher discovers work itself, in small batches.
+- **Discovery is the enricher's own.** The enricher finds work itself, in small batches. (The addendum adds an `OfferCreated` wake-up from `OfferBuilder`; the discovery query is unchanged.)
   - It reads `main_link` values of non-deleted offers that have no `product_links` row, newest `MAX(posted_at)` first, `LIMIT 50`.
   - It inserts them as `pending`.
   - There is no separate backfill: old offers are simply older in the same queue.
@@ -241,3 +241,9 @@ Each URL is written in **its own short transaction**: one link-row update, plus 
   - the store is fixed for at least 90 % of cutt.ly and tidd.ly;
   - an id is found for at least 90 % of Amazon, KaBuM! and Mercado Livre;
   - no exceptions.
+
+## Addendum (2026-11-13): event-driven wake-up
+- **Hosting:** the enricher is no longer a process of its own. The collector handles SIGTERM by cancelling its main task, so the host stops between URLs (`stop_grace_period: 45s` on the collector). `apps/enrichment.py` (`EnricherHost`) runs it, and the post-image sync, as threads of the collector process, each with its own SQLite connection and restarted after a crash. `velkgram enrich` stays for manual and `--once` runs. §4's compose service and the `serve` child are gone.
+- **Event:** after storing a live offer with a link, `OfferBuilder` queues `OfferCreated(channel_id, message_id, main_link)` (`shared/events.py`). It goes out from the offer worker, after the alert path. The collector's handler calls `EnricherHost.wake()`.
+- **Doorbell, not queue:** `product_links` stays the durable queue, so retries, backoff, pauses and restarts are unchanged. `wake` ends the idle sleep and forces one discovery. The 60 s periodic discovery remains the safety net for lost wake-ups (restart, backfill).
+- **Gaps:** the 2 s per-host gap and the pauses are still honored. A host inside its gap is skipped by `next_due`, so it never holds back other hosts.

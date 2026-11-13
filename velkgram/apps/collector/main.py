@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import signal
 import sqlite3
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
@@ -19,6 +20,7 @@ from velkgram.alerting.ports.notifier_state import NotifierStateStore, NotifierS
 from velkgram.alerting.services.routing import UserRoutedNotifier
 from velkgram.apps.cli import MIGRATION_PACKAGES
 from velkgram.apps.collector.collector import Collector
+from velkgram.apps.enrichment import EnricherHost
 from velkgram.apps.notifier_wiring import ChatHolder, make_bot_client
 from velkgram.ingestion.adapters.telethon.client import (
     build_client,
@@ -166,6 +168,7 @@ async def run(
     sleep: Sleep = asyncio.sleep,
     *,
     bot_client: BotClient | None = None,
+    enricher: EnricherHost | None = None,
 ) -> None:
     clock = SystemClock()
     conn = connect(settings.db_path)
@@ -187,47 +190,71 @@ async def run(
         retention_days=settings.retention_days,
         app_timezone=settings.app_timezone,
     )
-    tasks: list[asyncio.Task[None]] = []
+    if enricher is not None:
+        enricher.start()
     try:
-        if bot is not None:
-            bot.begin_login()  # background; never blocks the user client's startup
-        await client.connect()  # type: ignore[misc]
-        await client.catch_up()  # type: ignore[misc]
-        if not await client.is_user_authorized():
-            await collector.fatal("session not authorized")
-        else:
-            if holder is not None:
-                await remember_chat(client, holder, SqliteNotifierStateStore(conn))
-            await gateway.warm_entity_cache()
-            register_handlers(client, collector.ingestor, clock)
-            # Baseline before start(): web changes made during startup are still published.
-            signal = PollingChangeSignal(conn)
-            try:
-                await collector.start()
-            except Exception as exc:
-                if not is_auth_fatal(exc):
-                    await _notify_start_failure(notifier_, exc)
-                raise
-            tasks = run_loops(collector, signal, sleep)
-            await client.run_until_disconnected()  # type: ignore[misc]
-    except Exception as exc:
-        if not is_auth_fatal(exc):
-            log.exception("collector_crashed")
-            raise
-        log.error("auth_fatal", extra={"reason": str(exc)})
-        await collector.fatal(str(exc))
-    finally:
-        for t in tasks:
-            t.cancel()
+        tasks: list[asyncio.Task[None]] = []
         try:
-            await collector.stop_offer_worker()  # also the coupon alerter
-        finally:
             if bot is not None:
-                await bot.aclose()
-    await _idle_forever()
+                bot.begin_login()  # background; never blocks the user client's startup
+            await client.connect()  # type: ignore[misc]
+            await client.catch_up()  # type: ignore[misc]
+            if not await client.is_user_authorized():
+                await collector.fatal("session not authorized")
+            else:
+                if holder is not None:
+                    await remember_chat(client, holder, SqliteNotifierStateStore(conn))
+                await gateway.warm_entity_cache()
+                register_handlers(client, collector.ingestor, clock)
+                # Baseline before start(): web changes made during startup are still published.
+                signal = PollingChangeSignal(conn)
+                try:
+                    await collector.start()
+                except Exception as exc:
+                    if not is_auth_fatal(exc):
+                        await _notify_start_failure(notifier_, exc)
+                    raise
+                tasks = run_loops(collector, signal, sleep)
+                await client.run_until_disconnected()  # type: ignore[misc]
+        except Exception as exc:
+            if not is_auth_fatal(exc):
+                log.exception("collector_crashed")
+                raise
+            log.error("auth_fatal", extra={"reason": str(exc)})
+            await collector.fatal(str(exc))
+        finally:
+            for t in tasks:
+                t.cancel()
+            try:
+                await collector.stop_offer_worker()  # also the coupon alerter
+            finally:
+                if bot is not None:
+                    await bot.aclose()
+        await _idle_forever()
+    finally:
+        if enricher is not None:
+            await asyncio.to_thread(enricher.stop)  # joins the workers: off the event loop
 
 
 async def main() -> None:
     settings = load_settings(os.environ)
     configure_logging(settings.log_level)
-    await run(settings, build_client(settings))
+    # SIGTERM cancels `run`, so its cleanup runs: the enricher stops between URLs, the bot closes.
+    task = asyncio.current_task()
+    loop = asyncio.get_running_loop()
+    terminated = False
+
+    def on_sigterm() -> None:
+        nonlocal terminated
+        terminated = True
+        if task is not None:
+            task.cancel()
+
+    loop.add_signal_handler(signal.SIGTERM, on_sigterm)
+    try:
+        await run(settings, build_client(settings), enricher=EnricherHost(settings))
+    except asyncio.CancelledError:
+        if not terminated:
+            raise
+    finally:
+        loop.remove_signal_handler(signal.SIGTERM)

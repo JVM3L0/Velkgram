@@ -161,7 +161,7 @@ docker compose run --rm collector velkgram report   # usage report
 
 ## Railway
 
-Railway volumes attach to a single service and the processes share one SQLite file, so everything runs in **one service**: `velkgram serve` migrates, then supervises the collector, the enricher and the web UI (if one dies, all stop and Railway restarts the container). `railway.toml` already sets the Dockerfile build, the start command, the `/login` healthcheck and the restart policy.
+Railway volumes attach to a single service and the processes share one SQLite file, so everything runs in **one service**: `velkgram serve` migrates, then supervises the collector and the web UI (if one dies, both stop and Railway restarts the container). The link enricher runs as a thread of the collector: a live offer with a link publishes `OfferCreated` after the alert, which wakes the enricher at once. `velkgram enrich` remains for manual or `--once` runs; do not leave a long-running one next to a live collector, since two enrichers do not share the 2 s per-host request gap. `railway.toml` already sets the Dockerfile build, the start command, the `/login` healthcheck and the restart policy.
 
 1. Push the repo to GitHub and create a Railway project from it (one service).
 2. Add a **volume** to the service mounted at `/app/data`.

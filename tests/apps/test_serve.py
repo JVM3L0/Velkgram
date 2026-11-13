@@ -17,10 +17,10 @@ def _exiter(code: int) -> list[str]:
     return [PY, "-c", f"raise SystemExit({code})"]
 
 
-def test_serve_commands_run_collector_enricher_and_web_on_the_given_port() -> None:
+def test_serve_commands_run_collector_and_web_on_the_given_port() -> None:
     commands = serve_commands(port=1234)
     assert commands["collector"] == ["velkgram", "collector"]
-    assert commands["enricher"] == ["velkgram", "enrich"]
+    assert set(commands) == {"collector", "web"}  # the enricher lives inside the collector
     web = commands["web"]
     assert "--factory" in web
     assert "velkgram.apps.web.main:create_app" in web

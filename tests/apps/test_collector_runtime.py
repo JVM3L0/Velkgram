@@ -25,6 +25,7 @@ from velkgram.apps.cli import MIGRATION_PACKAGES, build_parser
 from velkgram.apps.collector import main as collector_main
 from velkgram.apps.collector.collector import Collector
 from velkgram.apps.collector.main import build_notifier, remember_chat, run, run_loops
+from velkgram.apps.enrichment import EnricherHost
 from velkgram.apps.notifier_wiring import ChatHolder
 from velkgram.ingestion import TelegramDeferred
 from velkgram.shared.config import Settings
@@ -535,3 +536,66 @@ async def test_built_notifier_routes_each_alert_to_its_users_chat(tmp_path: Path
     assert [chat for chat, _, _ in client.sent] == [555, 999]
     assert bot is not None
     await bot.aclose()
+
+
+class _Host(EnricherHost):
+    def __init__(self, settings: Settings) -> None:
+        super().__init__(settings)
+        self.events: list[str] = []
+
+    def start(self) -> None:
+        self.events.append("start")
+
+    def stop(self) -> None:
+        self.events.append("stop")
+
+
+async def test_the_enricher_is_started_with_the_collector_and_stopped_when_it_ends(
+    tmp_path: Path,
+) -> None:
+    client = _client()
+    client.run_until_disconnected.side_effect = RuntimeError("network")
+    host = _Host(_settings(tmp_path))
+    with pytest.raises(RuntimeError, match="network"):
+        await run(_settings(tmp_path), client, notifier=FakeNotifier(), enricher=host)
+    assert host.events == ["start", "stop"]
+
+
+async def test_the_enricher_keeps_running_after_an_auth_fatal_collector(tmp_path: Path) -> None:
+    client = _client()
+    client.run_until_disconnected.side_effect = errors.AuthKeyUnregisteredError(None)
+    host = _Host(_settings(tmp_path))
+    task = asyncio.create_task(
+        run(_settings(tmp_path), client, notifier=FakeNotifier(), enricher=host)
+    )
+    await _settle()
+    assert not task.done()
+    assert host.events == ["start"]  # the collector idles, links keep being followed
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    assert host.events == ["start", "stop"]
+
+
+async def test_sigterm_cancels_run_so_its_cleanup_runs_and_main_returns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+    import signal
+
+    cleaned: list[int] = []
+
+    async def fake_run(settings: Settings, client: object, **kw: object) -> None:
+        try:
+            await asyncio.sleep(60)
+        finally:
+            cleaned.append(1)
+
+    monkeypatch.setattr(collector_main, "run", fake_run)
+    monkeypatch.setattr(collector_main, "load_settings", lambda env: _settings(tmp_path))
+    monkeypatch.setattr(collector_main, "build_client", lambda settings: object())
+    monkeypatch.setattr(collector_main, "configure_logging", lambda level: None)
+    task = asyncio.create_task(collector_main.main())
+    await _settle()
+    os.kill(os.getpid(), signal.SIGTERM)
+    await asyncio.wait_for(task, timeout=5)  # returns normally: no CancelledError escapes
+    assert cleaned == [1]

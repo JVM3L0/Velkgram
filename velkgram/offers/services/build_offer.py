@@ -22,6 +22,7 @@ from velkgram.shared.events import (
     MessageDeleted,
     MessageEdited,
     MessageReceived,
+    OfferCreated,
 )
 from velkgram.shared.ports import Clock
 
@@ -43,7 +44,7 @@ class OfferBuilder:
     ) -> None:
         self._repo = repo
         self._publish = publish
-        self._outbox: list[CouponMatchedWish] = []
+        self._outbox: list[Event] = []
         self._wishes = wishes
         self._clock = clock
         self._queue: asyncio.Queue[_Event] = asyncio.Queue()
@@ -70,20 +71,19 @@ class OfferBuilder:
             await self._flush()
 
     async def _flush(self) -> None:
-        """Publish the coupon events the last `_handle` queued; a failure never stops the worker."""
+        """Publish the events the last `_handle` queued; a failure never stops the worker."""
         events, self._outbox = self._outbox, []
         for event in events:
             try:
                 assert self._publish is not None
                 await self._publish(event)
             except Exception:
-                log.exception(
-                    "coupon_event_publish_failed",
-                    extra={
-                        "channel_id": event.coupon_channel_id,
-                        "message_id": event.coupon_message_id,
-                    },
+                name = (
+                    "coupon_event_publish_failed"
+                    if isinstance(event, CouponMatchedWish)
+                    else "offer_event_publish_failed"
                 )
+                log.exception(name, extra=_event_ids(event))
 
     def _handle(self, e: _Event) -> None:
         try:
@@ -128,7 +128,13 @@ class OfferBuilder:
             self._repo.delete_offer_matches(offer.channel_id, offer.message_id)
         if self._publish is not None and source == MatchSource.live and m.source == "live":
             self._queue_coupon_event(m, offer, now)
+            self._queue_offer_created(offer)
         return True
+
+    def _queue_offer_created(self, offer: Offer) -> None:
+        """Tell the link enricher a live offer with a link is stored (after the alert path)."""
+        if offer.main_link is not None and not offer.deleted:
+            self._outbox.append(OfferCreated(offer.channel_id, offer.message_id, offer.main_link))
 
     def _queue_coupon_event(self, m: MessageData, offer: Offer, now: datetime) -> None:
         """Queue a `CouponMatchedWish` for a fresh live coupon. Never raises: the offer and the
@@ -247,6 +253,14 @@ class OfferBuilder:
             for w in wishes()
             if matches(w, offer.norm_text, offer.price_cents)
         ]
+
+
+def _event_ids(e: Event) -> dict[str, object]:
+    if isinstance(e, CouponMatchedWish):
+        return {"channel_id": e.coupon_channel_id, "message_id": e.coupon_message_id}
+    if isinstance(e, OfferCreated):
+        return {"channel_id": e.channel_id, "message_id": e.message_id}
+    return {"event_type": type(e).__name__}
 
 
 def _ids(e: _Event) -> dict[str, object]:

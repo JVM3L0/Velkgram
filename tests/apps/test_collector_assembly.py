@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -55,9 +56,9 @@ class Env:
         apply_migrations(self.conn, MIGRATION_PACKAGES)
         self.collector = self.build()
 
-    def build(self) -> Collector:
+    def build(self, **kw: Any) -> Collector:
         self.bus = MemoryBus()
-        c = Collector(self.conn, self.gateway, self.notifier, self.clock, self.bus, _nosleep)
+        c = Collector(self.conn, self.gateway, self.notifier, self.clock, self.bus, _nosleep, **kw)
         self.collector = c
         LIVE_COLLECTORS.append(c)
         return c
@@ -604,3 +605,26 @@ async def test_failing_bot_login_fails_the_alert_without_leaking_the_token(
         assert "SECRET" not in r.getMessage()
         assert "SECRET" not in str(r.__dict__)
         assert "SECRET" not in (caplog.handler.format(r) if caplog.handler else "")
+
+
+async def test_a_stored_live_offer_with_a_link_wakes_the_enricher(tmp_path: Path) -> None:
+    env = Env(tmp_path)
+    woken: list[int] = []
+    env.build(on_offer_created=lambda: woken.append(1))
+    env.channel()
+    await env.collector.start()
+    m = replace(msg(1, CH, "Teclado mecanico R$ 200"), links=("https://amzn.to/x",))
+    await env.collector.ingestor.on_new(m)
+    await env.collector.wait_idle()
+    assert woken == [1]
+
+
+async def test_an_offer_without_a_link_does_not_wake_the_enricher(tmp_path: Path) -> None:
+    env = Env(tmp_path)
+    woken: list[int] = []
+    env.build(on_offer_created=lambda: woken.append(1))
+    env.channel()
+    await env.collector.start()
+    await env.collector.ingestor.on_new(msg(1, CH, "Teclado mecanico R$ 200"))
+    await env.collector.wait_idle()
+    assert woken == []

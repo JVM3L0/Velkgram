@@ -18,6 +18,7 @@ from velkgram.shared.events import (
     MessageDeleted,
     MessageEdited,
     MessageReceived,
+    OfferCreated,
 )
 
 NOW = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
@@ -305,14 +306,20 @@ def _product_msg(message_id: int, text: str = "SSD Kingston 1TB por R$ 99") -> M
 
 
 class Published:
+    """Records published events: `events` for the coupon tests, `created` for `OfferCreated`."""
+
     def __init__(self) -> None:
         self.events: list[Event] = []
+        self.created: list[OfferCreated] = []
         self.fail = False
 
     async def __call__(self, e: Event) -> None:
         if self.fail:
             raise RuntimeError("bus down")
-        self.events.append(e)
+        if isinstance(e, OfferCreated):
+            self.created.append(e)
+        else:
+            self.events.append(e)
 
 
 @pytest.fixture
@@ -587,3 +594,51 @@ def test_reclassifying_a_post_as_chatter_drops_the_matches_it_had(
     assert len(repo.priced_points(1)) == 1
     builder.ingest(_msg("Precin", links=(), has_photo=False), source=MatchSource.retro)
     assert repo.priced_points(1) == []
+
+
+# --- offer events -----------------------------------------------------------------------------
+
+
+def _created(published: Published) -> list[OfferCreated]:
+    return published.created
+
+
+async def test_live_offer_with_a_link_publishes_offer_created_once_stored(
+    repo: InMemoryOfferRepository, wishes: FakeWishReader, published: Published
+) -> None:
+    b = OfferBuilder(repo, wishes, FakeClock(NOW), publish=published)
+    await _feed(b, _msg())
+    assert _created(published) == [OfferCreated(1, 2, "https://amzn.to/x")]
+    assert repo.get(1, 2) is not None  # the event goes out after the offer is stored
+
+
+async def test_offer_without_a_link_publishes_no_offer_created(
+    repo: InMemoryOfferRepository, wishes: FakeWishReader, published: Published
+) -> None:
+    b = OfferBuilder(repo, wishes, FakeClock(NOW), publish=published)
+    await _feed(b, _msg(links=()))
+    assert _created(published) == []
+
+
+async def test_retro_ingest_publishes_no_offer_created(
+    repo: InMemoryOfferRepository, wishes: FakeWishReader, published: Published
+) -> None:
+    b = OfferBuilder(repo, wishes, FakeClock(NOW), publish=published)
+    b.ingest(_msg(), source=MatchSource.retro)
+    assert b._outbox == []
+
+
+async def test_a_failing_offer_created_publish_does_not_stop_the_worker(
+    repo: InMemoryOfferRepository,
+    wishes: FakeWishReader,
+    published: Published,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    b = OfferBuilder(repo, wishes, FakeClock(NOW), publish=published)
+    published.fail = True
+    with caplog.at_level(logging.ERROR):
+        await _feed(b, _msg())
+    assert [r for r in caplog.records if r.message == "offer_event_publish_failed"]
+    published.fail = False
+    await _feed(b, _msg(message_id=3))
+    assert len(_created(published)) == 1

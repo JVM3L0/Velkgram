@@ -91,6 +91,15 @@ class CouponMatchedWish:
     targets: tuple[CouponTargetData, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class OfferCreated:
+    """A live offer with a link was stored: the link enricher has new work."""
+
+    channel_id: int
+    message_id: int
+    main_link: str
+
+
 Event = (
     MessageReceived
     | MessageEdited
@@ -99,4 +108,5 @@ Event = (
     | WishlistChanged
     | ChannelsChanged
     | CouponMatchedWish
+    | OfferCreated
 )

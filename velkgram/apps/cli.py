@@ -22,25 +22,22 @@ from velkgram.alerting.adapters.sqlite.queries import SqliteAlertQueries
 from velkgram.alerting.ports.notifier import NotifierError
 from velkgram.alerting.ports.notifier_state import NotifierStatus
 from velkgram.apps import notifier_wiring
+from velkgram.apps.enrichment import run_post_images
 from velkgram.apps.notifier_wiring import ChatHolder, MemoryNotifierStateStore
 from velkgram.apps.web.auth import hash_password, verify_password
-from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.adapters.telethon.client import build_client
 from velkgram.offers import LinkEnricher, OfferBuilder, rebuild_offers
-from velkgram.offers.adapters.channels_api import ChannelsApiPublicChannels
 from velkgram.offers.adapters.http.channel_pages import HttpxChannelPages
 from velkgram.offers.adapters.http.fetcher import HttpxFetcher, configure_fetch_logging
 from velkgram.offers.adapters.ingestion_api import IngestionApiMessageSource
 from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
-from velkgram.offers.adapters.sqlite.post_images import SqlitePostImageRepository
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
 from velkgram.offers.ports.fetcher import Fetcher
 from velkgram.offers.ports.post_images import ChannelPages
 from velkgram.offers.ports.queries import FeedFilter
-from velkgram.offers.services.post_images import PostImageSync
 from velkgram.offers.web.format import brl
 from velkgram.reporting.adapters.alerting_api import AlertingAlertStats, price_extractor
 from velkgram.reporting.adapters.ingestion_api import IngestionMessageStats
@@ -290,18 +287,7 @@ def _make_channel_pages() -> ChannelPages:
 
 
 def _run_post_images(settings: Settings, stop: threading.Event) -> None:
-    """Keep post image URLs fresh; its own connection, since it runs on its own thread."""
-    conn = connect(settings.db_path)
-    try:
-        PostImageSync(
-            ChannelsApiPublicChannels(SqliteChannelRepository(conn)),
-            _make_channel_pages(),
-            SqlitePostImageRepository(conn),
-            SystemClock(),
-            settings.retention_days,
-        ).run(stop)
-    finally:
-        conn.close()
+    run_post_images(settings, stop, _make_channel_pages)
 
 
 def cmd_enrich(args: argparse.Namespace) -> int:
@@ -442,7 +428,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("serve", help="migrate, then run collector, enricher and web in one container")
     sub.add_parser("rebuild-offers", help="rebuild offers and wish matches from stored messages")
     sub.add_parser("notify-test", help="send a test alert through the Telegram bot")
-    enrich = sub.add_parser("enrich", help="follow offer links to learn store, title and image")
+    enrich = sub.add_parser(
+        "enrich",
+        help="follow offer links to learn store, title and image (the collector already runs one)",
+    )
     enrich.add_argument("--once", action="store_true", help="exit once nothing is due")
     enrich.add_argument("--limit", type=int, default=None, help="stop after N links")
     report = sub.add_parser("report", help="usage report: volume, alerts, latency, token cost")

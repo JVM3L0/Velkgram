@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -149,6 +150,24 @@ def test_different_hosts_do_not_wait() -> None:
     env.enricher.step()
     env.enricher.step()
     assert env.waits == []
+
+
+def test_a_host_in_its_gap_does_not_hold_back_other_hosts() -> None:
+    a1, a2, b = "https://a.example/1", "https://a.example/2", "https://b.example/1"
+    env = _env_with(b, a1, a2)  # newest first: a2, a1, b
+    assert env.enricher.step()
+    assert env.enricher.step()  # a.example is within its 2 s gap: b.example goes first
+    assert env.fetcher.calls == [a2, b]
+    assert env.waits == []
+
+
+def test_run_waits_out_the_gap_only_when_just_the_cooling_host_is_left() -> None:
+    a1, a2, b = "https://a.example/1", "https://a.example/2", "https://b.example/1"
+    env = _env_with(b, a1, a2)
+    assert env.enricher.run(threading.Event(), until_idle=True) == 3
+    assert env.fetcher.calls == [a2, b, a1]
+    assert len(env.waits) == 1
+    assert 0 < env.waits[0] <= 2.0
 
 
 def test_403_from_final_host_pauses_that_host_but_others_proceed() -> None:
@@ -416,6 +435,7 @@ def test_pause_is_keyed_on_the_host_that_answered_not_the_first_hop() -> None:
     env.fetcher.scripts[CUTT] = Script((CUTT, "https://www.kabum.com.br/x"), 403)
     env.enricher.step()
     assert set(env.enricher._paused) == {"www.kabum.com.br"}
+    env.clock.advance(2.0)  # past cutt.ly's request gap
     assert env.enricher.step()  # cutt.ly itself is not paused
     assert env.fetcher.calls == [CUTT, "https://cutt.ly/second"]
 
@@ -520,3 +540,68 @@ def test_run_until_idle_exits_when_nothing_is_left() -> None:
     env = _env_with("https://a.example/1")
     assert env.enricher.run(threading.Event(), until_idle=True) == 1
     assert env.waits == []
+
+
+# --- wake-up by event -------------------------------------------------------------------------
+
+
+def test_wake_discovers_a_new_link_before_the_periodic_discovery_is_due() -> None:
+    env = _env_with("https://a.example/1")
+    assert env.enricher.step()
+    env.add(5, "https://b.example/1")
+    assert not env.enricher.step()  # discovered 0 s ago: the 60 s periodic one is not due
+    env.enricher.wake()
+    assert env.enricher.step()
+    assert env.fetcher.calls[-1] == "https://b.example/1"
+
+
+def test_one_wake_forces_one_discovery() -> None:
+    env = _env_with("https://a.example/1")
+    env.enricher.step()
+    env.enricher.wake()
+    env.enricher.step()  # consumes the wake-up
+    env.add(5, "https://b.example/1")
+    assert not env.enricher.step()
+
+
+def test_wake_cuts_the_idle_sleep_short() -> None:
+    env = Env()
+    wake = threading.Event()
+    enricher = LinkEnricher(env.links, env.fetcher, env.clock, wake=wake)
+    stop = threading.Event()
+    worker = threading.Thread(target=enricher.run, args=(stop,), daemon=True)
+    worker.start()
+    try:
+        deadline = time.monotonic() + 5
+        while env.links.heartbeat() is None:  # the first idle beat: it is about to sleep 10 s
+            assert time.monotonic() < deadline, "never went idle"
+            time.sleep(0.01)
+        env.add(1, "https://a.example/1")
+        enricher.wake()
+        while not env.fetcher.calls:
+            assert time.monotonic() < deadline, "the wake-up did not reach the sleeping loop"
+            time.sleep(0.01)
+    finally:
+        stop.set()
+        enricher.wake()
+        worker.join(timeout=5)
+    assert not worker.is_alive()
+
+
+def test_wake_during_a_request_gap_does_not_cut_the_gap_short() -> None:
+    env = _env_with("https://a.example/1", "https://a.example/2")
+    env.enricher.step()
+    env.enricher.wake()
+    env.enricher.run(threading.Event(), until_idle=True)
+    assert env.waits and all(w <= 2.0 for w in env.waits)  # the gap is still waited out
+    assert len(env.fetcher.calls) == 2
+
+
+def test_idle_sleep_ends_when_a_cooling_hosts_retry_comes_due() -> None:
+    url = "https://a.example/1"
+    env = _env_with(url)
+    env.links.discover()
+    now = env.clock.now()
+    env.links._rows[url] = replace(env.row(url), next_try_at=now + timedelta(seconds=1))
+    env.enricher._last_request["a.example"] = now  # inside its 2 s request gap
+    assert env.enricher._idle_delay(now) == 1.0
