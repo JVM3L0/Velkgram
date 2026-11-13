@@ -36,6 +36,8 @@ from velkgram.wishlist import Wish
 KB = 1024
 LINKS = 4000
 SAMPLES = 40
+MIN_LINKS_DURING = 50  # enricher work that must overlap the samples, whatever the machine
+MAX_SAMPLES = 2000
 
 
 def _meta_flood(size: int) -> str:
@@ -132,7 +134,11 @@ class _Clock:
 
 
 async def measure(tmp_path: Path) -> tuple[list[float], int]:
-    """Alert latencies while the enricher runs flat out, and how many links it finished."""
+    """Alert latencies while the enricher runs flat out, and the links it finished meanwhile.
+
+    Sampling goes on until enough enricher work overlapped it: a slow machine takes longer
+    instead of proving nothing.
+    """
     db = tmp_path / "v.db"
     _seed(db)
     fetcher = _FloodFetcher()
@@ -145,19 +151,22 @@ async def measure(tmp_path: Path) -> tuple[list[float], int]:
     latencies: list[float] = []
     host.start()
     try:
-        while fetcher.calls < 20:  # the enricher is busy before the first sample
+        while fetcher.calls < 1:  # the enricher is busy before the first sample
             await asyncio.sleep(0.01)
-        for i in range(SAMPLES):
-            latencies.append(await alerts.latency(i))
+        before = fetcher.calls
+        while len(latencies) < SAMPLES or (
+            fetcher.calls - before < MIN_LINKS_DURING and len(latencies) < MAX_SAMPLES
+        ):
+            latencies.append(await alerts.latency(len(latencies)))
             await asyncio.sleep(0.02)  # let the enricher run between alerts, like real traffic
-        done = fetcher.calls
+        during = fetcher.calls - before
     finally:
         await asyncio.to_thread(host.stop)
         await alerts.close()
-    return latencies, done
+    return latencies, during
 
 
 async def test_alert_latency_holds_while_the_enricher_runs_flat_out(tmp_path: Path) -> None:
-    latencies, done = await measure(tmp_path)
-    assert done > 100, f"the enricher barely ran ({done} links): the test proves nothing"
+    latencies, during = await measure(tmp_path)
+    assert during >= MIN_LINKS_DURING, f"the enricher barely ran ({during} links): proves nothing"
     within(max(latencies), 0.2, "alert latency under enricher load")
