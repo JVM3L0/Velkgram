@@ -8,6 +8,7 @@ class FakeBotClient:
         self._monotonic = monotonic
         self.start_calls: list[str] = []
         self.sent: list[tuple[int, str, bool]] = []
+        self.html_flags: list[bool] = []
         self.send_times: list[float] = []
         self.disconnects = 0
         self.start_error: Exception | None = None
@@ -23,7 +24,9 @@ class FakeBotClient:
         if self.start_error is not None:
             raise self.start_error
 
-    async def send_message(self, chat_id: int, text: str, *, link_preview: bool) -> None:
+    async def send_message(
+        self, chat_id: int, text: str, *, link_preview: bool, html: bool = False
+    ) -> None:
         if self._monotonic is not None:
             self.send_times.append(self._monotonic())
         if self.send_gate is not None:
@@ -31,6 +34,7 @@ class FakeBotClient:
         if self.send_error is not None:
             raise self.send_error
         self.sent.append((chat_id, text, link_preview))
+        self.html_flags.append(html)
 
     async def disconnect(self) -> None:
         self.disconnects += 1

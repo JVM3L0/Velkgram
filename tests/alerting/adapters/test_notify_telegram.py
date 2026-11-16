@@ -7,8 +7,9 @@ import pytest
 from tests.fakes.bot_client import FakeBotClient, FakeMonotonic
 from tests.fakes.clock import FakeClock
 from tests.fakes.notifier_state import InMemoryNotifierStateStore
-from velkgram.alerting import AlertMessage, NotifierError, format_alert
+from velkgram.alerting import AlertMessage, NotifierError
 from velkgram.alerting.adapters.notify_telegram import TelegramBotNotifier
+from velkgram.alerting.domain.format import format_alert_html
 from velkgram.alerting.ports.notifier_state import NotifierStatus
 
 TOKEN = "123:SECRET-TOKEN"
@@ -61,7 +62,8 @@ def env() -> Env:
 
 async def test_notify_sends_text_with_preview(env: Env) -> None:
     await env.notifier.notify(MSG)
-    assert env.client.sent == [(42, format_alert(MSG), True)]
+    assert env.client.sent == [(42, format_alert_html(MSG), True)]
+    assert env.client.html_flags == [True]
     assert env.client.start_calls == [TOKEN]
     assert env.status() == (NotifierStatus.OK, None)
 
@@ -69,6 +71,7 @@ async def test_notify_sends_text_with_preview(env: Env) -> None:
 async def test_notify_system_sends_text_with_preview(env: Env) -> None:
     await env.notifier.notify_system("Velkgram parou")
     assert env.client.sent == [(42, "Velkgram parou", True)]
+    assert env.client.html_flags == [False]  # system text is plain: no accidental markup
 
 
 async def test_concurrent_sends_are_paced(env: Env) -> None:
@@ -80,7 +83,7 @@ async def test_concurrent_sends_are_paced(env: Env) -> None:
 async def test_burst_of_ten_delivers_all_in_order(env: Env) -> None:
     messages = [AlertMessage(f"w{i}", f"t{i}", None, "c", None, None) for i in range(10)]
     await asyncio.gather(*(env.notifier.notify(m) for m in messages))
-    assert [s[1] for s in env.client.sent] == [format_alert(m) for m in messages]
+    assert [s[1] for s in env.client.sent] == [format_alert_html(m) for m in messages]
 
 
 async def test_send_error_becomes_notifier_error_with_class_name(env: Env) -> None:

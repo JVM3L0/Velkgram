@@ -11,7 +11,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
-from velkgram.alerting.domain.format import format_alert
+from velkgram.alerting.domain.format import format_alert_html
 from velkgram.alerting.domain.models import AlertMessage
 from velkgram.alerting.ports.notifier import NotifierError
 from velkgram.alerting.ports.notifier_state import NotifierStateStore, NotifierStatus
@@ -23,7 +23,9 @@ log = logging.getLogger(__name__)
 class BotClient(Protocol):
     async def start(self, bot_token: str) -> None: ...
 
-    async def send_message(self, chat_id: int, text: str, *, link_preview: bool) -> None: ...
+    async def send_message(
+        self, chat_id: int, text: str, *, link_preview: bool, html: bool = False
+    ) -> None: ...
 
     async def disconnect(self) -> None: ...
 
@@ -117,7 +119,7 @@ class TelegramBotNotifier:
     async def notify(self, message: AlertMessage) -> None:
         if not await self.ensure_started():
             raise NotifierError("bot_unavailable")
-        await self._send(format_alert(message), message.chat_id)
+        await self._send(format_alert_html(message), message.chat_id, html=True)
 
     async def notify_system(self, text: str) -> None:
         try:
@@ -128,7 +130,7 @@ class TelegramBotNotifier:
         except TimeoutError:
             raise NotifierError("timeout") from None
 
-    async def _send(self, text: str, to: int | None = None) -> None:
+    async def _send(self, text: str, to: int | None = None, *, html: bool = False) -> None:
         chat_id = to if to is not None else self._chat_id()
         if chat_id is None:
             self._record(NotifierStatus.ERROR, "sem chat")
@@ -141,7 +143,7 @@ class TelegramBotNotifier:
             self._last_send_at = self._monotonic()
             failure: str | None = None
             try:
-                await self._client.send_message(chat_id, text, link_preview=True)
+                await self._client.send_message(chat_id, text, link_preview=True, html=html)
             except Exception as exc:
                 failure = type(exc).__name__
             if failure is not None:

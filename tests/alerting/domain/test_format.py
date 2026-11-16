@@ -413,3 +413,34 @@ def test_format_list_alert_caps_the_items_and_counts_the_rest() -> None:
     assert "+2 itens na lista" in text
     assert "⏱ atrasado 7 min" in text
     assert "https://x.test/4" not in text
+
+
+def test_html_alert_bolds_price_links_the_title_and_makes_codes_tappable() -> None:
+    from velkgram.alerting.domain.format import format_alert_html
+
+    out = format_alert_html(
+        AlertMessage(
+            wish_name="Monitor <LG>",
+            text="Monitor LG 27 por R$ 1.599,00 cupom: ABC123",
+            title="Monitor LG & cia",
+            price_cents=159900,
+            channel_name="Promos",
+            link="https://loja.example/p?a=1&b=2",
+            delayed_minutes=None,
+            store_title="KaBuM",
+        )
+    )
+    assert out.splitlines() == [
+        "🔔 <b>Monitor &lt;LG&gt;</b>",
+        '<a href="https://loja.example/p?a=1&amp;b=2">Monitor LG &amp; cia</a>',
+        "💰 <b>R$ 1.599,00</b> · KaBuM",
+        "🎟️ Cupom no post: <code>ABC123</code>",
+        "via Promos",
+    ]
+
+
+def test_html_coupon_alert_bolds_its_head_and_escapes_the_rest() -> None:
+    from velkgram.alerting.domain.format import format_alert_html
+
+    msg = AlertMessage("", "", 1, "", None, None, rendered='🎟️ Cupom X: A\nPara "a<b"')
+    assert format_alert_html(msg) == '<b>🎟️ Cupom X: A</b>\nPara "a&lt;b"'

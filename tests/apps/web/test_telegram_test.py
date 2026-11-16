@@ -62,11 +62,11 @@ async def test_one_failing_chat_does_not_stop_the_others(bot: FakeBotClient) -> 
     calls = {"n": 0}
     original = bot.send_message
 
-    async def send(chat_id: int, text: str, *, link_preview: bool) -> None:
+    async def send(chat_id: int, text: str, *, link_preview: bool, html: bool = False) -> None:
         calls["n"] += 1
         if chat_id == 222:
             raise UserIsBlockedError()
-        await original(chat_id, text, link_preview=link_preview)
+        await original(chat_id, text, link_preview=link_preview, html=html)
 
     bot.send_message = send  # type: ignore[method-assign]
     results = await TelegramTester(TELEGRAM).send_many([111, 222, 333])

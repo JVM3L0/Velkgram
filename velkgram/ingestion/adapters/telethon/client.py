@@ -41,8 +41,12 @@ class TelethonBotClient:
     async def start(self, bot_token: str) -> None:
         await self._client.start(bot_token=bot_token)  # type: ignore[misc]
 
-    async def send_message(self, chat_id: int, text: str, *, link_preview: bool) -> None:
-        await self._client.send_message(chat_id, text, link_preview=link_preview)  # type: ignore[misc]
+    async def send_message(
+        self, chat_id: int, text: str, *, link_preview: bool, html: bool = False
+    ) -> None:
+        await self._client.send_message(  # type: ignore[misc]
+            chat_id, text, link_preview=link_preview, parse_mode="html" if html else None
+        )
 
     async def disconnect(self) -> None:
         await self._client.disconnect()  # type: ignore[misc]

@@ -2,6 +2,7 @@
 
 import unicodedata
 from datetime import timedelta
+from html import escape
 
 from velkgram.alerting.domain.models import ActiveCoupon, AlertMessage
 from velkgram.shared.deals import (
@@ -87,6 +88,49 @@ def format_alert(msg: AlertMessage) -> str:
     lines.append(f"via {msg.channel_name}")
     if msg.link:
         lines.append(msg.link)
+    return "\n".join(lines)
+
+
+def _h(text: str) -> str:
+    return escape(text, quote=False)
+
+
+def _link(url: str, label: str) -> str:
+    return f'<a href="{escape(url, quote=True)}">{_h(label)}</a>'
+
+
+def format_alert_html(msg: AlertMessage) -> str:
+    """The alert for Telegram's HTML parse mode: bold price, tappable codes, a titled link.
+
+    `format_alert` stays the plain text (logs, history); both carry the same facts.
+    """
+    if msg.rendered is not None:
+        head, _, rest = msg.rendered.partition("\n")
+        return f"<b>{_h(head)}</b>" + (f"\n{_h(rest)}" if rest else "")
+    price = (
+        f"<b>{format_brl(msg.price_cents)}</b>"
+        if msg.price_cents is not None
+        else "⚠️ preço não identificado"
+    )
+    price = f"💰 {price}"
+    if msg.store_title:
+        price += f" · {_h(msg.store_title)}"
+    if msg.over_max_cents is not None:
+        price += f" (acima do seu limite de {format_brl(msg.over_max_cents)}, mas há cupom)"
+    codes = extract_coupons(msg.text)
+    lines = [f"🔔 <b>{_h(msg.wish_name)}</b>"]
+    if msg.title:
+        lines.append(_link(msg.link, msg.title) if msg.link else _h(msg.title))
+    lines.append(price)
+    if codes:
+        lines.append("🎟️ Cupom no post: " + ", ".join(f"<code>{_h(c)}</code>" for c in codes))
+    lines.extend(_h(line) for line in msg.coupon_lines)
+    if msg.delayed_minutes is not None:
+        lines.append(f"⏱ atrasado {msg.delayed_minutes} min")
+    lines.extend(f"<i>{_h(line)}</i>" for line in extra_lines(msg.body, codes))
+    lines.append(f"via {_h(msg.channel_name)}")
+    if msg.link and not msg.title:
+        lines.append(_h(msg.link))
     return "\n".join(lines)
 
 
