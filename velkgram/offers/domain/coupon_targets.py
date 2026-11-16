@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from velkgram.offers.domain.models import CouponTier, Offer, OfferKind
 from velkgram.shared.deals import (
     WishView,
+    brings_within_max,
     coupon_saving,
     matches_terms,
     min_not_met,
@@ -93,6 +94,10 @@ def coupon_targets(
             )
             if tier is None:
                 continue
+            if price > wish.max_price_cents and not brings_within_max(
+                tier.discount, tier.min_cents, tier.cap_cents, price, wish.max_price_cents
+            ):
+                continue  # one coupon at a time: it alone must reach the wish's maximum
             if best is None or _better(offer, best[0]):
                 best = (offer, tier)
         if best is not None:

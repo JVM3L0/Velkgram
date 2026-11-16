@@ -87,7 +87,7 @@ UNDER = "RTX 4060 por R$ 900,00"
 
 
 async def test_over_max_with_applicable_coupon_alerts_with_suffix() -> None:
-    port = FakeActiveCoupons([_coupon(5)])
+    port = FakeActiveCoupons([_coupon(5, discount="R$ 250 OFF")])
     h = Harness(port)
     h.wish()
     await h.feed(msg(7, text=OVER))
@@ -99,6 +99,21 @@ async def test_over_max_with_applicable_coupon_alerts_with_suffix() -> None:
     # the over-max lookup uses the message price, a 24 h window and excludes the message itself
     store, since, price, exclude = port.calls[0]
     assert (store, since, price, exclude) == ("shopee", NOW - timedelta(hours=24), 120000, (CH, 7))
+
+
+async def test_over_max_with_a_coupon_that_does_not_reach_the_max_does_not_alert() -> None:
+    h = Harness(FakeActiveCoupons([_coupon(5, discount="R$ 100 OFF")]))  # 1200 - 100 > 1000
+    h.wish()
+    await h.feed(msg(7, text=OVER))
+    assert h.stored() == []
+
+
+async def test_coupons_are_never_stacked_to_reach_the_max() -> None:
+    two = [_coupon(5, discount="R$ 120 OFF"), _coupon(6, discount="R$ 120 OFF")]
+    h = Harness(FakeActiveCoupons(two))  # 1200 - 120 - 120 would fit, but only one applies
+    h.wish()
+    await h.feed(msg(7, text=OVER))
+    assert h.stored() == []
 
 
 async def test_over_max_without_coupon_does_not_alert() -> None:
@@ -152,18 +167,20 @@ async def test_port_error_in_notify_sends_without_lines() -> None:
     assert h.processed == [(CH, 7)]
 
 
-async def test_alert_under_max_gets_at_most_two_lines_newest_first() -> None:
-    coupons = [_coupon(3, ("AAA",)), _coupon(2, ("BBB", "CCC")), _coupon(1, ("DDD",))]
+async def test_alert_under_max_gets_only_the_best_coupon_line() -> None:
+    coupons = [
+        _coupon(3, ("AAA",)),
+        _coupon(2, ("BBB", "CCC"), discount="R$ 30 OFF"),
+        _coupon(1, ("DDD",)),
+    ]
     port = FakeActiveCoupons(coupons)
     h = Harness(port)
     h.wish()
     await h.feed(msg(7, text=UNDER))
     lines = h.notifier.sent[0].coupon_lines
     assert lines == (
-        "🎟️ Cupom ativo da loja: AAA — R$ 10 OFF a partir de R$ 40,00"
-        " → R$ 10,00 de desconto (1,1%) → ~R$ 890,00",
-        "🎟️ Cupom ativo da loja: BBB, CCC — R$ 10 OFF a partir de R$ 40,00"
-        " → R$ 10,00 de desconto (1,1%) → ~R$ 890,00",
+        "🎟️ Cupom ativo da loja: BBB, CCC — R$ 30 OFF a partir de R$ 40,00"
+        " → R$ 30,00 de desconto (3,3%) → ~R$ 870,00",
     )
     assert h.notifier.sent[0].over_max_cents is None
     assert port.calls[0][2:] == (90000, (CH, 7))
@@ -189,7 +206,7 @@ async def test_no_store_means_no_lookup() -> None:
 
 
 async def test_three_wishes_one_message_one_lookup_each_site() -> None:
-    port = FakeActiveCoupons([_coupon(5)])
+    port = FakeActiveCoupons([_coupon(5, discount="R$ 250 OFF")])
     h = Harness(port)
     for n in ("A", "B", "C"):
         h.wish(n)
@@ -240,7 +257,7 @@ async def test_notifier_runs_only_after_the_slow_port_returns(
 
 @pytest.mark.parametrize(("price", "alerts"), [("1.500,00", True), ("1.500,01", False)])
 async def test_ceiling_is_exactly_one_and_a_half_times_the_max(price: str, alerts: bool) -> None:
-    h = Harness(FakeActiveCoupons([_coupon(5)]))
+    h = Harness(FakeActiveCoupons([_coupon(5, discount="R$ 600 OFF")]))
     h.wish()
     await h.feed(msg(7, text=f"RTX 4060 por R$ {price}"))
     assert bool(h.stored()) is alerts

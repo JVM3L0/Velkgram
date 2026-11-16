@@ -164,11 +164,16 @@ def test_offer_below_the_coupon_minimum_is_excluded() -> None:
     assert _ids([_product(price=3900)], [_wish(max_cents=50000)]) == []
 
 
+def test_over_max_needs_the_coupon_alone_to_reach_the_max() -> None:
+    wish = [_wish(max_cents=5000)]  # the coupon is R$ 10 OFF
+    reaching = coupon_targets(_coupon(), wish, [_product(price=6000)], NOW)
+    assert [(t.offer_price_cents, t.over_max) for t in reaching] == [(6000, True)]
+    assert _ids([_product(price=6100)], wish) == []  # 6100 - 10 is still above the max
+
+
 def test_over_max_ceiling() -> None:
     wish = [_wish(max_cents=4000)]
-    over = coupon_targets(_coupon(), wish, [_product(price=6000)], NOW)
-    assert [(t.offer_price_cents, t.over_max) for t in over] == [(6000, True)]
-    assert _ids([_product(price=6100)], wish) == []
+    assert _ids([_product(price=6000)], wish) == []  # 6000 - 10 > 4000 even within 1.5x
     at_max = coupon_targets(_coupon(), [_wish(max_cents=5000)], [_product(price=5000)], NOW)
     assert not at_max[0].over_max
 

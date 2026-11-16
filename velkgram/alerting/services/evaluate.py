@@ -32,6 +32,8 @@ from velkgram.shared.deals import (
     ListItem,
     ProductList,
     WishView,
+    brings_within_max,
+    coupon_saving,
     extract_coupons,
     extract_price,
     matches_terms,
@@ -47,7 +49,6 @@ log = logging.getLogger(__name__)
 _BACKFILL_MAX_AGE = timedelta(minutes=30)
 _COUPON_ACTIVE_WINDOW = timedelta(hours=24)
 _SLOW_PORT_MS = 50
-_MAX_COUPON_LINES = 2
 _MEMO_CAP = 256  # per-message memos live as long as the evaluator; keep them bounded
 
 
@@ -68,6 +69,16 @@ def _list_hits(wish: WishView, listing: ProductList) -> tuple[ListItem, ...]:
         if matches_terms(wish, normalize_text(f"{listing.header} {item.name}"))
     ]
     return tuple(sorted(found, key=lambda i: i.price_cents))
+
+
+def _best_first(found: list[ActiveCoupon], price: int) -> list[ActiveCoupon]:
+    """Coupons by what each alone saves at `price`, biggest first: they can't be stacked."""
+
+    def saved(c: ActiveCoupon) -> int:
+        s = coupon_saving(c.discount, c.min_cents, c.cap_cents, price)
+        return s.cents if s else 0
+
+    return sorted(found, key=saved, reverse=True)
 
 
 def _identity(slug: str) -> str:
@@ -202,8 +213,16 @@ class Evaluator:
             if alert is not None:
                 self._remember_wish(wish)
                 created.append(alert)
-        if over_max and price is not None and self._has_active_coupon(m, price, now):
+        active = self._lookup(m, price, now) if over_max and price is not None else None
+        if over_max and price is not None and active:
             for wish in over_max:
+                if not any(
+                    brings_within_max(
+                        c.discount, c.min_cents, c.cap_cents, price, wish.max_price_cents
+                    )
+                    for c in active
+                ):
+                    continue  # one coupon at a time: it alone must reach this wish's maximum
                 try:
                     alert = self._decide(m, wish, text, price, delayed, now, over_max=True)
                 except Exception:
@@ -295,9 +314,6 @@ class Evaluator:
             )
         return found
 
-    def _has_active_coupon(self, m: MessageData, price: int, now: datetime) -> bool:
-        return bool(self._lookup(m, price, now))
-
     def _decide(
         self,
         m: MessageData,
@@ -358,7 +374,7 @@ class Evaluator:
         lines = self._lines.get(key)
         if lines is None:
             found = self._lookup(m, price, now) or []
-            lines = tuple(format_coupon_line(c, price) for c in found[:_MAX_COUPON_LINES])
+            lines = tuple(format_coupon_line(c, price) for c in _best_first(found, price)[:1])
             if len(self._lines) >= _MEMO_CAP:
                 self._lines.pop(next(iter(self._lines)))
             self._lines[key] = lines

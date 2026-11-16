@@ -132,6 +132,18 @@ def coupon_saving(
     return Saving(cap_cents, capped=True, low=cap_cents * 100 < LOW_CAP_PCT * price_cents)
 
 
+def brings_within_max(
+    discount: str,
+    min_cents: int | None,
+    cap_cents: int | None,
+    price_cents: int,
+    max_cents: int,
+) -> bool:
+    """Whether one coupon alone takes `price_cents` down to the wish's maximum or below."""
+    saving = coupon_saving(discount, min_cents, cap_cents, price_cents)
+    return saving is not None and price_cents - saving.cents <= max_cents
+
+
 _COUPON_KEYWORD = re.compile(r"\b(?:cupom|cupons|cupon|c[óo]digo|code)\b", re.IGNORECASE)
 _COUPON_TOKEN = re.compile(r"(?=[A-Z0-9_-]*[A-Z])[A-Z0-9_-]{3,25}")
 _NOT_CODES = frozenset(

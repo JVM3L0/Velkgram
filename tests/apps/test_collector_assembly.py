@@ -501,7 +501,7 @@ async def _over_max_alert_with_active_coupon(env: Env) -> None:
     await env.collector.start()
     await _post_coupon(env, 2)
     live = replace(
-        msg(3, CH, "Teclado mecanico por R$ 600"),
+        msg(3, CH, "Teclado mecanico por R$ 505"),
         date=env.clock.now(),
         links=("https://s.shopee.com.br/prod",),
     )
@@ -540,10 +540,10 @@ async def test_retried_offer_alert_has_the_title_line_and_the_store(env: Env) ->
     ]
     rebuilt = env.collector.build_message(alert)
     assert rebuilt is not None
-    assert rebuilt.title == "Teclado mecanico por R$ 600"
+    assert rebuilt.title == "Teclado mecanico por R$ 505"
     assert rebuilt.store_title == "Shopee"
     text = format_alert(rebuilt)
-    assert text.splitlines()[1] == "Teclado mecanico por R$ 600"
+    assert text.splitlines()[1] == "Teclado mecanico por R$ 505"
     assert " · Shopee" in text.splitlines()[2]
 
 
