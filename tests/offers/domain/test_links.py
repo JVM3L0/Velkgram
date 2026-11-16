@@ -392,3 +392,19 @@ def test_aliexpress_first_hop_without_id_is_not_product() -> None:
     first = "https://www.aliexpress.com/ssr/300003448/glo-main-venue?disableNav=YES"
     info = resolve(short, outcome(first, status=302, hops=(short, first)))
     assert (info.store, info.product_id, info.kind) == ("aliexpress", None, "not_product")
+
+
+def test_a_product_page_gives_its_price_and_a_jsonld_image_fallback() -> None:
+    body = (
+        '<script type="application/ld+json">{"@type": "Product", "image": '
+        '"https://i.example/k.jpg", "offers": {"price": "418.41"}}</script>'
+    )
+    outcome = FetchOutcome(
+        "https://www.kabum.com.br/produto/123/x", (), 200, "text/html", body, "www.kabum.com.br"
+    )
+    info = resolve("https://www.kabum.com.br/produto/123/x", outcome)
+    assert (info.kind, info.page_price_cents, info.image_url) == (
+        "product",
+        41841,
+        "https://i.example/k.jpg",
+    )

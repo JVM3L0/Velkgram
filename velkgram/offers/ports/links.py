@@ -22,6 +22,7 @@ class LinkRow:
     product_id: str | None = None
     title: str | None = None
     image_url: str | None = None
+    page_price_cents: int | None = None
     kind: Kind = "unknown"
     status: LinkStatus = "pending"
     attempts: int = 0

@@ -6,6 +6,7 @@ from html import unescape
 from typing import Literal
 from urllib.parse import unquote
 
+from velkgram.offers.domain.page_price import jsonld_image, page_price
 from velkgram.offers.domain.stores import store_of
 from velkgram.offers.domain.urls import host_of, is_safe_https_url
 
@@ -68,6 +69,7 @@ class LinkInfo:
     title: str | None
     image_url: str | None
     kind: Kind
+    page_price_cents: int | None = None  # what the page itself states, off the alert path
 
 
 _AMAZON_DIRECT = re.compile(r"/(?:dp|gp)/")
@@ -276,7 +278,8 @@ def resolve(original_url: str, outcome: FetchOutcome) -> LinkInfo:
 
     if product_id is not None:
         title, image = _page_details(store, body)
-        return LinkInfo(store, product_id, title, image, "product")
+        price = page_price(store, body)
+        return LinkInfo(store, product_id, title, image, "product", price)
 
     final_host = _bare(host_of(outcome.final_url))
     if store in _ID_STORES:
@@ -297,4 +300,5 @@ def _page_details(store: str | None, body: str | None) -> tuple[str | None, str 
         return None, None
     if store == "amazon":
         return _amazon_page(body)
-    return _og_page(body, strip_price=store == "mercadolivre")
+    title, image = _og_page(body, strip_price=store == "mercadolivre")
+    return title, image or _clean_image(jsonld_image(body))

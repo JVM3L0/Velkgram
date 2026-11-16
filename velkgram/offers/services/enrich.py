@@ -255,6 +255,7 @@ class LinkEnricher:
             product_id=info.product_id,
             title=info.title,
             image_url=info.image_url,
+            page_price_cents=info.page_price_cents,
             kind=info.kind,
             fetched_at=now,
         )

@@ -32,6 +32,7 @@ def _to_row(r: sqlite3.Row) -> LinkRow:
         product_id=r["product_id"],
         title=r["title"],
         image_url=r["image_url"],
+        page_price_cents=r["page_price_cents"],
         kind=r["kind"],
         status=r["status"],
         attempts=int(r["attempts"]),
@@ -113,8 +114,9 @@ class SqliteLinkRepository:
         with transaction(self._conn) as c:
             c.execute(
                 "UPDATE product_links SET final_url = ?, final_host = ?, store = ?, "
-                "product_id = ?, title = ?, image_url = ?, kind = ?, status = ?, attempts = ?, "
-                "blocks = ?, next_try_at = ?, fetched_at = ? WHERE url = ?",
+                "product_id = ?, title = ?, image_url = ?, page_price_cents = ?, kind = ?, "
+                "status = ?, attempts = ?, blocks = ?, next_try_at = ?, fetched_at = ? "
+                "WHERE url = ?",
                 (
                     row.final_url,
                     final_host,
@@ -122,6 +124,7 @@ class SqliteLinkRepository:
                     row.product_id,
                     row.title,
                     row.image_url,
+                    row.page_price_cents,
                     row.kind,
                     row.status,
                     row.attempts,

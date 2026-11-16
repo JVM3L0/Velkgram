@@ -312,3 +312,13 @@ def test_fixed_store_and_link_rows_survive_text_purge(handle: Handle) -> None:
     assert handle.links.known_product("amazon", "x") is None
     assert handle.links.earliest_next_try(T0, NO_HOSTS) is None  # done row still there, not due
     assert handle.links.discover() == 0  # and it is not rediscovered
+
+
+def test_page_price_survives_a_save_and_a_reload(handle: Handle) -> None:
+    handle.offers.upsert(_offer(1, "https://a.example/1"))
+    row = _discovered(handle, "https://a.example/1")
+    assert row.page_price_cents is None
+    # pending with a due retry, so next_due hands the saved row back
+    handle.links.save(replace(row, page_price_cents=41841, next_try_at=T0), fix_store=False)
+    again = handle.links.next_due(T0 + timedelta(days=30), NO_HOSTS)
+    assert again is not None and again.page_price_cents == 41841

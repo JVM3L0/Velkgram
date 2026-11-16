@@ -291,6 +291,25 @@ def test_known_product_is_reused_without_fetch() -> None:
     assert "?" not in (row.final_url or "")
 
 
+def test_the_page_price_is_read_and_stored_with_the_link() -> None:
+    env = _env_with(KABUM)
+    body = (
+        '<script type="application/ld+json">'
+        '{"@type": "Product", "offers": {"price": "418.41"}}</script>'
+    )
+    env.fetcher.scripts[KABUM] = Script((KABUM,), 200, body)
+    env.enricher.step()
+    row = env.row(KABUM)
+    assert (row.status, row.page_price_cents) == ("done", 41841)
+
+
+def test_a_page_without_a_price_leaves_it_unknown() -> None:
+    env = _env_with(KABUM)
+    env.fetcher.scripts[KABUM] = Script((KABUM,), 200, "<html></html>")
+    env.enricher.step()
+    assert env.row(KABUM).page_price_cents is None
+
+
 def test_store_fix_applies_only_to_offers_with_unknown_store() -> None:
     url = "https://www.kabum.com.br/produto/123456/ssd"
     env = Env()
