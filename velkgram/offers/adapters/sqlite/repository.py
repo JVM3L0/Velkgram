@@ -17,7 +17,7 @@ from velkgram.offers.domain.models import (
     RetroStatus,
 )
 from velkgram.offers.domain.product_match import model_codes
-from velkgram.offers.domain.urls import real_product_url
+from velkgram.offers.domain.product_url import real_product_url
 from velkgram.shared.db import transaction
 
 _MIN_INT = -(2**63)

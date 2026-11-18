@@ -2,12 +2,9 @@ import json
 
 import pytest
 
-from velkgram.offers.domain.page_price import (
-    amazon_price,
-    jsonld_image,
-    jsonld_price,
-    page_price,
-)
+from velkgram.offers.domain.page_price import jsonld_image, jsonld_price
+from velkgram.offers.domain.stores import STORES
+from velkgram.offers.domain.stores.amazon import amazon_price
 
 
 def _ld(data: object) -> str:
@@ -85,6 +82,5 @@ def test_amazon_without_a_price_block_is_unknown() -> None:
 
 
 def test_page_price_picks_the_reader_by_store() -> None:
-    assert page_price("kabum", _ld(_product("20.00"))) == 2000
-    assert page_price("amazon", _amazon("R$ 30,00")) == 3000
-    assert page_price("kabum", None) is None
+    assert STORES["kabum"].page_price(_ld(_product("20.00"))) == 2000
+    assert STORES["amazon"].page_price(_amazon("R$ 30,00")) == 3000

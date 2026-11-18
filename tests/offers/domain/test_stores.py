@@ -2,7 +2,7 @@ import pytest
 
 from velkgram.offers.domain.stores import STORES, main_link, product_link, store_of
 
-HOSTS = [(slug, host) for slug, hosts in STORES.items() for host in hosts]
+HOSTS = [(slug, host) for slug, store in STORES.items() for host in store.domains]
 
 
 @pytest.mark.parametrize(("slug", "host"), HOSTS)

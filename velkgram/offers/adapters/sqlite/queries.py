@@ -16,8 +16,8 @@ from velkgram.offers.adapters.sqlite.repository import (
 from velkgram.offers.domain.coupon_targets import applicable_tier
 from velkgram.offers.domain.models import MatchSource, Offer, OfferKind
 from velkgram.offers.domain.product_match import compatible, signature, specific_codes
+from velkgram.offers.domain.product_url import real_product_url
 from velkgram.offers.domain.stats import product_stats
-from velkgram.offers.domain.urls import real_product_url
 from velkgram.offers.ports.queries import (
     NEWS_COUNT_CAP,
     ActiveCouponView,

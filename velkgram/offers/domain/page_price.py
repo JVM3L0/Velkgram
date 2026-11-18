@@ -1,7 +1,7 @@
 """Price and image a store page states about its product (pure; never raises on bad input).
 
-KaBuM-style pages carry schema.org JSON-LD; Amazon only has the price in its price block. A page
-that is unclear returns None: "unknown" is better than a wrong price.
+Pages that carry schema.org JSON-LD (KaBuM-style) are read here; a store whose page differs reads
+it in its own module. A page that is unclear returns None: "unknown" is better than a wrong price.
 """
 
 import json
@@ -17,10 +17,6 @@ _MAX_BLOCKS = 10
 _MAX_DEPTH = 8
 _MAX_CENTS = 100_000_000_00  # R$ 100 million: anything above is a parsing accident
 _PRODUCT_TYPES = {"product", "productgroup"}
-_BRL = re.compile(r"R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})")
-_AMAZON_PRICE_BLOCKS = ("corePriceDisplay_desktop_feature_div", "corePrice_feature_div")
-_OFFSCREEN = re.compile(r'class="a-offscreen">([^<]{1,40})<')
-_BLOCK_WINDOW = 4000
 
 
 def _as_dict(node: object) -> dict[str, object] | None:
@@ -31,7 +27,7 @@ def _as_list(node: object) -> list[object]:
     return cast("list[object]", node) if isinstance(node, list) else [node]
 
 
-def _cents(value: object) -> int | None:
+def cents_of(value: object) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int | float | str):
         return None
     try:
@@ -72,7 +68,7 @@ def _offer_price(offers: object) -> int | None:
             raw = spec.get("price")
         if raw is None:
             raw = offer.get("lowPrice")
-        if (cents := _cents(raw)) is not None:
+        if (cents := cents_of(raw)) is not None:
             prices.add(cents)
     return next(iter(prices)) if len(prices) == 1 else None
 
@@ -106,31 +102,3 @@ def jsonld_image(body: str) -> str | None:
     return next(
         (i for node in _jsonld_products(body) if (i := _first_image(node.get("image")))), None
     )
-
-
-def amazon_price(body: str) -> int | None:
-    """The main price shown in Amazon's price block; None when the block or its price is unclear."""
-    for marker in _AMAZON_PRICE_BLOCKS:
-        start = body.find(marker)
-        if start < 0:
-            continue
-        window = body[start : start + _BLOCK_WINDOW]
-        # The first one is the price; later ones are per-unit or list prices.
-        first = next(
-            (
-                _cents(m.group(1).replace(".", "").replace(",", "."))
-                for text in _OFFSCREEN.findall(window)
-                if (m := _BRL.search(text.replace("\xa0", " ")))
-            ),
-            None,
-        )
-        return first
-    return None
-
-
-def page_price(store: str | None, body: str | None) -> int | None:
-    if body is None:
-        return None
-    if store == "amazon":
-        return amazon_price(body)
-    return jsonld_price(body)

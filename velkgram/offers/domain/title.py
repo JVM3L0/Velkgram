@@ -2,24 +2,12 @@
 
 import unicodedata
 
+from velkgram.offers.domain.stores import STORES
 from velkgram.shared.text import URL_PATTERN
 
 MAX_TITLE = 140
 FALLBACK_TITLE = "Oferta sem título"
-STORE_TITLES = {
-    "amazon": "Amazon",
-    "mercadolivre": "Mercado Livre",
-    "shopee": "Shopee",
-    "magalu": "Magalu",
-    "kabum": "KaBuM!",
-    "aliexpress": "AliExpress",
-    "pichau": "Pichau",
-    "terabyte": "Terabyte",
-    "casasbahia": "Casas Bahia",
-    "americanas": "Americanas",
-    "carrefour": "Carrefour",
-    "netshoes": "Netshoes",
-}
+STORE_TITLES = {slug: store.name for slug, store in STORES.items()}
 _DROPPED = frozenset({"So", "Sk", "Cs", "Co", "Me", "Cf"})
 
 

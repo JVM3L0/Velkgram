@@ -1,3 +1,4 @@
+from velkgram.offers.domain.stores import STORES
 from velkgram.offers.domain.title import STORE_TITLES, split_title, store_title, title_of
 
 
@@ -36,7 +37,7 @@ def test_title_falls_back_when_text_is_only_emoji_and_links() -> None:
 
 def test_store_titles() -> None:
     assert STORE_TITLES["kabum"] == "KaBuM!"
-    assert len(STORE_TITLES) == 12
+    assert set(STORE_TITLES) == set(STORES)
 
 
 def test_split_title_returns_the_title_and_the_rest() -> None:

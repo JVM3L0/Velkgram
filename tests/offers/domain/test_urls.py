@@ -1,11 +1,10 @@
 import pytest
 
+from velkgram.offers.domain.product_url import product_url, real_product_url
 from velkgram.offers.domain.urls import (
     host_of,
     is_safe_https_url,
     is_safe_url,
-    product_url,
-    real_product_url,
     strip_query,
 )
 from velkgram.offers.web.format import safe_href
