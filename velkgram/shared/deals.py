@@ -165,7 +165,7 @@ _NOT_CODES = frozenset(
         "SELECIONADAS",
         "SELECIONADOS",
     }
-    | {  # store names from offers/domain/stores.py; shared cannot import a module
+    | {  # store names from offers/domain/stores/; shared cannot import a module
         "AMAZON",
         "MERCADOLIVRE",
         "MERCADO",
@@ -180,6 +180,15 @@ _NOT_CODES = frozenset(
         "AMERICANAS",
         "CARREFOUR",
         "NETSHOES",
+        "GAZIN",
+        "ELETROCLUB",
+        "DAFITI",
+        "NIKE",
+        "G.BARBOSA",
+        "GBARBOSA",
+        "CARAJÁS",
+        "CARAJAS",
+        "ACER",
     }
 )
 _EDGE_PUNCTUATION = ".,;!?()[]\"'*"

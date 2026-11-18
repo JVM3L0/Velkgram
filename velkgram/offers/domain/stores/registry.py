@@ -28,6 +28,14 @@ _ALL: tuple[Store, ...] = (
     BaseStore(slug="americanas", name="Americanas", domains=("americanas.com.br",)),
     BaseStore(slug="carrefour", name="Carrefour", domains=("carrefour.com.br",)),
     BaseStore(slug="netshoes", name="Netshoes", domains=("netshoes.com.br",)),
+    BaseStore(slug="gazin", name="Gazin", domains=("gazin.com.br",)),
+    BaseStore(slug="eletroclub", name="Eletroclub", domains=("eletroclub.com.br",)),
+    BaseStore(slug="dafiti", name="Dafiti", domains=("dafiti.com.br",)),
+    BaseStore(slug="nike", name="Nike", domains=("nike.com.br",)),
+    BaseStore(slug="gbarbosa", name="G.Barbosa", domains=("gbarbosa.com.br",)),
+    BaseStore(slug="carajas", name="Carajás", domains=("carajas.com.br",)),
+    # Only Acer's Brazilian store: acer.com as a whole is not a shop.
+    BaseStore(slug="acer", name="Acer", domains=("br-store.acer.com",)),
 )
 STORES: Mapping[str, Store] = {s.slug: s for s in _ALL}
 
