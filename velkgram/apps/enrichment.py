@@ -13,12 +13,17 @@ from collections.abc import Callable
 from velkgram.channels.adapters.sqlite.repository import SqliteChannelRepository
 from velkgram.offers import LinkEnricher
 from velkgram.offers.adapters.channels_api import ChannelsApiPublicChannels
+from velkgram.offers.adapters.fs.image_store import FsImageStore
 from velkgram.offers.adapters.http.channel_pages import HttpxChannelPages
 from velkgram.offers.adapters.http.fetcher import HttpxFetcher, configure_fetch_logging
+from velkgram.offers.adapters.http.image_downloader import HttpxImageDownloader
+from velkgram.offers.adapters.image.pillow_thumbnailer import PillowThumbnailer
 from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
 from velkgram.offers.adapters.sqlite.post_images import SqlitePostImageRepository
 from velkgram.offers.ports.fetcher import Fetcher
+from velkgram.offers.ports.image_files import ImageDownloader
 from velkgram.offers.ports.post_images import ChannelPages
+from velkgram.offers.services.image_cache import ImageCache
 from velkgram.offers.services.post_images import PostImageSync
 from velkgram.shared.adapters.clock_system import SystemClock
 from velkgram.shared.config import Settings
@@ -31,17 +36,31 @@ JOIN_TIMEOUT_S = 20.0
 
 
 def run_post_images(
-    settings: Settings, stop: threading.Event, make_pages: Callable[[], ChannelPages]
+    settings: Settings,
+    stop: threading.Event,
+    make_pages: Callable[[], ChannelPages],
+    make_downloader: Callable[[], ImageDownloader] = HttpxImageDownloader,
 ) -> None:
-    """Keep post image URLs fresh; its own connection, since it runs on its own thread."""
+    """Keep post image URLs and their local copies fresh; its own connection, since it runs on
+    its own thread."""
     conn = connect(settings.db_path)
     try:
+        clock = SystemClock()
+        cache = ImageCache(
+            FsImageStore(settings.images_path),
+            make_downloader(),
+            PillowThumbnailer(),
+            clock,
+            settings.images_max_mb * 1024 * 1024,
+            settings.retention_days,
+        )
         PostImageSync(
             ChannelsApiPublicChannels(SqliteChannelRepository(conn)),
             make_pages(),
             SqlitePostImageRepository(conn),
-            SystemClock(),
+            clock,
             settings.retention_days,
+            cache,
         ).run(stop)
     finally:
         conn.close()
@@ -53,11 +72,13 @@ class EnricherHost:
         settings: Settings,
         make_fetcher: Callable[[], Fetcher] = HttpxFetcher,
         make_pages: Callable[[], ChannelPages] = HttpxChannelPages,
+        make_downloader: Callable[[], ImageDownloader] = HttpxImageDownloader,
         restart_delay_s: float = RESTART_DELAY_S,
     ) -> None:
         self._settings = settings
         self._make_fetcher = make_fetcher
         self._make_pages = make_pages
+        self._make_downloader = make_downloader
         self._restart_delay_s = restart_delay_s
         self._stop = threading.Event()
         self._wake = threading.Event()
@@ -67,7 +88,9 @@ class EnricherHost:
         configure_fetch_logging()
         workers: dict[str, Callable[[], None]] = {
             "link-enricher": self._enrich,
-            "post-images": lambda: run_post_images(self._settings, self._stop, self._make_pages),
+            "post-images": lambda: run_post_images(
+                self._settings, self._stop, self._make_pages, self._make_downloader
+            ),
         }
         for name, work in workers.items():
             thread = threading.Thread(

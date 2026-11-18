@@ -21,7 +21,14 @@ class Settings:
     web_https_only: bool = False
     log_level: str = "INFO"
     retention_days: int = 90
+    images_dir: Path | None = None  # unset: `images` next to the database
+    images_max_mb: int = 1024
     app_timezone: ZoneInfo = field(default_factory=lambda: ZoneInfo("America/Sao_Paulo"))
+
+    @property
+    def images_path(self) -> Path:
+        """Where the post picture copies live: IMAGES_DIR, else next to the database."""
+        return self.images_dir or self.db_path.parent / "images"
 
     def __repr__(self) -> str:
         def mask(value: str | None) -> str:
@@ -35,7 +42,8 @@ class Settings:
             f"web_password_hash={mask(self.web_password_hash)}, "
             f"web_secret_key={mask(self.web_secret_key)}, web_https_only={self.web_https_only}, "
             f"log_level={self.log_level!r}, "
-            f"retention_days={self.retention_days}, app_timezone={self.app_timezone.key!r})"
+            f"retention_days={self.retention_days}, images_dir={self.images_dir!r}, "
+            f"images_max_mb={self.images_max_mb}, app_timezone={self.app_timezone.key!r})"
         )
 
 
@@ -53,6 +61,17 @@ def _retention_days(env: Mapping[str, str]) -> int:
     if days < 30:
         raise ValueError(f"RETENTION_DAYS must be at least 30: {days}")
     return days
+
+
+def _images_max_mb(env: Mapping[str, str]) -> int:
+    raw = _value(env, "IMAGES_MAX_MB", "1024")
+    try:
+        mb = int(raw)
+    except ValueError:
+        raise ValueError(f"IMAGES_MAX_MB must be an integer: {raw}") from None
+    if mb < 16:
+        raise ValueError(f"IMAGES_MAX_MB must be at least 16: {mb}")
+    return mb
 
 
 def _app_timezone(env: Mapping[str, str]) -> ZoneInfo:
@@ -86,11 +105,12 @@ def load_settings(env: Mapping[str, str]) -> Settings:
     if notifier == "telegram" and token is None:
         raise ValueError("ALERT_BOT_TOKEN is required when NOTIFIER=telegram")
     api_id = env.get("TG_API_ID")
+    db_path = Path(_value(env, "DB_PATH", "./data/velkgram.db"))
     return Settings(
         tg_api_id=int(api_id) if api_id else None,
         tg_api_hash=env.get("TG_API_HASH") or None,
         tg_session=env.get("TG_SESSION") or None,
-        db_path=Path(_value(env, "DB_PATH", "./data/velkgram.db")),
+        db_path=db_path,
         notifier=notifier,
         alert_bot_token=token,
         alert_chat_id=_alert_chat_id(env),
@@ -99,5 +119,7 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         web_https_only=_value(env, "WEB_HTTPS_ONLY", "").lower() in ("1", "true", "yes"),
         log_level=_value(env, "LOG_LEVEL", "INFO"),
         retention_days=_retention_days(env),
+        images_dir=Path(images_dir) if (images_dir := _value(env, "IMAGES_DIR", "")) else None,
+        images_max_mb=_images_max_mb(env),
         app_timezone=_app_timezone(env),
     )

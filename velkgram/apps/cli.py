@@ -30,12 +30,14 @@ from velkgram.ingestion.adapters.telethon.client import build_client
 from velkgram.offers import LinkEnricher, OfferBuilder, rebuild_offers
 from velkgram.offers.adapters.http.channel_pages import HttpxChannelPages
 from velkgram.offers.adapters.http.fetcher import HttpxFetcher, configure_fetch_logging
+from velkgram.offers.adapters.http.image_downloader import HttpxImageDownloader
 from velkgram.offers.adapters.ingestion_api import IngestionApiMessageSource
 from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.adapters.wishlist_api import WishlistApiWishReader
 from velkgram.offers.ports.fetcher import Fetcher
+from velkgram.offers.ports.image_files import ImageDownloader
 from velkgram.offers.ports.post_images import ChannelPages
 from velkgram.offers.ports.queries import FeedFilter
 from velkgram.offers.web.format import brl
@@ -286,8 +288,12 @@ def _make_channel_pages() -> ChannelPages:
     return HttpxChannelPages()
 
 
+def _make_image_downloader() -> ImageDownloader:
+    return HttpxImageDownloader()
+
+
 def _run_post_images(settings: Settings, stop: threading.Event) -> None:
-    run_post_images(settings, stop, _make_channel_pages)
+    run_post_images(settings, stop, _make_channel_pages, _make_image_downloader)
 
 
 def cmd_enrich(args: argparse.Namespace) -> int:

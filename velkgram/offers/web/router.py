@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
 from velkgram.accounts import User
+from velkgram.offers.domain.channel_page import is_telegram_cdn_url
 from velkgram.offers.domain.coupon import best_tier, coupon_title
 from velkgram.offers.domain.insight import PriceVerdict, price_insight
 from velkgram.offers.domain.lowest import CURRENT_WINDOW_DAYS, current_lowest, daily_lowest
@@ -295,6 +296,13 @@ def _int_or_none(raw: str) -> int | None:
         return None
 
 
+def _card_image(card: OfferCard) -> str | None:
+    """A post picture goes through `/img`, which keeps a copy: Telegram's own link expires."""
+    if is_telegram_cdn_url(card.image_url):
+        return f"/img/{card.channel_id}/{card.message_id}"
+    return card.image_url if is_safe_https_url(card.image_url) else None
+
+
 def build_router(
     *,
     get_conn: Callable[..., Iterator[sqlite3.Connection]],
@@ -307,6 +315,8 @@ def build_router(
     clock: Clock,
     tz: ZoneInfo,
     retention_days: int,
+    image_copy: Callable[[int, int], bytes | None],
+    post_image_url: Callable[[sqlite3.Connection, int, int], str | None],
 ) -> APIRouter:
     router = APIRouter()
 
@@ -358,7 +368,7 @@ def build_router(
             redeem_href=safe_href(card.redeem_link),
             cart_href=safe_href(card.cart_link),
             text=card.text,
-            image_url=card.image_url if is_safe_https_url(card.image_url) else None,
+            image_url=_card_image(card),
             product_href=safe_href(card.product_url),
             seen_in=tuple(names[c] for c in card.seen_channel_ids if c in names),
             seen_count=len(card.seen_channel_ids),
@@ -765,6 +775,27 @@ def build_router(
             "show_alert": False,
             "retro_refresh": False,
         }
+
+    @router.get("/img/{channel_id}/{message_id}")
+    def post_image(
+        channel_id: int,
+        message_id: int,
+        conn: Annotated[sqlite3.Connection, Depends(get_conn)],
+    ) -> Response:
+        data = image_copy(channel_id, message_id)
+        if data is not None:
+            return Response(
+                data,
+                media_type="image/webp",
+                headers={
+                    "Cache-Control": "private, max-age=2592000, immutable",
+                    "X-Content-Type-Options": "nosniff",
+                },
+            )
+        remote = post_image_url(conn, channel_id, message_id)
+        if remote is not None and is_telegram_cdn_url(remote):
+            return RedirectResponse(remote, status_code=302)
+        raise HTTPException(status_code=404)
 
     @router.get("/produto/{channel_id}/{message_id}", response_class=HTMLResponse)
     def compare(

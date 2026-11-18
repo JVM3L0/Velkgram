@@ -15,6 +15,7 @@ dependencies = [
   "python-multipart",
   "itsdangerous",
   "httpx",
+  "pillow>=13.0.0",
 ]
 
 [project.scripts]

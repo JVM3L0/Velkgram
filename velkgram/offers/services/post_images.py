@@ -10,6 +10,7 @@ from datetime import timedelta
 
 from velkgram.offers.domain.channel_page import oldest_post_id, parse_channel_page
 from velkgram.offers.ports.post_images import ChannelPages, PostImageRepository, PublicChannels
+from velkgram.offers.services.image_cache import ImageCache
 from velkgram.shared.ports import Clock
 
 log = logging.getLogger(__name__)
@@ -28,17 +29,21 @@ class PostImageSync:
         images: PostImageRepository,
         clock: Clock,
         retention_days: int = RETENTION_DAYS,
+        cache: ImageCache | None = None,
     ) -> None:
         self._retention = timedelta(days=retention_days)
         self._channels = channels
         self._pages = pages
         self._images = images
         self._clock = clock
+        self._cache = cache
         self._oldest: dict[int, int] = {}  # channel -> oldest post id seen on its newest page
 
     def _store(self, channel_id: int, html: str) -> tuple[int, int | None]:
         found = parse_channel_page(html)
         self._images.upsert(channel_id, found, self._clock.now())
+        if self._cache is not None:
+            self._cache.keep(channel_id, found)
         return len(found), oldest_post_id(html)
 
     def sync_once(self) -> int:
@@ -58,7 +63,16 @@ class PostImageSync:
                 log.warning(
                     "post_images_failed", extra={"channel": username, "error": type(e).__name__}
                 )
+        self._enforce_cache_limits()
         return stored
+
+    def _enforce_cache_limits(self) -> None:
+        if self._cache is None:
+            return
+        try:
+            self._cache.enforce_limits()
+        except Exception as e:
+            log.warning("post_image_cache_enforce_failed", extra={"error": type(e).__name__})
 
     def catch_up(
         self,

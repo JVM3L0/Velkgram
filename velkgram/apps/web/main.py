@@ -46,7 +46,9 @@ from velkgram.channels.web.router import build_router as build_channels_router
 from velkgram.ingestion.adapters.sqlite.queries import SqliteIngestionQueries
 from velkgram.ingestion.web.router import build_router as build_status_router
 from velkgram.offers import sparkline_svg
+from velkgram.offers.adapters.fs.image_store import FsImageStore
 from velkgram.offers.adapters.sqlite.links import SqliteLinkRepository
+from velkgram.offers.adapters.sqlite.post_images import SqlitePostImageRepository
 from velkgram.offers.adapters.sqlite.queries import SqliteOfferQueries
 from velkgram.offers.adapters.sqlite.repository import SqliteOfferRepository
 from velkgram.offers.web.format import linkify
@@ -378,6 +380,7 @@ def create_app(
         prefix="/status",
         dependencies=[Depends(require_admin)],
     )
+    images = FsImageStore(settings.images_path)
     # Included after the wishlist router so `/wishes/new` wins over `/wishes/{id}`.
     app.include_router(
         build_offers_router(
@@ -391,6 +394,10 @@ def create_app(
             clock=clock,
             tz=settings.app_timezone,
             retention_days=settings.retention_days,
+            image_copy=lambda channel_id, message_id: images.get(channel_id, message_id),
+            post_image_url=lambda conn, channel_id, message_id: SqlitePostImageRepository(conn).get(
+                channel_id, message_id
+            ),
         ),
         dependencies=[Depends(require_user)],
     )

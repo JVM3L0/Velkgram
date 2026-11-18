@@ -19,9 +19,14 @@ class PostImage:
     url: str
 
 
-def _trusted(url: str) -> bool:
+def is_telegram_cdn_url(url: str | None) -> bool:
     """Only Telegram's own CDN over https: the page is third-party markup."""
-    parts = urlsplit(url)
+    if not url:
+        return False
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
     host = parts.hostname or ""
     return parts.scheme == "https" and host.endswith(_CDN_SUFFIX)
 
@@ -36,7 +41,7 @@ def parse_channel_page(html: str) -> list[PostImage]:
         if photo is None:
             continue
         url = unescape(photo.group(1))
-        if _trusted(url):
+        if is_telegram_cdn_url(url):
             found.append(PostImage(int(post.group(1)), url))
     return found
 

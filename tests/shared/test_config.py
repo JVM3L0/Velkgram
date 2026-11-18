@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from velkgram.shared.config import load_settings
+from velkgram.shared.config import Settings, load_settings
 
 
 def test_settings_repr_hides_secrets() -> None:
@@ -116,3 +116,25 @@ def test_repr_masks_bot_token_and_shows_chat_id() -> None:
 )
 def test_web_https_only_flag(raw: str, expected: bool) -> None:
     assert load_settings({"WEB_HTTPS_ONLY": raw}).web_https_only is expected
+
+
+def test_the_image_copies_live_next_to_the_database_by_default() -> None:
+    s = load_settings({"DB_PATH": "/app/data/velkgram.db"})
+    assert s.images_dir is None
+    assert s.images_path == Path("/app/data/images")
+    assert s.images_max_mb == 1024
+
+
+def test_the_image_directory_and_budget_can_be_set() -> None:
+    s = load_settings({"IMAGES_DIR": "/pics", "IMAGES_MAX_MB": "256"})
+    assert (s.images_path, s.images_max_mb) == (Path("/pics"), 256)
+
+
+@pytest.mark.parametrize("raw", ["abc", "15", "-1"])
+def test_a_bad_image_budget_is_refused(raw: str) -> None:
+    with pytest.raises(ValueError, match="IMAGES_MAX_MB"):
+        load_settings({"IMAGES_MAX_MB": raw})
+
+
+def test_settings_built_by_hand_keep_the_images_next_to_their_database(tmp_path: Path) -> None:
+    assert Settings(db_path=tmp_path / "x.db").images_path == tmp_path / "images"

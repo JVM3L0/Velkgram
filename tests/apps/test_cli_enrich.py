@@ -7,6 +7,7 @@ from types import FrameType
 
 import pytest
 
+from tests.fakes.images import FakeImageDownloader
 from velkgram.apps import cli
 from velkgram.apps.cli import MIGRATION_PACKAGES, main
 from velkgram.offers.domain.links import FetchOutcome, FetchPlan
@@ -125,6 +126,7 @@ def test_enrich_also_syncs_post_images_while_it_runs(
             return page
 
     monkeypatch.setattr(cli, "_make_channel_pages", lambda: Pages())
+    monkeypatch.setattr(cli, "_make_image_downloader", lambda: FakeImageDownloader())
 
     def wait_for_sync() -> None:
         synced.wait(timeout=5)

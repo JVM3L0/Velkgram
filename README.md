@@ -48,6 +48,7 @@ Edit `.env`. Empty values count as unset and fall back to the default.
 | `NOTIFIER` | `log` (the only option in v1) |
 | `LOG_LEVEL` | `INFO` |
 | `RETENTION_DAYS` | days to keep message text (default `90`, minimum `30`) |
+| `IMAGES_DIR`, `IMAGES_MAX_MB` | where the small WebP copies of post pictures are kept (default `images` next to the database) and the most space they may take (default `1024`, minimum `16`); Telegram's picture links expire within days, so the copy is what keeps a card's photo. The oldest go first, and nothing older than `RETENTION_DAYS` is kept |
 | `APP_TIMEZONE` | IANA timezone for the daily purge and the web UI (default `America/Sao_Paulo`) |
 | `WEB_PASSWORD_HASH`, `WEB_SECRET_KEY` | for the web UI. `WEB_PASSWORD_HASH` (from `uv run velkgram hash-password`) becomes the password of the `admin` account the first time the app starts; `WEB_SECRET_KEY` is any long random string |
 

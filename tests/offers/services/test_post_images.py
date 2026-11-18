@@ -1,13 +1,18 @@
 import threading
 from datetime import UTC, datetime
 
+import pytest
+
 from tests.fakes.clock import FakeClock
+from tests.fakes.images import FakeImageDownloader, FakeThumbnailer, InMemoryImageStore
 from tests.fakes.repositories import (
     FakeChannelPages,
     FakePublicChannels,
     InMemoryPostImageRepository,
 )
 from velkgram.offers.domain.channel_page import PostImage
+from velkgram.offers.domain.image_files import StoredImage
+from velkgram.offers.services.image_cache import ImageCache
 from velkgram.offers.services.post_images import PostImageSync
 
 NOW = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
@@ -124,3 +129,87 @@ def test_catch_up_survives_a_failing_channel() -> None:
     )
     sync.catch_up(max_pages=3, pause_s=0.0, wait=lambda _s: False)
     assert repo.get(-200, 10) == f"{CDN}p10.jpg"
+
+
+# --- the local copy of each picture ---------------------------------------------------------
+
+
+def _with_cache(
+    channels: list[tuple[int, str]],
+    pages: dict[str, str | Exception | None],
+    bodies: dict[str, bytes],
+    max_bytes: int = 10_000,
+) -> tuple[PostImageSync, InMemoryImageStore, FakeImageDownloader]:
+    store, downloader = InMemoryImageStore(), FakeImageDownloader(bodies)
+    clock = FakeClock(NOW)
+    cache = ImageCache(store, downloader, FakeThumbnailer(), clock, max_bytes, 90)
+    sync = PostImageSync(
+        FakePublicChannels(channels),
+        FakeChannelPages(pages),
+        InMemoryPostImageRepository(),
+        clock,
+        cache=cache,
+    )
+    return sync, store, downloader
+
+
+def test_sync_keeps_a_copy_of_each_picture_it_finds() -> None:
+    sync, store, _ = _with_cache(
+        [(-100, "promotom")], {"promotom": _page(7, "a")}, {f"{CDN}a.jpg": b"raw"}
+    )
+    sync.sync_once()
+    assert store.get(-100, 7) == b"thumb:raw"
+
+
+def test_the_next_sync_does_not_download_a_kept_picture_again() -> None:
+    sync, _, downloader = _with_cache(
+        [(-100, "promotom")], {"promotom": _page(7, "a")}, {f"{CDN}a.jpg": b"raw"}
+    )
+    sync.sync_once()
+    sync.sync_once()
+    assert downloader.calls == [f"{CDN}a.jpg"]
+
+
+def test_catch_up_keeps_the_pictures_of_older_pages_too() -> None:
+    page = _posts(1, 3)
+    sync, store, _ = _with_cache(
+        [(-100, "promotom")],
+        {"promotom": page},
+        {f"{CDN}p{n}.jpg": b"raw" for n in (1, 2, 3)},
+    )
+    sync.catch_up(wait=lambda _s: False)
+    assert {i.message_id for i in store.list()} == {1, 2, 3}
+
+
+def test_sync_enforces_the_budget_after_keeping() -> None:
+    sync, store, _ = _with_cache(
+        [(-100, "promotom")],
+        {"promotom": _posts(1, 3)},
+        {f"{CDN}p{n}.jpg": b"x" * 10 for n in (1, 2, 3)},
+        max_bytes=32,
+    )
+    sync.sync_once()
+    assert sum(i.size for i in store.list()) <= 32
+    assert len(store.list()) == 2
+
+
+class _UnlistableStore(InMemoryImageStore):
+    def list(self) -> list[StoredImage]:
+        raise OSError("volume gone")
+
+
+def test_a_broken_store_does_not_stop_the_url_sync(caplog: pytest.LogCaptureFixture) -> None:
+    clock = FakeClock(NOW)
+    cache = ImageCache(
+        _UnlistableStore(), FakeImageDownloader(), FakeThumbnailer(), clock, 10_000, 90
+    )
+    sync = PostImageSync(
+        FakePublicChannels([(-100, "promotom")]),
+        FakeChannelPages({"promotom": _page(7, "a")}),
+        InMemoryPostImageRepository(),
+        clock,
+        cache=cache,
+    )
+    with caplog.at_level("WARNING"):
+        assert sync.sync_once() == 1
+    assert any(r.message == "post_image_cache_enforce_failed" for r in caplog.records)
