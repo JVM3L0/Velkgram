@@ -2,7 +2,7 @@
  * Velkgram stylesheet: theme tokens and the Material 3 Expressive layer on top of Beer CSS 5.0.3.
  *
  * Two themes, one token set of light-dark() pairs, from the Velk brand kit: ink and paper
- * neutrals and pastels, with rosa as Velkgram's own colour. On light, text roles are darkened
+ * neutrals and pastels, with sky blue as Velkgram's own colour. On light, text roles are darkened
  * for AA and only containers are pastel. tests/apps/web/test_contrast.py checks every pair.
  */
 
@@ -34,10 +34,10 @@
 /* `:not(.themed)` lifts specificity to tie Beer CSS's body.light / body.dark, which this file wins by order. */
 body:not(.themed) {
   color-scheme: light dark;
-  --primary: light-dark(#94305f, #f4b3cf);
+  --primary: light-dark(#1f5f85, #a9d8f5);
   --on-primary: light-dark(#ffffff, #1b1a1e);
-  --primary-container: light-dark(#f4b3cf, #5a3346);
-  --on-primary-container: light-dark(#1b1a1e, #fbdce9);
+  --primary-container: light-dark(#a9d8f5, #2c4a5e);
+  --on-primary-container: light-dark(#1b1a1e, #dcf0fc);
   --secondary: light-dark(#5b478f, #cbbaf2);
   --on-secondary: light-dark(#ffffff, #1b1a1e);
   --secondary-container: light-dark(#cbbaf2, #453a5e);
@@ -66,7 +66,7 @@ body:not(.themed) {
   --scrim: light-dark(#000000, #000000);
   --inverse-surface: light-dark(#28262d, #f6f4f1);
   --inverse-on-surface: light-dark(#f6f4f1, #1b1a1e);
-  --inverse-primary: light-dark(#f4b3cf, #94305f);
+  --inverse-primary: light-dark(#a9d8f5, #1f5f85);
   --surface-dim: light-dark(#e4e1dd, #151418);
   --surface-bright: light-dark(#ffffff, #3a3841);
   --surface-container-lowest: light-dark(#ffffff, #151418);
@@ -80,6 +80,11 @@ body:not(.themed) {
   font-optical-sizing: auto;
   background-color: var(--surface);
   color: var(--on-surface);
+}
+/* Filled buttons stay pastel in both themes; --primary is the readable shade for text. */
+:is(button, a.button):not(.transparent, .border, .tonal, .chip, .circle, .coupon-code, .vg-menu button) {
+  background-color: #a9d8f5;
+  color: #1b1a1e;
 }
 body.light { color-scheme: light; }
 body.dark { color-scheme: dark; }
