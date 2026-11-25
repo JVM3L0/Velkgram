@@ -125,7 +125,7 @@ def test_static_css_is_served(tmp_path: Path) -> None:
     response = client.get("/static/velkgram.css")
     assert response.status_code == 200
     assert "text/css" in response.headers["content-type"]
-    assert "Bricolage Grotesque" in response.text
+    assert "Google Sans Flex" in response.text
 
 
 def test_logged_in_bar_has_theme_menu_and_logout(tmp_path: Path) -> None:

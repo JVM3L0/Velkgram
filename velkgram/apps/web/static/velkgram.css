@@ -1,27 +1,27 @@
 /*
  * Velkgram stylesheet: theme tokens and the Material 3 Expressive layer on top of Beer CSS 5.0.3.
  *
- * Two themes, one token set of light-dark() pairs. The base is Gruvbox Material (soft), with
- * accents washed toward the text ("bem pastel"); on light, text roles are darkened for AA and
- * only their containers are pastel. tests/apps/web/test_contrast.py checks every pair.
+ * Two themes, one token set of light-dark() pairs, from the Velk brand kit: ink and paper
+ * neutrals and pastels, with rosa as Velkgram's own colour. On light, text roles are darkened
+ * for AA and only containers are pastel. tests/apps/web/test_contrast.py checks every pair.
  */
 
 @font-face {
-  font-family: "Bricolage Grotesque";
-  src: url("/static/fonts/bricolage-latin-ext.woff2") format("woff2");
-  font-weight: 200 800; font-stretch: 75% 100%; font-display: swap;
+  font-family: "Google Sans Flex";
+  src: url("/static/fonts/google-sans-flex-latin-ext.woff2") format("woff2");
+  font-weight: 400 800; font-display: swap;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: "Bricolage Grotesque";
-  src: url("/static/fonts/bricolage-latin.woff2") format("woff2");
-  font-weight: 200 800; font-stretch: 75% 100%; font-display: swap;
+  font-family: "Google Sans Flex";
+  src: url("/static/fonts/google-sans-flex-latin.woff2") format("woff2");
+  font-weight: 400 800; font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 /* ---- Fonts, shape and motion tokens ---- */
 :root {
-  --font: "Bricolage Grotesque", system-ui, sans-serif;
+  --font: "Google Sans Flex", system-ui, sans-serif;
   --shape-xl: 12px;      /* cards, sheets, panels */
   --shape-control: 8px;  /* buttons, chips, fields, segmented controls */
   --shape-pressed: 4px;
@@ -29,53 +29,53 @@
   --spring-time: 360ms;
 }
 
-/* ---- Colour: one token set, light-dark() pairs. Base is Gruvbox Material "bem pastel".
+/* ---- Colour: one token set, light-dark() pairs. Velk brand palette.
    System mode follows the device; the body.light / body.dark classes force a theme. ---- */
 /* `:not(.themed)` lifts specificity to tie Beer CSS's body.light / body.dark, which this file wins by order. */
 body:not(.themed) {
   color-scheme: light dark;
-  --primary: light-dark(#5d6728, #bab979);
-  --on-primary: light-dark(#f9f5d7, #1b1b1b);
-  --primary-container: light-dark(#d7d6b0, #48483a);
-  --on-primary-container: light-dark(#654735, #d4be98);
-  --secondary: light-dark(#895607, #d6b071);
-  --on-secondary: light-dark(#f9f5d7, #1b1b1b);
-  --secondary-container: light-dark(#e0d2a9, #4e4638);
-  --on-secondary-container: light-dark(#654735, #d4be98);
-  --tertiary: light-dark(#3f6770, #a0b49f);
-  --on-tertiary: light-dark(#f9f5d7, #1b1b1b);
-  --tertiary-container: light-dark(#d0d6c0, #424742);
-  --on-tertiary-container: light-dark(#654735, #d4be98);
-  --error: light-dark(#a64040, #e18b78);
-  --on-error: light-dark(#f9f5d7, #1b1b1b);
-  --error-container: light-dark(#e7cdb6, #513e3a);
-  --on-error-container: light-dark(#654735, #d4be98);
-  --success: light-dark(#5d6728, #bab979);
-  --warning: light-dark(#9c4b08, #df9f6c);
-  --amber: light-dark(#895607, #d6b071);
-  --amber-fill: light-dark(#b47109, #d6b071);
-  --background: light-dark(#f2e5bc, #282828);
-  --on-background: light-dark(#654735, #d4be98);
-  --surface: light-dark(#f2e5bc, #282828);
-  --on-surface: light-dark(#654735, #d4be98);
-  --surface-variant: light-dark(#eddeb5, #45403d);
-  --on-surface-variant: light-dark(#6b5f56, #b9ad9d);
-  --outline: light-dark(#8a7a69, #928374);
-  --outline-variant: light-dark(#b5a688, #7c6f64);
+  --primary: light-dark(#94305f, #f4b3cf);
+  --on-primary: light-dark(#ffffff, #1b1a1e);
+  --primary-container: light-dark(#f4b3cf, #5a3346);
+  --on-primary-container: light-dark(#1b1a1e, #fbdce9);
+  --secondary: light-dark(#5b478f, #cbbaf2);
+  --on-secondary: light-dark(#ffffff, #1b1a1e);
+  --secondary-container: light-dark(#cbbaf2, #453a5e);
+  --on-secondary-container: light-dark(#1b1a1e, #e7defa);
+  --tertiary: light-dark(#2c6641, #a8e0b7);
+  --on-tertiary: light-dark(#ffffff, #1b1a1e);
+  --tertiary-container: light-dark(#a8e0b7, #2f4a38);
+  --on-tertiary-container: light-dark(#1b1a1e, #d6f2de);
+  --error: light-dark(#a3333d, #f2a0a0);
+  --on-error: light-dark(#ffffff, #1b1a1e);
+  --error-container: light-dark(#f2a0a0, #5c3032);
+  --on-error-container: light-dark(#1b1a1e, #fcdada);
+  --success: light-dark(#2c6641, #a8e0b7);
+  --warning: light-dark(#8c431b, #f8bfa0);
+  --amber: light-dark(#715500, #f7d78a);
+  --amber-fill: light-dark(#8f6d00, #f7d78a);
+  --background: light-dark(#f6f4f1, #1b1a1e);
+  --on-background: light-dark(#1b1a1e, #f6f4f1);
+  --surface: light-dark(#f6f4f1, #1b1a1e);
+  --on-surface: light-dark(#1b1a1e, #f6f4f1);
+  --surface-variant: light-dark(#ece9e5, #34323a);
+  --on-surface-variant: light-dark(#55525c, #c3c0ca);
+  --outline: light-dark(#7c7884, #8f8b97);
+  --outline-variant: light-dark(#c9c5cd, #4a4751);
   --shadow: light-dark(#000000, #000000);
   --scrim: light-dark(#000000, #000000);
-  --inverse-surface: light-dark(#32302f, #fbf1c7);
-  --inverse-on-surface: light-dark(#d4be98, #654735);
-  --inverse-primary: light-dark(#a9b665, #6c782e);
-  --surface-dim: light-dark(#e6d5ae, #1b1b1b);
-  --surface-bright: light-dark(#fbf1c7, #504945);
-  --surface-container-lowest: light-dark(#f9f5d7, #1b1b1b);
-  --surface-container-low: light-dark(#fbf1c7, #32302f);
-  --surface-container: light-dark(#eddeb5, #45403d);
-  --surface-container-high: light-dark(#e6d5ae, #504945);
-  --surface-container-highest: light-dark(#dccb9f, #554d48);
-  --elev-a: light-dark(rgb(101 71 53 / 0.16), transparent);
-  --elev-b: light-dark(rgb(101 71 53 / 0.1), transparent);
+  --inverse-surface: light-dark(#28262d, #f6f4f1);
+  --inverse-on-surface: light-dark(#f6f4f1, #1b1a1e);
+  --inverse-primary: light-dark(#f4b3cf, #94305f);
+  --surface-dim: light-dark(#e4e1dd, #151418);
+  --surface-bright: light-dark(#ffffff, #3a3841);
+  --surface-container-lowest: light-dark(#ffffff, #151418);
+  --surface-container-low: light-dark(#ffffff, #222126);
+  --surface-container: light-dark(#efece8, #28262d);
+  --surface-container-high: light-dark(#e8e5e1, #323038);
+  --surface-container-highest: light-dark(#e0dcd8, #3c3a43);
+  --elev-a: light-dark(rgb(27 26 30 / 0.14), transparent);
+  --elev-b: light-dark(rgb(27 26 30 / 0.08), transparent);
   font-family: var(--font);
   font-optical-sizing: auto;
   background-color: var(--surface);
