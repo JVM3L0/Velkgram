@@ -146,3 +146,29 @@ def test_wish_card_price_rise_has_no_badge_above_the_limit(tmp_path: Path) -> No
     page = client.get("/wishes").text
     assert "wish-delta-up" in page and "40%" in page
     assert "abaixo do seu alerta" not in page
+
+
+def _add_wish(client: TestClient, name: str) -> None:
+    data = {"name": name, "required_terms": "x", "excluded_terms": "", "max_price": "10,00"}
+    assert client.post("/wishes/new", data=data).status_code == 303
+
+
+def _card_ids(html: str) -> list[int]:
+    return [int(i) for i in re.findall(r'<article id="wish-(\d+)"', html)]
+
+
+def test_paused_wishes_are_listed_below_active_ones(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _add_wish(client, "Monitor")
+    _add_wish(client, "Mouse")
+    client.post("/wishes/1/toggle")
+    assert _card_ids(client.get("/wishes").text) == [2, 3, 1]
+
+
+def test_toggle_returns_the_whole_list_reordered(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    _add_wish(client, "Monitor")
+    paused = client.post("/wishes/1/toggle").text
+    assert 'id="wishes"' in paused
+    assert _card_ids(paused) == [2, 1]
+    assert _card_ids(client.post("/wishes/1/toggle").text) == [1, 2]

@@ -53,6 +53,13 @@ def build_router(
         stats = summaries(conn, ids)
         return [{"wish": w, "stats": stats.get(w.id) if w.id is not None else None} for w in wishes]
 
+    def list_context(
+        conn: sqlite3.Connection, repo: WishRepository, user: User
+    ) -> dict[str, object]:
+        # Stable sort: paused wishes sink, each group keeps the repository order.
+        wishes = sorted(repo.list_for_user(user.id or 0), key=lambda w: not w.enabled)
+        return {"cards": card_context(conn, wishes)}
+
     def commands(conn: sqlite3.Connection) -> tuple[WishRepository, WishCommands]:
         repo = make_repo(conn)
         return repo, WishCommands(repo)
@@ -93,9 +100,7 @@ def build_router(
         user: Annotated[User, Depends(current_user)],
     ) -> Response:
         repo, _ = commands(conn)
-        return templates.TemplateResponse(
-            request, "wishes.html", {"cards": card_context(conn, repo.list_for_user(user.id or 0))}
-        )
+        return templates.TemplateResponse(request, "wishes.html", list_context(conn, repo, user))
 
     @router.get("/new")
     def new_form(
@@ -198,11 +203,9 @@ def build_router(
         repo, cmds = commands(conn)
         current = owned(repo, wish_id, user)
         cmds.toggle(wish_id, not current.enabled)
-        updated = repo.get(wish_id)
-        if updated is None:
-            raise HTTPException(status_code=404, detail="Desejo não encontrado")
-        (card,) = card_context(conn, [updated])
-        return templates.TemplateResponse(request, "_wish_row.html", card)
+        return templates.TemplateResponse(
+            request, "_wish_grid.html", list_context(conn, repo, user)
+        )
 
     @router.post("/{wish_id}/delete")
     def delete(

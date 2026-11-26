@@ -26,7 +26,7 @@
     <span class="wish-limit">Alerta até {{ wish.max_price_cents | brl }}</span>
   </p>
   <div class="wish-actions">
-    <button class="border" type="button" hx-post="/wishes/{{ wish.id }}/toggle" hx-target="#wish-{{ wish.id }}" hx-swap="outerHTML">
+    <button class="border" type="button" hx-post="/wishes/{{ wish.id }}/toggle" hx-target="#wishes" hx-swap="outerHTML">
       <i aria-hidden="true">{{ "play_arrow" if paused else "pause" }}</i><span>{{ "Retomar" if paused else "Pausar" }}</span>
     </button>
     <a class="button tonal" href="/wishes/{{ wish.id }}"><i aria-hidden="true">list</i><span>Ver ofertas</span></a>
